@@ -33,7 +33,7 @@ Thumbs.db
 # Environment variables
 .env
 .env.local
-
+ansible/
 # Build artifacts
 dist/
 build/

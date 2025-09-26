@@ -11,7 +11,7 @@
 
 ## 项目结构
 
-```
+```text
 cpusim/
 ├── bin/                # 编译输出目录
 │   └── cpusim-server   # 可执行文件
