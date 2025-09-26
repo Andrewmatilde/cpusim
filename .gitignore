@@ -4,7 +4,7 @@
 *.so
 *.dylib
 bin/
-cpusim-server
+/cpusim-server
 
 # Test binary, built with `go test -c`
 *.test
