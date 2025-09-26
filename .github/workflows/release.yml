@@ -25,9 +25,6 @@ jobs:
           - goos: darwin
             goarch: arm64
             suffix: darwin-arm64
-          - goos: windows
-            goarch: amd64
-            suffix: windows-amd64.exe
 
     steps:
       - name: Checkout code
@@ -38,18 +35,22 @@ jobs:
         with:
           go-version: '1.22'  # Using 1.22 as 1.25 is not yet released
 
+      - name: Extract version
+        id: version
+        run: echo "VERSION=${GITHUB_REF#refs/tags/}" >> $GITHUB_OUTPUT
+
       - name: Build binary
         env:
           GOOS: ${{ matrix.goos }}
           GOARCH: ${{ matrix.goarch }}
         run: |
-          go build -v -ldflags="-s -w" -o cpusim-server-${{ matrix.suffix }} ./cmd/cpusim-server
+          go build -v -ldflags="-s -w" -o cpusim-server-${{ steps.version.outputs.VERSION }}-${{ matrix.suffix }} ./cmd/cpusim-server
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
-          name: cpusim-server-${{ matrix.suffix }}
-          path: cpusim-server-${{ matrix.suffix }}
+          name: cpusim-server-${{ steps.version.outputs.VERSION }}-${{ matrix.suffix }}
+          path: cpusim-server-${{ steps.version.outputs.VERSION }}-${{ matrix.suffix }}
 
   release:
     name: Create Release
@@ -80,20 +81,16 @@ jobs:
             ## CPU仿真服务 - GCD计算器
 
             ### 下载说明
-            - `cpusim-server-linux-amd64`: Linux x86_64
-            - `cpusim-server-linux-arm64`: Linux ARM64
-            - `cpusim-server-darwin-amd64`: macOS Intel
-            - `cpusim-server-darwin-arm64`: macOS Apple Silicon
-            - `cpusim-server-windows-amd64.exe`: Windows x86_64
+            - `cpusim-server-${{ github.ref_name }}-linux-amd64`: Linux x86_64
+            - `cpusim-server-${{ github.ref_name }}-linux-arm64`: Linux ARM64
+            - `cpusim-server-${{ github.ref_name }}-darwin-amd64`: macOS Intel
+            - `cpusim-server-${{ github.ref_name }}-darwin-arm64`: macOS Apple Silicon
 
             ### 使用方法
             ```bash
             # Linux/macOS
-            chmod +x cpusim-server-*
-            sudo ./cpusim-server-*
-
-            # Windows (管理员权限)
-            cpusim-server-windows-amd64.exe
+            chmod +x cpusim-server-${{ github.ref_name }}-*
+            sudo ./cpusim-server-${{ github.ref_name }}-*
             ```
 
       - name: Upload Release Assets
