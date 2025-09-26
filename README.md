@@ -58,6 +58,7 @@ make clean
 **端点:** `POST /calculate`
 
 **请求示例:**
+
 ```bash
 curl -X POST http://localhost:80/calculate \
   -H "Content-Type: application/json" \
@@ -65,6 +66,7 @@ curl -X POST http://localhost:80/calculate \
 ```
 
 **响应示例:**
+
 ```json
 {
   "gcd": "1",
@@ -73,6 +75,7 @@ curl -X POST http://localhost:80/calculate \
 ```
 
 **响应字段说明:**
+
 - `gcd`: 两个固定大整数的最大公约数
 - `process_time`: 计算耗时
 
@@ -81,6 +84,7 @@ curl -X POST http://localhost:80/calculate \
 ### 固定整数
 
 服务使用两个预定义的大整数（斐波那契数）：
+
 - A: 300位整数
 - B: 300位整数
 
