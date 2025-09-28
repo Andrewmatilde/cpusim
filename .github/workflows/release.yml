@@ -39,18 +39,25 @@ jobs:
         id: version
         run: echo "VERSION=${GITHUB_REF#refs/tags/}" >> $GITHUB_OUTPUT
 
-      - name: Build binary
+      - name: Build binaries
         env:
           GOOS: ${{ matrix.goos }}
           GOARCH: ${{ matrix.goarch }}
         run: |
           go build -v -ldflags="-s -w" -o cpusim-server-${{ steps.version.outputs.VERSION }}-${{ matrix.suffix }} ./cmd/cpusim-server
+          go build -v -ldflags="-s -w" -o collector-server-${{ steps.version.outputs.VERSION }}-${{ matrix.suffix }} ./collector/cmd/collector-server
 
-      - name: Upload artifact
+      - name: Upload cpusim-server artifact
         uses: actions/upload-artifact@v4
         with:
           name: cpusim-server-${{ steps.version.outputs.VERSION }}-${{ matrix.suffix }}
           path: cpusim-server-${{ steps.version.outputs.VERSION }}-${{ matrix.suffix }}
+
+      - name: Upload collector-server artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: collector-server-${{ steps.version.outputs.VERSION }}-${{ matrix.suffix }}
+          path: collector-server-${{ steps.version.outputs.VERSION }}-${{ matrix.suffix }}
 
   release:
     name: Create Release
@@ -78,20 +85,43 @@ jobs:
           draft: false
           prerelease: false
           body: |
-            ## CPU仿真服务 - GCD计算器
+            ## CPU仿真服务 - GCD计算器与数据收集器
 
             ### 下载说明
+
+            #### CPU仿真服务 (cpusim-server)
             - `cpusim-server-${{ github.ref_name }}-linux-amd64`: Linux x86_64
             - `cpusim-server-${{ github.ref_name }}-linux-arm64`: Linux ARM64
             - `cpusim-server-${{ github.ref_name }}-darwin-amd64`: macOS Intel
             - `cpusim-server-${{ github.ref_name }}-darwin-arm64`: macOS Apple Silicon
 
+            #### 数据收集器 (collector-server)
+            - `collector-server-${{ github.ref_name }}-linux-amd64`: Linux x86_64
+            - `collector-server-${{ github.ref_name }}-linux-arm64`: Linux ARM64
+            - `collector-server-${{ github.ref_name }}-darwin-amd64`: macOS Intel
+            - `collector-server-${{ github.ref_name }}-darwin-arm64`: macOS Apple Silicon
+
             ### 使用方法
+
+            #### 启动CPU仿真服务
             ```bash
             # Linux/macOS
             chmod +x cpusim-server-${{ github.ref_name }}-*
             sudo ./cpusim-server-${{ github.ref_name }}-*
             ```
+
+            #### 启动数据收集器
+            ```bash
+            # Linux/macOS
+            chmod +x collector-server-${{ github.ref_name }}-*
+            STORAGE_PATH=./data/experiments PORT=8080 CALCULATOR_PROCESS_NAME=cpusim-server ./collector-server-${{ github.ref_name }}-*
+            ```
+
+            #### API文档
+            - CPU仿真服务: `http://localhost/` (端口80)
+            - 数据收集器: `http://localhost:8080/` (端口8080)
+            - 健康检查: `GET /health`
+            - 实验管理: `GET/POST /experiments`
 
       - name: Upload Release Assets
         run: |

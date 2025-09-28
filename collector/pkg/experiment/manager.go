@@ -24,17 +24,17 @@ const (
 
 // Experiment represents an active or completed experiment
 type Experiment struct {
-	ID                  string                   `json:"experimentId"`
-	Description         string                   `json:"description,omitempty"`
-	StartTime           time.Time                `json:"startTime"`
-	EndTime             *time.Time               `json:"endTime,omitempty"`
-	Status              Status                   `json:"status"`
-	CollectionInterval  time.Duration            `json:"collectionInterval"`
-	Timeout             time.Duration            `json:"timeout"`
-	IsActive            bool                     `json:"isActive"`
-	DataPoints          []metrics.SystemMetrics  `json:"dataPoints"`
-	DataPointsCollected int                      `json:"dataPointsCollected"`
-	LastMetrics         *metrics.SystemMetrics   `json:"lastMetrics,omitempty"`
+	ID                  string                  `json:"experimentId"`
+	Description         string                  `json:"description,omitempty"`
+	StartTime           time.Time               `json:"startTime"`
+	EndTime             *time.Time              `json:"endTime,omitempty"`
+	Status              Status                  `json:"status"`
+	CollectionInterval  time.Duration           `json:"collectionInterval"`
+	Timeout             time.Duration           `json:"timeout"`
+	IsActive            bool                    `json:"isActive"`
+	DataPoints          []metrics.SystemMetrics `json:"dataPoints"`
+	DataPointsCollected int                     `json:"dataPointsCollected"`
+	LastMetrics         *metrics.SystemMetrics  `json:"lastMetrics,omitempty"`
 
 	// Internal fields
 	ctx        context.Context
@@ -155,8 +155,20 @@ func (m *Manager) GetExperiment(id string) (*Experiment, error) {
 	defer experiment.mu.RUnlock()
 
 	// Return a copy to avoid race conditions
-	experimentCopy := *experiment
-	experimentCopy.DataPoints = make([]metrics.SystemMetrics, len(experiment.DataPoints))
+	experimentCopy := Experiment{
+		ID:                  experiment.ID,
+		Description:         experiment.Description,
+		StartTime:           experiment.StartTime,
+		EndTime:             experiment.EndTime,
+		Status:              experiment.Status,
+		CollectionInterval:  experiment.CollectionInterval,
+		Timeout:             experiment.Timeout,
+		IsActive:            experiment.IsActive,
+		DataPoints:          make([]metrics.SystemMetrics, len(experiment.DataPoints)),
+		DataPointsCollected: experiment.DataPointsCollected,
+		LastMetrics:         experiment.LastMetrics,
+		// Note: intentionally not copying ctx, cancelFunc, ticker, or mu
+	}
 	copy(experimentCopy.DataPoints, experiment.DataPoints)
 
 	return &experimentCopy, nil

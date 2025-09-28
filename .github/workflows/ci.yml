@@ -42,19 +42,27 @@ jobs:
       - name: Run vet
         run: go vet ./...
 
-      - name: Build binary
+      - name: Build binaries
         run: |
           mkdir -p bin
           go build -v -ldflags="-s -w" -o bin/cpusim-server ./cmd/cpusim-server
+          go build -v -ldflags="-s -w" -o bin/collector-server ./collector/cmd/collector-server
 
-      - name: Check binary
+      - name: Check binaries
         run: |
           ls -lah bin/
           file bin/cpusim-server
+          file bin/collector-server
 
-      - name: Upload binary artifact
+      - name: Test collector API generation
+        run: |
+          go generate ./...
+          # Check if generated files are up to date
+          git diff --exit-code || (echo "Generated files are not up to date. Run 'go generate ./...' and commit the changes." && exit 1)
+
+      - name: Upload binary artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: cpusim-server-${{ github.sha }}
-          path: bin/cpusim-server
+          name: binaries-${{ github.sha }}
+          path: bin/
           retention-days: 7
