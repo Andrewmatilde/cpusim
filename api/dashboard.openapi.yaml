@@ -1,0 +1,284 @@
+openapi: 3.0.3
+info:
+  title: CPU Simulation Dashboard API
+  description: 管理面API，用于管理多个CPU仿真主机
+  version: 1.0.0
+
+servers:
+  - url: http://localhost:9090
+    description: Dashboard server
+security: []
+paths:
+  /api/hosts:
+    get:
+      summary: 获取所有主机列表
+      operationId: getHosts
+      responses:
+        '200':
+          description: 主机列表
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  hosts:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Host'
+
+  /api/hosts/{name}/health:
+    get:
+      summary: 检查主机健康状态
+      operationId: getHostHealth
+      parameters:
+        - name: name
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: 主机健康状态
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HostHealth'
+
+  /api/hosts/{name}/calculate:
+    post:
+      summary: 测试主机CPU计算
+      operationId: testHostCalculation
+      parameters:
+        - name: name
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CalculationRequest'
+      responses:
+        '200':
+          description: 计算结果
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CalculationResponse'
+
+  /api/hosts/{name}/experiments:
+    get:
+      summary: 获取主机实验列表
+      operationId: getHostExperiments
+      parameters:
+        - name: name
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: 实验列表
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ExperimentListResponse'
+
+    post:
+      summary: 在主机上启动实验
+      operationId: startHostExperiment
+      parameters:
+        - name: name
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ExperimentRequest'
+      responses:
+        '200':
+          description: 实验启动结果
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ExperimentResponse'
+
+  /api/hosts/{name}/experiments/{experimentId}/status:
+    get:
+      summary: 获取实验状态
+      operationId: getHostExperimentStatus
+      parameters:
+        - name: name
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: experimentId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: 实验状态
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ExperimentStatus'
+
+  /api/hosts/{name}/experiments/{experimentId}/stop:
+    post:
+      summary: 停止实验
+      operationId: stopHostExperiment
+      parameters:
+        - name: name
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: experimentId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: 停止结果
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ExperimentResponse'
+
+components:
+  schemas:
+    Host:
+      type: object
+      properties:
+        name:
+          type: string
+        ip:
+          type: string
+        cpuServiceUrl:
+          type: string
+        collectorServiceUrl:
+          type: string
+
+    HostHealth:
+      type: object
+      properties:
+        name:
+          type: string
+        ip:
+          type: string
+        cpuServiceHealthy:
+          type: boolean
+        collectorServiceHealthy:
+          type: boolean
+        collectorHealth:
+          type: object
+          properties:
+            status:
+              type: string
+            timestamp:
+              type: string
+
+    CalculationRequest:
+      type: object
+      properties:
+        a:
+          type: integer
+        b:
+          type: integer
+
+    CalculationResponse:
+      type: object
+      properties:
+        gcd:
+          type: string
+        process_time:
+          type: string
+
+    ExperimentRequest:
+      type: object
+      required:
+        - experimentId
+        - description
+        - timeout
+        - collectionInterval
+      properties:
+        experimentId:
+          type: string
+        description:
+          type: string
+        timeout:
+          type: integer
+        collectionInterval:
+          type: integer
+
+    ExperimentResponse:
+      type: object
+      properties:
+        experimentId:
+          type: string
+        message:
+          type: string
+        status:
+          type: string
+        timestamp:
+          type: string
+
+    ExperimentStatus:
+      type: object
+      properties:
+        experimentId:
+          type: string
+        status:
+          type: string
+        isActive:
+          type: boolean
+        dataPointsCollected:
+          type: integer
+        startTime:
+          type: string
+        endTime:
+          type: string
+        duration:
+          type: integer
+        lastMetrics:
+          type: object
+          properties:
+            cpuUsagePercent:
+              type: number
+            memoryUsageBytes:
+              type: integer
+            memoryUsagePercent:
+              type: number
+            calculatorServiceHealthy:
+              type: boolean
+            networkIOBytes:
+              type: object
+              properties:
+                bytesReceived:
+                  type: integer
+                bytesSent:
+                  type: integer
+                packetsReceived:
+                  type: integer
+                packetsSent:
+                  type: integer
+
+    ExperimentListResponse:
+      type: object
+      properties:
+        experiments:
+          type: array
+          items:
+            $ref: '#/components/schemas/ExperimentStatus'
+        total:
+          type: integer
+        hasMore:
+          type: boolean

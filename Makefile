@@ -6,7 +6,12 @@ CMD_PATH := cmd/cpusim-server
 # Collector 设置
 COLLECTOR_BINARY_NAME := collector-server
 COLLECTOR_BINARY_PATH := bin/$(COLLECTOR_BINARY_NAME)
-COLLECTOR_CMD_PATH := collector/cmd/collector-server
+COLLECTOR_CMD_PATH := cmd/collector-server
+
+# Dashboard 设置
+DASHBOARD_BINARY_NAME := dashboard-server
+DASHBOARD_BINARY_PATH := bin/$(DASHBOARD_BINARY_NAME)
+DASHBOARD_CMD_PATH := cmd/dashboard-server
 
 # Go 编译器设置
 GO := go
@@ -23,21 +28,23 @@ GREEN := \033[0;32m
 YELLOW := \033[0;33m
 NC := \033[0m # No Color
 
-.PHONY: all build run clean help build-collector run-collector run-both test-collector
+.PHONY: all build run clean help build-collector run-collector run-both test-collector build-dashboard run-dashboard
 
 # 默认目标
 all: build
 
 help:
 	@echo "$(GREEN)可用的 Makefile 命令:$(NC)"
-	@echo "  $(YELLOW)make build$(NC)         - 编译cpusim-server到 bin 目录"
-	@echo "  $(YELLOW)make run$(NC)           - 编译并运行cpusim-server"
+	@echo "  $(YELLOW)make build$(NC)           - 编译cpusim-server到 bin 目录"
+	@echo "  $(YELLOW)make run$(NC)             - 编译并运行cpusim-server"
 	@echo "  $(YELLOW)make build-collector$(NC) - 编译collector-server到 bin 目录"
 	@echo "  $(YELLOW)make run-collector$(NC)   - 编译并运行collector-server"
-	@echo "  $(YELLOW)make run-both$(NC)       - 同时运行cpusim-server和collector-server"
+	@echo "  $(YELLOW)make build-dashboard$(NC) - 编译dashboard-server到 bin 目录"
+	@echo "  $(YELLOW)make run-dashboard$(NC)   - 编译并运行dashboard-server"
+	@echo "  $(YELLOW)make run-both$(NC)        - 同时运行cpusim-server和collector-server"
 	@echo "  $(YELLOW)make test-collector$(NC)  - 测试collector API"
-	@echo "  $(YELLOW)make clean$(NC)         - 清理编译产物"
-	@echo "  $(YELLOW)make help$(NC)          - 显示此帮助信息"
+	@echo "  $(YELLOW)make clean$(NC)           - 清理编译产物"
+	@echo "  $(YELLOW)make help$(NC)            - 显示此帮助信息"
 
 # 编译项目
 build:
@@ -59,11 +66,24 @@ build-collector:
 	$(GO) build $(GOFLAGS) -ldflags "$(LDFLAGS)" -o $(COLLECTOR_BINARY_PATH) ./$(COLLECTOR_CMD_PATH)
 	@echo "$(GREEN)编译完成！二进制文件位于: $(COLLECTOR_BINARY_PATH)$(NC)"
 
+# 编译dashboard
+build-dashboard:
+	@echo "$(GREEN)开始编译 $(DASHBOARD_BINARY_NAME)...$(NC)"
+	@mkdir -p bin
+	$(GO) build $(GOFLAGS) -ldflags "$(LDFLAGS)" -o $(DASHBOARD_BINARY_PATH) ./$(DASHBOARD_CMD_PATH)
+	@echo "$(GREEN)编译完成！二进制文件位于: $(DASHBOARD_BINARY_PATH)$(NC)"
+
 # 运行collector
 run-collector: build-collector
 	@echo "$(GREEN)启动collector服务（端口8080）...$(NC)"
 	@mkdir -p data/experiments
 	STORAGE_PATH=./data/experiments PORT=8080 CALCULATOR_PROCESS_NAME=cpusim-server ./$(COLLECTOR_BINARY_PATH)
+
+# 运行dashboard
+run-dashboard: build-dashboard
+	@echo "$(GREEN)启动dashboard服务（端口9090）...$(NC)"
+	@mkdir -p configs
+	PORT=9090 CONFIG_PATH=./configs/config.json ./$(DASHBOARD_BINARY_PATH)
 
 # 同时运行两个服务
 run-both: build build-collector

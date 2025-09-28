@@ -45,7 +45,8 @@ jobs:
           GOARCH: ${{ matrix.goarch }}
         run: |
           go build -v -ldflags="-s -w" -o cpusim-server-${{ steps.version.outputs.VERSION }}-${{ matrix.suffix }} ./cmd/cpusim-server
-          go build -v -ldflags="-s -w" -o collector-server-${{ steps.version.outputs.VERSION }}-${{ matrix.suffix }} ./collector/cmd/collector-server
+          go build -v -ldflags="-s -w" -o collector-server-${{ steps.version.outputs.VERSION }}-${{ matrix.suffix }} ./cmd/collector-server
+          go build -v -ldflags="-s -w" -o dashboard-server-${{ steps.version.outputs.VERSION }}-${{ matrix.suffix }} ./cmd/dashboard-server
 
       - name: Upload cpusim-server artifact
         uses: actions/upload-artifact@v4
@@ -58,6 +59,12 @@ jobs:
         with:
           name: collector-server-${{ steps.version.outputs.VERSION }}-${{ matrix.suffix }}
           path: collector-server-${{ steps.version.outputs.VERSION }}-${{ matrix.suffix }}
+
+      - name: Upload dashboard-server artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: dashboard-server-${{ steps.version.outputs.VERSION }}-${{ matrix.suffix }}
+          path: dashboard-server-${{ steps.version.outputs.VERSION }}-${{ matrix.suffix }}
 
   release:
     name: Create Release
@@ -85,7 +92,7 @@ jobs:
           draft: false
           prerelease: false
           body: |
-            ## CPU仿真服务 - GCD计算器与数据收集器
+            ## CPU仿真服务 - GCD计算器、数据收集器与管理面板
 
             ### 下载说明
 
@@ -100,6 +107,12 @@ jobs:
             - `collector-server-${{ github.ref_name }}-linux-arm64`: Linux ARM64
             - `collector-server-${{ github.ref_name }}-darwin-amd64`: macOS Intel
             - `collector-server-${{ github.ref_name }}-darwin-arm64`: macOS Apple Silicon
+
+            #### 管理面板 (dashboard-server)
+            - `dashboard-server-${{ github.ref_name }}-linux-amd64`: Linux x86_64
+            - `dashboard-server-${{ github.ref_name }}-linux-arm64`: Linux ARM64
+            - `dashboard-server-${{ github.ref_name }}-darwin-amd64`: macOS Intel
+            - `dashboard-server-${{ github.ref_name }}-darwin-arm64`: macOS Apple Silicon
 
             ### 使用方法
 
@@ -117,11 +130,22 @@ jobs:
             STORAGE_PATH=./data/experiments PORT=8080 CALCULATOR_PROCESS_NAME=cpusim-server ./collector-server-${{ github.ref_name }}-*
             ```
 
+            #### 启动管理面板
+            ```bash
+            # Linux/macOS
+            chmod +x dashboard-server-${{ github.ref_name }}-*
+            mkdir -p configs
+            echo '{"hosts":[{"name":"1","ip":"127.0.0.1"}]}' > configs/config.json
+            PORT=9090 CONFIG_PATH=./configs/config.json ./dashboard-server-${{ github.ref_name }}-*
+            ```
+
             #### API文档
             - CPU仿真服务: `http://localhost/` (端口80)
             - 数据收集器: `http://localhost:8080/` (端口8080)
+            - 管理面板: `http://localhost:9090/` (端口9090)
             - 健康检查: `GET /health`
             - 实验管理: `GET/POST /experiments`
+            - 多主机管理: `GET /api/hosts`
 
       - name: Upload Release Assets
         run: |

@@ -46,13 +46,15 @@ jobs:
         run: |
           mkdir -p bin
           go build -v -ldflags="-s -w" -o bin/cpusim-server ./cmd/cpusim-server
-          go build -v -ldflags="-s -w" -o bin/collector-server ./collector/cmd/collector-server
+          go build -v -ldflags="-s -w" -o bin/collector-server ./cmd/collector-server
+          go build -v -ldflags="-s -w" -o bin/dashboard-server ./cmd/dashboard-server
 
       - name: Check binaries
         run: |
           ls -lah bin/
           file bin/cpusim-server
           file bin/collector-server
+          file bin/dashboard-server
 
       - name: Test collector API generation
         run: |
