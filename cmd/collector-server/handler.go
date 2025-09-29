@@ -9,8 +9,6 @@ import (
 	"cpusim/collector/pkg/storage"
 
 	"github.com/gin-gonic/gin"
-	"github.com/google/uuid"
-	openapi_types "github.com/oapi-codegen/runtime/types"
 )
 
 // APIHandler implements the generated OpenAPI interface
@@ -67,7 +65,7 @@ func (h *APIHandler) getAllExperiments() []generated.ExperimentSummary {
 	// Get active experiments from manager
 	activeSummaries := h.experimentManager.ListAllExperiments()
 	for _, summary := range activeSummaries {
-		expUUID, _ := uuid.Parse(summary.ID)
+		expUUID := summary.ID
 
 		var statusEnum generated.ExperimentSummaryStatus
 		switch summary.Status {
@@ -82,7 +80,7 @@ func (h *APIHandler) getAllExperiments() []generated.ExperimentSummary {
 		}
 
 		apiSummary := generated.ExperimentSummary{
-			ExperimentId: openapi_types.UUID(expUUID),
+			ExperimentId: expUUID,
 			Status:       statusEnum,
 			StartTime:    summary.StartTime,
 			IsActive:     summary.IsActive,
@@ -119,7 +117,7 @@ func (h *APIHandler) getAllExperiments() []generated.ExperimentSummary {
 				continue // Skip if already included from active experiments
 			}
 
-			expUUID, _ := uuid.Parse(stored.ExperimentID)
+			expUUID := stored.ExperimentID
 
 			// Try to load the experiment data to get more details
 			if data, err := h.storage.LoadExperimentData(stored.ExperimentID); err == nil {
@@ -131,7 +129,7 @@ func (h *APIHandler) getAllExperiments() []generated.ExperimentSummary {
 				}
 
 				summary := generated.ExperimentSummary{
-					ExperimentId: openapi_types.UUID(expUUID),
+					ExperimentId: expUUID,
 					Status:       statusEnum,
 					StartTime:    data.StartTime,
 					IsActive:     false,
@@ -189,8 +187,8 @@ func (h *APIHandler) StartExperiment(c *gin.Context) {
 		return
 	}
 
-	// Convert UUID to string
-	experimentID := req.ExperimentId.String()
+	// Convert string to string (no conversion needed)
+	experimentID := req.ExperimentId
 
 	// Set defaults
 	collectionInterval := time.Duration(defaultCollectionInterval) * time.Millisecond
@@ -233,10 +231,10 @@ func (h *APIHandler) StartExperiment(c *gin.Context) {
 		return
 	}
 
-	expUUID, _ := uuid.Parse(exp.ID)
+	expUUID := exp.ID
 	message := "Experiment started successfully"
 	c.JSON(http.StatusOK, generated.ExperimentResponse{
-		ExperimentId: openapi_types.UUID(expUUID),
+		ExperimentId: expUUID,
 		Status:       generated.ExperimentResponseStatusStarted,
 		Timestamp:    exp.StartTime,
 		Message:      &message,
@@ -244,8 +242,8 @@ func (h *APIHandler) StartExperiment(c *gin.Context) {
 }
 
 // StopExperiment stops an active experiment
-func (h *APIHandler) StopExperiment(c *gin.Context, experimentId openapi_types.UUID) {
-	experimentID := experimentId.String()
+func (h *APIHandler) StopExperiment(c *gin.Context, experimentId string) {
+	experimentID := experimentId
 
 	exp, err := h.experimentManager.StopExperiment(experimentID)
 	if err != nil {
@@ -272,9 +270,9 @@ func (h *APIHandler) StopExperiment(c *gin.Context, experimentId openapi_types.U
 		status = generated.ExperimentResponseStatusTimeout
 	}
 
-	expUUID, _ := uuid.Parse(exp.ID)
+	expUUID := exp.ID
 	c.JSON(http.StatusOK, generated.ExperimentResponse{
-		ExperimentId: openapi_types.UUID(expUUID),
+		ExperimentId: expUUID,
 		Status:       status,
 		Timestamp:    time.Now(),
 		Message:      &message,
@@ -282,8 +280,8 @@ func (h *APIHandler) StopExperiment(c *gin.Context, experimentId openapi_types.U
 }
 
 // GetExperimentStatus returns the current status of an experiment
-func (h *APIHandler) GetExperimentStatus(c *gin.Context, experimentId openapi_types.UUID) {
-	experimentID := experimentId.String()
+func (h *APIHandler) GetExperimentStatus(c *gin.Context, experimentId string) {
+	experimentID := experimentId
 
 	exp, err := h.experimentManager.GetExperiment(experimentID)
 	if err != nil {
@@ -295,7 +293,7 @@ func (h *APIHandler) GetExperimentStatus(c *gin.Context, experimentId openapi_ty
 		return
 	}
 
-	expUUID, _ := uuid.Parse(exp.ID)
+	expUUID := exp.ID
 	dataPointsCollected := exp.DataPointsCollected
 
 	var statusEnum generated.ExperimentStatusStatus
@@ -311,7 +309,7 @@ func (h *APIHandler) GetExperimentStatus(c *gin.Context, experimentId openapi_ty
 	}
 
 	status := generated.ExperimentStatus{
-		ExperimentId:        openapi_types.UUID(expUUID),
+		ExperimentId:        expUUID,
 		Status:              statusEnum,
 		StartTime:           exp.StartTime,
 		IsActive:            exp.IsActive,
@@ -343,8 +341,8 @@ func (h *APIHandler) GetExperimentStatus(c *gin.Context, experimentId openapi_ty
 }
 
 // GetExperimentData returns the collected data for an experiment
-func (h *APIHandler) GetExperimentData(c *gin.Context, experimentId openapi_types.UUID) {
-	experimentID := experimentId.String()
+func (h *APIHandler) GetExperimentData(c *gin.Context, experimentId string) {
+	experimentID := experimentId
 
 	data, err := h.experimentManager.GetExperimentData(experimentID)
 	if err != nil {
@@ -357,10 +355,10 @@ func (h *APIHandler) GetExperimentData(c *gin.Context, experimentId openapi_type
 	}
 
 	// Convert to API format
-	expUUID, _ := uuid.Parse(data.ExperimentID)
+	expUUID := data.ExperimentID
 	collectionInterval := data.CollectionInterval
 	result := generated.ExperimentData{
-		ExperimentId:       openapi_types.UUID(expUUID),
+		ExperimentId:       expUUID,
 		StartTime:          data.StartTime,
 		CollectionInterval: &collectionInterval,
 		Metrics:            make([]generated.MetricDataPoint, 0, len(data.Metrics)),

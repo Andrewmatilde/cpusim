@@ -107,6 +107,32 @@ paths:
               schema:
                 $ref: '#/components/schemas/ExperimentResponse'
 
+  /api/hosts/{name}/experiments/{experimentId}/data:
+    get:
+      summary: 获取实验数据
+      operationId: getHostExperimentData
+      parameters:
+        - name: name
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: experimentId
+          in: path
+          required: true
+          schema:
+            type: string
+            pattern: '^[a-z0-9]([a-z0-9-]*[a-z0-9])?$'
+            minLength: 1
+            maxLength: 63
+      responses:
+        '200':
+          description: 实验数据
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ExperimentData'
+
   /api/hosts/{name}/experiments/{experimentId}/status:
     get:
       summary: 获取实验状态
@@ -122,6 +148,9 @@ paths:
           required: true
           schema:
             type: string
+            pattern: '^[a-z0-9]([a-z0-9-]*[a-z0-9])?$'
+            minLength: 1
+            maxLength: 63
       responses:
         '200':
           description: 实验状态
@@ -145,6 +174,9 @@ paths:
           required: true
           schema:
             type: string
+            pattern: '^[a-z0-9]([a-z0-9-]*[a-z0-9])?$'
+            minLength: 1
+            maxLength: 63
       responses:
         '200':
           description: 停止结果
@@ -212,6 +244,9 @@ components:
       properties:
         experimentId:
           type: string
+          pattern: '^[a-z0-9]([a-z0-9-]*[a-z0-9])?$'
+          minLength: 1
+          maxLength: 63
         description:
           type: string
         timeout:
@@ -224,6 +259,9 @@ components:
       properties:
         experimentId:
           type: string
+          pattern: '^[a-z0-9]([a-z0-9-]*[a-z0-9])?$'
+          minLength: 1
+          maxLength: 63
         message:
           type: string
         status:
@@ -236,6 +274,9 @@ components:
       properties:
         experimentId:
           type: string
+          pattern: '^[a-z0-9]([a-z0-9-]*[a-z0-9])?$'
+          minLength: 1
+          maxLength: 63
         status:
           type: string
         isActive:
@@ -249,6 +290,57 @@ components:
         duration:
           type: integer
         lastMetrics:
+          type: object
+          properties:
+            cpuUsagePercent:
+              type: number
+            memoryUsageBytes:
+              type: integer
+            memoryUsagePercent:
+              type: number
+            calculatorServiceHealthy:
+              type: boolean
+            networkIOBytes:
+              type: object
+              properties:
+                bytesReceived:
+                  type: integer
+                bytesSent:
+                  type: integer
+                packetsReceived:
+                  type: integer
+                packetsSent:
+                  type: integer
+
+    ExperimentData:
+      type: object
+      properties:
+        experimentId:
+          type: string
+          pattern: '^[a-z0-9]([a-z0-9-]*[a-z0-9])?$'
+          minLength: 1
+          maxLength: 63
+        description:
+          type: string
+        startTime:
+          type: string
+        endTime:
+          type: string
+        duration:
+          type: integer
+        collectionInterval:
+          type: integer
+        metrics:
+          type: array
+          items:
+            $ref: '#/components/schemas/MetricDataPoint'
+
+    MetricDataPoint:
+      type: object
+      properties:
+        timestamp:
+          type: string
+        systemMetrics:
           type: object
           properties:
             cpuUsagePercent:

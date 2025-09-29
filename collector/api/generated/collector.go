@@ -20,7 +20,6 @@ import (
 	"github.com/getkin/kin-openapi/openapi3"
 	"github.com/gin-gonic/gin"
 	"github.com/oapi-codegen/runtime"
-	openapi_types "github.com/oapi-codegen/runtime/types"
 )
 
 // Defines values for ExperimentResponseStatus.
@@ -81,11 +80,11 @@ type ExperimentData struct {
 	Description        *string `json:"description,omitempty"`
 
 	// Duration Duration in seconds
-	Duration     *int               `json:"duration,omitempty"`
-	EndTime      *time.Time         `json:"endTime,omitempty"`
-	ExperimentId openapi_types.UUID `json:"experimentId"`
-	Metrics      []MetricDataPoint  `json:"metrics"`
-	StartTime    time.Time          `json:"startTime"`
+	Duration     *int              `json:"duration,omitempty"`
+	EndTime      *time.Time        `json:"endTime,omitempty"`
+	ExperimentId string            `json:"experimentId"`
+	Metrics      []MetricDataPoint `json:"metrics"`
+	StartTime    time.Time         `json:"startTime"`
 }
 
 // ExperimentListResponse defines model for ExperimentListResponse.
@@ -101,7 +100,7 @@ type ExperimentListResponse struct {
 
 // ExperimentResponse defines model for ExperimentResponse.
 type ExperimentResponse struct {
-	ExperimentId openapi_types.UUID       `json:"experimentId"`
+	ExperimentId string                   `json:"experimentId"`
 	Message      *string                  `json:"message,omitempty"`
 	Status       ExperimentResponseStatus `json:"status"`
 	Timestamp    time.Time                `json:"timestamp"`
@@ -118,7 +117,7 @@ type ExperimentStatus struct {
 	// Duration Duration in seconds
 	Duration     *int                   `json:"duration,omitempty"`
 	EndTime      *time.Time             `json:"endTime,omitempty"`
-	ExperimentId openapi_types.UUID     `json:"experimentId"`
+	ExperimentId string                 `json:"experimentId"`
 	IsActive     bool                   `json:"isActive"`
 	LastMetrics  *SystemMetrics         `json:"lastMetrics,omitempty"`
 	StartTime    time.Time              `json:"startTime"`
@@ -137,7 +136,7 @@ type ExperimentSummary struct {
 	// Duration Duration in seconds
 	Duration     *int                    `json:"duration,omitempty"`
 	EndTime      *time.Time              `json:"endTime,omitempty"`
-	ExperimentId openapi_types.UUID      `json:"experimentId"`
+	ExperimentId string                  `json:"experimentId"`
 	IsActive     bool                    `json:"isActive"`
 	StartTime    time.Time               `json:"startTime"`
 	Status       ExperimentSummaryStatus `json:"status"`
@@ -187,8 +186,8 @@ type StartExperimentRequest struct {
 	// Description Optional description of the experiment
 	Description *string `json:"description,omitempty"`
 
-	// ExperimentId Unique identifier for the experiment
-	ExperimentId openapi_types.UUID `json:"experimentId"`
+	// ExperimentId Unique identifier for the experiment (kubernetes-style naming)
+	ExperimentId string `json:"experimentId"`
 
 	// Timeout Experiment timeout in seconds (1-3600, default 300)
 	Timeout *int `json:"timeout,omitempty"`
@@ -307,13 +306,13 @@ type ClientInterface interface {
 	StartExperiment(ctx context.Context, body StartExperimentJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// GetExperimentData request
-	GetExperimentData(ctx context.Context, experimentId openapi_types.UUID, reqEditors ...RequestEditorFn) (*http.Response, error)
+	GetExperimentData(ctx context.Context, experimentId string, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// GetExperimentStatus request
-	GetExperimentStatus(ctx context.Context, experimentId openapi_types.UUID, reqEditors ...RequestEditorFn) (*http.Response, error)
+	GetExperimentStatus(ctx context.Context, experimentId string, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// StopExperiment request
-	StopExperiment(ctx context.Context, experimentId openapi_types.UUID, reqEditors ...RequestEditorFn) (*http.Response, error)
+	StopExperiment(ctx context.Context, experimentId string, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// HealthCheck request
 	HealthCheck(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error)
@@ -355,7 +354,7 @@ func (c *Client) StartExperiment(ctx context.Context, body StartExperimentJSONRe
 	return c.Client.Do(req)
 }
 
-func (c *Client) GetExperimentData(ctx context.Context, experimentId openapi_types.UUID, reqEditors ...RequestEditorFn) (*http.Response, error) {
+func (c *Client) GetExperimentData(ctx context.Context, experimentId string, reqEditors ...RequestEditorFn) (*http.Response, error) {
 	req, err := NewGetExperimentDataRequest(c.Server, experimentId)
 	if err != nil {
 		return nil, err
@@ -367,7 +366,7 @@ func (c *Client) GetExperimentData(ctx context.Context, experimentId openapi_typ
 	return c.Client.Do(req)
 }
 
-func (c *Client) GetExperimentStatus(ctx context.Context, experimentId openapi_types.UUID, reqEditors ...RequestEditorFn) (*http.Response, error) {
+func (c *Client) GetExperimentStatus(ctx context.Context, experimentId string, reqEditors ...RequestEditorFn) (*http.Response, error) {
 	req, err := NewGetExperimentStatusRequest(c.Server, experimentId)
 	if err != nil {
 		return nil, err
@@ -379,7 +378,7 @@ func (c *Client) GetExperimentStatus(ctx context.Context, experimentId openapi_t
 	return c.Client.Do(req)
 }
 
-func (c *Client) StopExperiment(ctx context.Context, experimentId openapi_types.UUID, reqEditors ...RequestEditorFn) (*http.Response, error) {
+func (c *Client) StopExperiment(ctx context.Context, experimentId string, reqEditors ...RequestEditorFn) (*http.Response, error) {
 	req, err := NewStopExperimentRequest(c.Server, experimentId)
 	if err != nil {
 		return nil, err
@@ -509,7 +508,7 @@ func NewStartExperimentRequestWithBody(server string, contentType string, body i
 }
 
 // NewGetExperimentDataRequest generates requests for GetExperimentData
-func NewGetExperimentDataRequest(server string, experimentId openapi_types.UUID) (*http.Request, error) {
+func NewGetExperimentDataRequest(server string, experimentId string) (*http.Request, error) {
 	var err error
 
 	var pathParam0 string
@@ -543,7 +542,7 @@ func NewGetExperimentDataRequest(server string, experimentId openapi_types.UUID)
 }
 
 // NewGetExperimentStatusRequest generates requests for GetExperimentStatus
-func NewGetExperimentStatusRequest(server string, experimentId openapi_types.UUID) (*http.Request, error) {
+func NewGetExperimentStatusRequest(server string, experimentId string) (*http.Request, error) {
 	var err error
 
 	var pathParam0 string
@@ -577,7 +576,7 @@ func NewGetExperimentStatusRequest(server string, experimentId openapi_types.UUI
 }
 
 // NewStopExperimentRequest generates requests for StopExperiment
-func NewStopExperimentRequest(server string, experimentId openapi_types.UUID) (*http.Request, error) {
+func NewStopExperimentRequest(server string, experimentId string) (*http.Request, error) {
 	var err error
 
 	var pathParam0 string
@@ -689,13 +688,13 @@ type ClientWithResponsesInterface interface {
 	StartExperimentWithResponse(ctx context.Context, body StartExperimentJSONRequestBody, reqEditors ...RequestEditorFn) (*StartExperimentResponse, error)
 
 	// GetExperimentDataWithResponse request
-	GetExperimentDataWithResponse(ctx context.Context, experimentId openapi_types.UUID, reqEditors ...RequestEditorFn) (*GetExperimentDataResponse, error)
+	GetExperimentDataWithResponse(ctx context.Context, experimentId string, reqEditors ...RequestEditorFn) (*GetExperimentDataResponse, error)
 
 	// GetExperimentStatusWithResponse request
-	GetExperimentStatusWithResponse(ctx context.Context, experimentId openapi_types.UUID, reqEditors ...RequestEditorFn) (*GetExperimentStatusResponse, error)
+	GetExperimentStatusWithResponse(ctx context.Context, experimentId string, reqEditors ...RequestEditorFn) (*GetExperimentStatusResponse, error)
 
 	// StopExperimentWithResponse request
-	StopExperimentWithResponse(ctx context.Context, experimentId openapi_types.UUID, reqEditors ...RequestEditorFn) (*StopExperimentResponse, error)
+	StopExperimentWithResponse(ctx context.Context, experimentId string, reqEditors ...RequestEditorFn) (*StopExperimentResponse, error)
 
 	// HealthCheckWithResponse request
 	HealthCheckWithResponse(ctx context.Context, reqEditors ...RequestEditorFn) (*HealthCheckResponse, error)
@@ -866,7 +865,7 @@ func (c *ClientWithResponses) StartExperimentWithResponse(ctx context.Context, b
 }
 
 // GetExperimentDataWithResponse request returning *GetExperimentDataResponse
-func (c *ClientWithResponses) GetExperimentDataWithResponse(ctx context.Context, experimentId openapi_types.UUID, reqEditors ...RequestEditorFn) (*GetExperimentDataResponse, error) {
+func (c *ClientWithResponses) GetExperimentDataWithResponse(ctx context.Context, experimentId string, reqEditors ...RequestEditorFn) (*GetExperimentDataResponse, error) {
 	rsp, err := c.GetExperimentData(ctx, experimentId, reqEditors...)
 	if err != nil {
 		return nil, err
@@ -875,7 +874,7 @@ func (c *ClientWithResponses) GetExperimentDataWithResponse(ctx context.Context,
 }
 
 // GetExperimentStatusWithResponse request returning *GetExperimentStatusResponse
-func (c *ClientWithResponses) GetExperimentStatusWithResponse(ctx context.Context, experimentId openapi_types.UUID, reqEditors ...RequestEditorFn) (*GetExperimentStatusResponse, error) {
+func (c *ClientWithResponses) GetExperimentStatusWithResponse(ctx context.Context, experimentId string, reqEditors ...RequestEditorFn) (*GetExperimentStatusResponse, error) {
 	rsp, err := c.GetExperimentStatus(ctx, experimentId, reqEditors...)
 	if err != nil {
 		return nil, err
@@ -884,7 +883,7 @@ func (c *ClientWithResponses) GetExperimentStatusWithResponse(ctx context.Contex
 }
 
 // StopExperimentWithResponse request returning *StopExperimentResponse
-func (c *ClientWithResponses) StopExperimentWithResponse(ctx context.Context, experimentId openapi_types.UUID, reqEditors ...RequestEditorFn) (*StopExperimentResponse, error) {
+func (c *ClientWithResponses) StopExperimentWithResponse(ctx context.Context, experimentId string, reqEditors ...RequestEditorFn) (*StopExperimentResponse, error) {
 	rsp, err := c.StopExperiment(ctx, experimentId, reqEditors...)
 	if err != nil {
 		return nil, err
@@ -1109,13 +1108,13 @@ type ServerInterface interface {
 	StartExperiment(c *gin.Context)
 	// Get experiment data
 	// (GET /experiments/{experimentId}/data)
-	GetExperimentData(c *gin.Context, experimentId openapi_types.UUID)
+	GetExperimentData(c *gin.Context, experimentId string)
 	// Get experiment status
 	// (GET /experiments/{experimentId}/status)
-	GetExperimentStatus(c *gin.Context, experimentId openapi_types.UUID)
+	GetExperimentStatus(c *gin.Context, experimentId string)
 	// Stop an experiment
 	// (POST /experiments/{experimentId}/stop)
-	StopExperiment(c *gin.Context, experimentId openapi_types.UUID)
+	StopExperiment(c *gin.Context, experimentId string)
 	// Health check
 	// (GET /health)
 	HealthCheck(c *gin.Context)
@@ -1183,7 +1182,7 @@ func (siw *ServerInterfaceWrapper) GetExperimentData(c *gin.Context) {
 	var err error
 
 	// ------------- Path parameter "experimentId" -------------
-	var experimentId openapi_types.UUID
+	var experimentId string
 
 	err = runtime.BindStyledParameterWithOptions("simple", "experimentId", c.Param("experimentId"), &experimentId, runtime.BindStyledParameterOptions{Explode: false, Required: true})
 	if err != nil {
@@ -1207,7 +1206,7 @@ func (siw *ServerInterfaceWrapper) GetExperimentStatus(c *gin.Context) {
 	var err error
 
 	// ------------- Path parameter "experimentId" -------------
-	var experimentId openapi_types.UUID
+	var experimentId string
 
 	err = runtime.BindStyledParameterWithOptions("simple", "experimentId", c.Param("experimentId"), &experimentId, runtime.BindStyledParameterOptions{Explode: false, Required: true})
 	if err != nil {
@@ -1231,7 +1230,7 @@ func (siw *ServerInterfaceWrapper) StopExperiment(c *gin.Context) {
 	var err error
 
 	// ------------- Path parameter "experimentId" -------------
-	var experimentId openapi_types.UUID
+	var experimentId string
 
 	err = runtime.BindStyledParameterWithOptions("simple", "experimentId", c.Param("experimentId"), &experimentId, runtime.BindStyledParameterOptions{Explode: false, Required: true})
 	if err != nil {
@@ -1300,36 +1299,37 @@ func RegisterHandlersWithOptions(router gin.IRouter, si ServerInterface, options
 // Base64 encoded, gzipped, json marshaled Swagger object
 var swaggerSpec = []string{
 
-	"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",
-	"AAA=",
+	"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",
+	"AAD//y8YREq0JAAA",
 }
 
 // GetSwagger returns the content of the embedded swagger specification file

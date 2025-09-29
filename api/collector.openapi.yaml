@@ -89,8 +89,10 @@ paths:
           required: true
           schema:
             type: string
-            format: uuid
-          description: The experiment ID to stop
+            pattern: '^[a-z0-9]([a-z0-9-]*[a-z0-9])?$'
+            minLength: 1
+            maxLength: 63
+          description: The experiment name (kubernetes-style naming)
       responses:
         '200':
           description: Experiment stopped successfully
@@ -116,8 +118,10 @@ paths:
           required: true
           schema:
             type: string
-            format: uuid
-          description: The experiment ID
+            pattern: '^[a-z0-9]([a-z0-9-]*[a-z0-9])?$'
+            minLength: 1
+            maxLength: 63
+          description: The experiment name
       responses:
         '200':
           description: Experiment status
@@ -143,8 +147,10 @@ paths:
           required: true
           schema:
             type: string
-            format: uuid
-          description: The experiment ID
+            pattern: '^[a-z0-9]([a-z0-9-]*[a-z0-9])?$'
+            minLength: 1
+            maxLength: 63
+          description: The experiment name
       responses:
         '200':
           description: Experiment data
@@ -181,8 +187,10 @@ components:
       properties:
         experimentId:
           type: string
-          format: uuid
-          description: Unique identifier for the experiment
+          pattern: '^[a-z0-9]([a-z0-9-]*[a-z0-9])?$'
+          minLength: 1
+          maxLength: 63
+          description: Unique identifier for the experiment (kubernetes-style naming)
         description:
           type: string
           description: Optional description of the experiment
@@ -208,7 +216,9 @@ components:
       properties:
         experimentId:
           type: string
-          format: uuid
+          pattern: '^[a-z0-9]([a-z0-9-]*[a-z0-9])?$'
+          minLength: 1
+          maxLength: 63
         status:
           type: string
           enum: [started, stopped, timeout]
@@ -245,7 +255,9 @@ components:
       properties:
         experimentId:
           type: string
-          format: uuid
+          pattern: '^[a-z0-9]([a-z0-9-]*[a-z0-9])?$'
+          minLength: 1
+          maxLength: 63
         description:
           type: string
         status:
@@ -276,7 +288,9 @@ components:
       properties:
         experimentId:
           type: string
-          format: uuid
+          pattern: '^[a-z0-9]([a-z0-9-]*[a-z0-9])?$'
+          minLength: 1
+          maxLength: 63
         status:
           type: string
           enum: [running, stopped, timeout, error]
@@ -306,7 +320,9 @@ components:
       properties:
         experimentId:
           type: string
-          format: uuid
+          pattern: '^[a-z0-9]([a-z0-9-]*[a-z0-9])?$'
+          minLength: 1
+          maxLength: 63
         description:
           type: string
         startTime:

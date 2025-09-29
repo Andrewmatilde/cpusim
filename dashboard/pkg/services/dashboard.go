@@ -7,12 +7,11 @@ import (
 	"fmt"
 	"net/http"
 	"strings"
+	"time"
 
 	collectorAPI "cpusim/collector/api/generated"
 	dashboardAPI "cpusim/dashboard/api/generated"
 	"cpusim/dashboard/pkg/config"
-
-	"github.com/google/uuid"
 )
 
 type DashboardService struct {
@@ -153,7 +152,7 @@ func (s *DashboardService) GetHostExperiments(ctx context.Context, hostName stri
 	var experiments []dashboardAPI.ExperimentStatus
 	for _, exp := range resp.JSON200.Experiments {
 		dashExp := dashboardAPI.ExperimentStatus{
-			ExperimentId:        stringPtr(exp.ExperimentId.String()),
+			ExperimentId:        stringPtr(exp.ExperimentId),
 			Status:              stringPtr(string(exp.Status)),
 			IsActive:            &exp.IsActive,
 			DataPointsCollected: exp.DataPointsCollected,
@@ -187,20 +186,15 @@ func (s *DashboardService) StartHostExperiment(ctx context.Context, hostName str
 		return nil, fmt.Errorf("failed to create collector client: %w", err)
 	}
 
-	// 如果没有提供experimentId，生成一个
+	// 如果没有提供experimentId，生成一个合法的k8s名称
 	experimentId := req.ExperimentId
 	if experimentId == "" {
-		experimentId = uuid.New().String()
-	}
-
-	// Parse experimentId as UUID
-	uuidVal, err := uuid.Parse(experimentId)
-	if err != nil {
-		return nil, fmt.Errorf("invalid experiment ID format: %w", err)
+		// 生成类似k8s名称的ID
+		experimentId = fmt.Sprintf("exp-%d", time.Now().Unix())
 	}
 
 	collectorReq := collectorAPI.StartExperimentJSONRequestBody{
-		ExperimentId:       uuidVal,
+		ExperimentId:       experimentId,
 		Description:        &req.Description,
 		Timeout:            &req.Timeout,
 		CollectionInterval: &req.CollectionInterval,
@@ -216,11 +210,90 @@ func (s *DashboardService) StartHostExperiment(ctx context.Context, hostName str
 	}
 
 	return &dashboardAPI.ExperimentResponse{
-		ExperimentId: stringPtr(resp.JSON200.ExperimentId.String()),
+		ExperimentId: stringPtr(resp.JSON200.ExperimentId),
 		Message:      resp.JSON200.Message,
 		Status:       stringPtr(string(resp.JSON200.Status)),
 		Timestamp:    stringPtr(resp.JSON200.Timestamp.String()),
 	}, nil
+}
+
+func (s *DashboardService) GetHostExperimentData(ctx context.Context, hostName, experimentId string) (*dashboardAPI.ExperimentData, error) {
+	host := s.config.GetHostByName(hostName)
+	if host == nil {
+		return nil, fmt.Errorf("host not found: %s", hostName)
+	}
+
+	client, err := collectorAPI.NewClientWithResponses(host.GetCollectorServiceURL())
+	if err != nil {
+		return nil, fmt.Errorf("failed to create collector client: %w", err)
+	}
+
+	// Parse experimentId as string (no need to parse UUID anymore)
+	resp, err := client.GetExperimentDataWithResponse(ctx, experimentId)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get experiment data: %w", err)
+	}
+
+	if resp.StatusCode() != 200 || resp.JSON200 == nil {
+		return nil, fmt.Errorf("get experiment data failed with status: %d", resp.StatusCode())
+	}
+
+	exp := resp.JSON200
+	dashExp := &dashboardAPI.ExperimentData{
+		ExperimentId:       stringPtr(exp.ExperimentId),
+		Description:        exp.Description,
+		StartTime:          stringPtr(exp.StartTime.String()),
+		CollectionInterval: exp.CollectionInterval,
+	}
+
+	if exp.EndTime != nil {
+		dashExp.EndTime = stringPtr(exp.EndTime.String())
+	}
+	if exp.Duration != nil {
+		dashExp.Duration = exp.Duration
+	}
+
+	// Convert metrics
+	if exp.Metrics != nil {
+		var metrics []dashboardAPI.MetricDataPoint
+		for _, metric := range exp.Metrics {
+			dashMetric := dashboardAPI.MetricDataPoint{
+				Timestamp: stringPtr(metric.Timestamp.String()),
+				SystemMetrics: &struct {
+					CalculatorServiceHealthy *bool `json:"calculatorServiceHealthy,omitempty"`
+					CpuUsagePercent          *float32 `json:"cpuUsagePercent,omitempty"`
+					MemoryUsageBytes         *int `json:"memoryUsageBytes,omitempty"`
+					MemoryUsagePercent       *float32 `json:"memoryUsagePercent,omitempty"`
+					NetworkIOBytes           *struct {
+						BytesReceived   *int `json:"bytesReceived,omitempty"`
+						BytesSent       *int `json:"bytesSent,omitempty"`
+						PacketsReceived *int `json:"packetsReceived,omitempty"`
+						PacketsSent     *int `json:"packetsSent,omitempty"`
+					} `json:"networkIOBytes,omitempty"`
+				}{
+					CalculatorServiceHealthy: &metric.SystemMetrics.CalculatorServiceHealthy,
+					CpuUsagePercent:          &metric.SystemMetrics.CpuUsagePercent,
+					MemoryUsageBytes:         int64ToIntPtr(metric.SystemMetrics.MemoryUsageBytes),
+					MemoryUsagePercent:       &metric.SystemMetrics.MemoryUsagePercent,
+					NetworkIOBytes: &struct {
+						BytesReceived   *int `json:"bytesReceived,omitempty"`
+						BytesSent       *int `json:"bytesSent,omitempty"`
+						PacketsReceived *int `json:"packetsReceived,omitempty"`
+						PacketsSent     *int `json:"packetsSent,omitempty"`
+					}{
+						BytesReceived:   int64ToIntPtr(metric.SystemMetrics.NetworkIOBytes.BytesReceived),
+						BytesSent:       int64ToIntPtr(metric.SystemMetrics.NetworkIOBytes.BytesSent),
+						PacketsReceived: int64ToIntPtr(metric.SystemMetrics.NetworkIOBytes.PacketsReceived),
+						PacketsSent:     int64ToIntPtr(metric.SystemMetrics.NetworkIOBytes.PacketsSent),
+					},
+				},
+			}
+			metrics = append(metrics, dashMetric)
+		}
+		dashExp.Metrics = &metrics
+	}
+
+	return dashExp, nil
 }
 
 func (s *DashboardService) GetHostExperimentStatus(ctx context.Context, hostName, experimentId string) (*dashboardAPI.ExperimentStatus, error) {
@@ -234,13 +307,8 @@ func (s *DashboardService) GetHostExperimentStatus(ctx context.Context, hostName
 		return nil, fmt.Errorf("failed to create collector client: %w", err)
 	}
 
-	// Parse experimentId as UUID
-	uuidVal, err := uuid.Parse(experimentId)
-	if err != nil {
-		return nil, fmt.Errorf("invalid experiment ID format: %w", err)
-	}
-
-	resp, err := client.GetExperimentStatusWithResponse(ctx, uuidVal)
+	// Parse experimentId as string (no need to parse UUID anymore)
+	resp, err := client.GetExperimentStatusWithResponse(ctx, experimentId)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get experiment status: %w", err)
 	}
@@ -251,7 +319,7 @@ func (s *DashboardService) GetHostExperimentStatus(ctx context.Context, hostName
 
 	exp := resp.JSON200
 	dashExp := &dashboardAPI.ExperimentStatus{
-		ExperimentId:        stringPtr(exp.ExperimentId.String()),
+		ExperimentId:        stringPtr(exp.ExperimentId),
 		Status:              stringPtr(string(exp.Status)),
 		IsActive:            &exp.IsActive,
 		DataPointsCollected: exp.DataPointsCollected,
@@ -309,13 +377,8 @@ func (s *DashboardService) StopHostExperiment(ctx context.Context, hostName, exp
 		return nil, fmt.Errorf("failed to create collector client: %w", err)
 	}
 
-	// Parse experimentId as UUID
-	uuidVal, err := uuid.Parse(experimentId)
-	if err != nil {
-		return nil, fmt.Errorf("invalid experiment ID format: %w", err)
-	}
-
-	resp, err := client.StopExperimentWithResponse(ctx, uuidVal)
+	// Parse experimentId as string (no need to parse UUID anymore)
+	resp, err := client.StopExperimentWithResponse(ctx, experimentId)
 	if err != nil {
 		return nil, fmt.Errorf("failed to stop experiment: %w", err)
 	}
@@ -325,7 +388,7 @@ func (s *DashboardService) StopHostExperiment(ctx context.Context, hostName, exp
 	}
 
 	return &dashboardAPI.ExperimentResponse{
-		ExperimentId: stringPtr(resp.JSON200.ExperimentId.String()),
+		ExperimentId: stringPtr(resp.JSON200.ExperimentId),
 		Message:      resp.JSON200.Message,
 		Status:       stringPtr(string(resp.JSON200.Status)),
 		Timestamp:    stringPtr(resp.JSON200.Timestamp.String()),

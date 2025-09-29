@@ -72,6 +72,15 @@ func (h *DashboardHandler) StartHostExperiment(c *gin.Context, name string) {
 	c.JSON(http.StatusOK, result)
 }
 
+func (h *DashboardHandler) GetHostExperimentData(c *gin.Context, name string, experimentId string) {
+	data, err := h.service.GetHostExperimentData(c.Request.Context(), name, experimentId)
+	if err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, data)
+}
+
 func (h *DashboardHandler) GetHostExperimentStatus(c *gin.Context, name string, experimentId string) {
 	status, err := h.service.GetHostExperimentStatus(c.Request.Context(), name, experimentId)
 	if err != nil {
