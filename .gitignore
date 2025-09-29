@@ -43,3 +43,4 @@ configs/config.json
 web/node_modules
 web/.claude
 .calude
+data/*

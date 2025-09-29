@@ -1,0 +1,446 @@
+openapi: 3.0.3
+info:
+  title: Request Sender API
+  description: |
+    HTTP请求发送服务，专门用于向CPU仿真服务发送负载请求
+
+    **固定请求配置:**
+    - 请求路径: POST /calculate
+    - 请求体: {} (空JSON对象)
+    - 目标服务: CPU仿真服务 (cpusim-server)
+
+    **QPS控制:**
+    - 基于QPS参数控制请求频率
+    - 每个请求间隔 = 1/QPS 秒
+    - 每个时间间隔启动一个goroutine发送请求
+
+    **HTTP连接优化:**
+    - 配置HTTP Transport以支持高并发连接
+    - 复用连接池以提高性能
+  version: 1.0.0
+  contact:
+    name: CPU Simulation Project
+servers:
+  - url: http://localhost:80
+    description: Request sender service
+security: []
+
+paths:
+  /experiments:
+    get:
+      summary: 获取实验列表
+      description: 获取所有请求发送实验的列表
+      operationId: listRequestExperiments
+      parameters:
+        - name: status
+          in: query
+          required: false
+          schema:
+            type: string
+            enum: [running, stopped, completed, error, all]
+            default: all
+          description: 按状态过滤实验
+        - name: limit
+          in: query
+          required: false
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+            default: 50
+          description: 返回的实验数量限制
+      responses:
+        '200':
+          description: 实验列表
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RequestExperimentListResponse'
+        '500':
+          description: 服务器错误
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+    post:
+      summary: 启动请求发送实验
+      description: 创建并启动一个新的请求发送实验
+      operationId: startRequestExperiment
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/StartRequestExperimentRequest'
+            example:
+              experimentId: "req-exp-001"
+              targetIP: "192.168.1.100"
+              targetPort: 80
+              timeout: 300
+              qps: 10
+              description: "CPU负载测试 - 10 QPS"
+      responses:
+        '201':
+          description: 实验启动成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RequestExperiment'
+        '400':
+          description: 请求参数错误
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '409':
+          description: 实验ID已存在
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          description: 服务器错误
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /experiments/{experimentId}:
+    get:
+      summary: 获取实验状态
+      description: 获取指定实验的详细状态信息
+      operationId: getRequestExperimentStatus
+      parameters:
+        - name: experimentId
+          in: path
+          required: true
+          schema:
+            type: string
+          description: 实验唯一标识符
+      responses:
+        '200':
+          description: 实验状态信息
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RequestExperiment'
+        '404':
+          description: 实验不存在
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          description: 服务器错误
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /experiments/{experimentId}/stop:
+    post:
+      summary: 停止请求发送实验
+      description: 停止指定的请求发送实验
+      operationId: stopRequestExperiment
+      parameters:
+        - name: experimentId
+          in: path
+          required: true
+          schema:
+            type: string
+          description: 实验唯一标识符
+      responses:
+        '200':
+          description: 实验停止成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StopExperimentResult'
+        '404':
+          description: 实验不存在
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '409':
+          description: 实验已停止
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          description: 服务器错误
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /experiments/{experimentId}/stats:
+    get:
+      summary: 获取实验统计信息
+      description: 获取实验的详细统计数据
+      operationId: getRequestExperimentStats
+      parameters:
+        - name: experimentId
+          in: path
+          required: true
+          schema:
+            type: string
+          description: 实验唯一标识符
+      responses:
+        '200':
+          description: 实验统计信息
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RequestExperimentStats'
+        '404':
+          description: 实验不存在
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          description: 服务器错误
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /health:
+    get:
+      summary: 健康检查
+      description: 检查请求发送服务的健康状态
+      operationId: healthCheck
+      responses:
+        '200':
+          description: 服务健康
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HealthResponse'
+
+components:
+  schemas:
+    StartRequestExperimentRequest:
+      type: object
+      required:
+        - experimentId
+        - targetIP
+        - targetPort
+        - timeout
+        - qps
+      properties:
+        experimentId:
+          type: string
+          description: 实验唯一标识符
+          example: "req-exp-001"
+        targetIP:
+          type: string
+          description: 目标CPU仿真服务IP地址
+          example: "192.168.1.100"
+        targetPort:
+          type: integer
+          description: 目标CPU仿真服务端口（通常为80）
+          minimum: 1
+          maximum: 65535
+          default: 80
+          example: 80
+        timeout:
+          type: integer
+          description: 实验超时时间（秒）
+          minimum: 1
+          maximum: 3600
+          example: 300
+        qps:
+          type: integer
+          description: 每秒请求数（QPS）
+          minimum: 1
+          maximum: 1000
+          default: 1
+          example: 10
+        description:
+          type: string
+          description: 实验描述
+          example: "CPU负载测试实验"
+
+    RequestExperiment:
+      type: object
+      properties:
+        experimentId:
+          type: string
+          description: 实验ID
+        targetIP:
+          type: string
+          description: 目标CPU仿真服务IP地址
+        targetPort:
+          type: integer
+          description: 目标CPU仿真服务端口
+        timeout:
+          type: integer
+          description: 超时时间（秒）
+        qps:
+          type: integer
+          description: 每秒请求数（QPS）
+        description:
+          type: string
+          description: 实验描述
+        status:
+          type: string
+          enum: [running, stopped, completed, error]
+          description: 实验状态
+        startTime:
+          type: string
+          format: date-time
+          description: 实验开始时间
+        endTime:
+          type: string
+          format: date-time
+          description: 实验结束时间
+          nullable: true
+        duration:
+          type: integer
+          description: 实验持续时间（秒）
+          nullable: true
+        createdAt:
+          type: string
+          format: date-time
+          description: 创建时间
+
+    RequestExperimentStats:
+      type: object
+      properties:
+        experimentId:
+          type: string
+          description: 实验ID
+        status:
+          type: string
+          enum: [running, stopped, completed, error]
+          description: 实验状态
+        totalRequests:
+          type: integer
+          description: 总请求数
+        successfulRequests:
+          type: integer
+          description: 成功请求数
+        failedRequests:
+          type: integer
+          description: 失败请求数
+        averageResponseTime:
+          type: number
+          format: float
+          description: 平均响应时间（毫秒）
+        minResponseTime:
+          type: number
+          format: float
+          description: 最小响应时间（毫秒）
+        maxResponseTime:
+          type: number
+          format: float
+          description: 最大响应时间（毫秒）
+        requestsPerSecond:
+          type: number
+          format: float
+          description: 每秒请求数（QPS）
+        errorRate:
+          type: number
+          format: float
+          description: 错误率（百分比）
+        responseTimeP50:
+          type: number
+          format: float
+          description: 50%分位响应时间（毫秒）
+        responseTimeP95:
+          type: number
+          format: float
+          description: 95%分位响应时间（毫秒）
+        responseTimeP99:
+          type: number
+          format: float
+          description: 99%分位响应时间（毫秒）
+        startTime:
+          type: string
+          format: date-time
+          description: 开始时间
+        endTime:
+          type: string
+          format: date-time
+          description: 结束时间
+          nullable: true
+        duration:
+          type: integer
+          description: 持续时间（秒）
+        lastUpdated:
+          type: string
+          format: date-time
+          description: 最后更新时间
+
+    RequestExperimentListResponse:
+      type: object
+      properties:
+        experiments:
+          type: array
+          items:
+            $ref: '#/components/schemas/RequestExperiment'
+        total:
+          type: integer
+          description: 总实验数量
+
+    StopExperimentResult:
+      type: object
+      properties:
+        experimentId:
+          type: string
+          description: 实验ID
+        stopStatus:
+          type: string
+          description: 停止状态
+          example: "stopped"
+        endTime:
+          type: string
+          format: date-time
+          description: 停止时间
+        duration:
+          type: integer
+          description: 运行时长（秒）
+        finalStats:
+          $ref: '#/components/schemas/RequestExperimentStats'
+
+    HealthResponse:
+      type: object
+      properties:
+        status:
+          type: string
+          example: "healthy"
+        timestamp:
+          type: string
+          format: date-time
+          description: 健康检查时间
+        uptime:
+          type: integer
+          description: 服务运行时间（秒）
+        version:
+          type: string
+          description: 服务版本
+          example: "1.0.0"
+
+    ErrorResponse:
+      type: object
+      required:
+        - timestamp
+      properties:
+        error:
+          type: string
+          description: 错误类型
+        message:
+          type: string
+          description: 错误详细信息
+        timestamp:
+          type: string
+          format: date-time
+          description: 错误时间
+        experimentId:
+          type: string
+          description: 相关实验ID
+          nullable: true
