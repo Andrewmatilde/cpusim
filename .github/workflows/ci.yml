@@ -48,6 +48,7 @@ jobs:
           go build -v -ldflags="-s -w" -o bin/cpusim-server ./cmd/cpusim-server
           go build -v -ldflags="-s -w" -o bin/collector-server ./cmd/collector-server
           go build -v -ldflags="-s -w" -o bin/dashboard-server ./cmd/dashboard-server
+          go build -v -ldflags="-s -w" -o bin/requester-server ./cmd/requester-server
 
       - name: Check binaries
         run: |
@@ -55,6 +56,7 @@ jobs:
           file bin/cpusim-server
           file bin/collector-server
           file bin/dashboard-server
+          file bin/requester-server
 
       - name: Test collector API generation
         run: |

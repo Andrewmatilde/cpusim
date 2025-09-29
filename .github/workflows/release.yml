@@ -47,6 +47,7 @@ jobs:
           go build -v -ldflags="-s -w" -o cpusim-server-${{ steps.version.outputs.VERSION }}-${{ matrix.suffix }} ./cmd/cpusim-server
           go build -v -ldflags="-s -w" -o collector-server-${{ steps.version.outputs.VERSION }}-${{ matrix.suffix }} ./cmd/collector-server
           go build -v -ldflags="-s -w" -o dashboard-server-${{ steps.version.outputs.VERSION }}-${{ matrix.suffix }} ./cmd/dashboard-server
+          go build -v -ldflags="-s -w" -o requester-server-${{ steps.version.outputs.VERSION }}-${{ matrix.suffix }} ./cmd/requester-server
 
       - name: Upload cpusim-server artifact
         uses: actions/upload-artifact@v4
@@ -65,6 +66,12 @@ jobs:
         with:
           name: dashboard-server-${{ steps.version.outputs.VERSION }}-${{ matrix.suffix }}
           path: dashboard-server-${{ steps.version.outputs.VERSION }}-${{ matrix.suffix }}
+
+      - name: Upload requester-server artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: requester-server-${{ steps.version.outputs.VERSION }}-${{ matrix.suffix }}
+          path: requester-server-${{ steps.version.outputs.VERSION }}-${{ matrix.suffix }}
 
   release:
     name: Create Release
@@ -92,7 +99,7 @@ jobs:
           draft: false
           prerelease: false
           body: |
-            ## CPU仿真服务 - GCD计算器、数据收集器与管理面板
+            ## CPU仿真服务 - GCD计算器、数据收集器、请求发送器与管理面板
 
             ### 下载说明
 
@@ -107,6 +114,12 @@ jobs:
             - `collector-server-${{ github.ref_name }}-linux-arm64`: Linux ARM64
             - `collector-server-${{ github.ref_name }}-darwin-amd64`: macOS Intel
             - `collector-server-${{ github.ref_name }}-darwin-arm64`: macOS Apple Silicon
+
+            #### 请求发送器 (requester-server)
+            - `requester-server-${{ github.ref_name }}-linux-amd64`: Linux x86_64
+            - `requester-server-${{ github.ref_name }}-linux-arm64`: Linux ARM64
+            - `requester-server-${{ github.ref_name }}-darwin-amd64`: macOS Intel
+            - `requester-server-${{ github.ref_name }}-darwin-arm64`: macOS Apple Silicon
 
             #### 管理面板 (dashboard-server)
             - `dashboard-server-${{ github.ref_name }}-linux-amd64`: Linux x86_64
