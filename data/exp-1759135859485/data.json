@@ -1,0 +1,105 @@
+{
+  "experiment": {
+    "collectionInterval": 1000,
+    "createdAt": "2025-09-29T16:51:06.136631+08:00",
+    "description": "",
+    "experimentId": "exp-1759135859485",
+    "participatingHosts": [
+      {
+        "ip": "128.1.40.151",
+        "name": "1"
+      }
+    ],
+    "timeout": 300
+  },
+  "hosts": [
+    {
+      "data": {
+        "collectionInterval": 1000,
+        "duration": 5,
+        "endTime": "2025-09-29T16:51:11.547288215+08:00",
+        "experimentId": "exp-1759135859485",
+        "metrics": [
+          {
+            "systemMetrics": {
+              "calculatorServiceHealthy": false,
+              "cpuUsagePercent": 0.055761658,
+              "memoryUsageBytes": 115986432,
+              "memoryUsagePercent": 11.502372,
+              "networkIOBytes": {
+                "bytesReceived": 63476,
+                "bytesSent": 63681,
+                "packetsReceived": 640,
+                "packetsSent": 432
+              }
+            },
+            "timestamp": "2025-09-29T16:51:07.177201521+08:00"
+          },
+          {
+            "systemMetrics": {
+              "calculatorServiceHealthy": false,
+              "cpuUsagePercent": 1.980198,
+              "memoryUsageBytes": 115986432,
+              "memoryUsagePercent": 11.502372,
+              "networkIOBytes": {
+                "bytesReceived": 0,
+                "bytesSent": 0,
+                "packetsReceived": 0,
+                "packetsSent": 0
+              }
+            },
+            "timestamp": "2025-09-29T16:51:08.177274782+08:00"
+          },
+          {
+            "systemMetrics": {
+              "calculatorServiceHealthy": false,
+              "cpuUsagePercent": 1.010101,
+              "memoryUsageBytes": 116244480,
+              "memoryUsagePercent": 11.527963,
+              "networkIOBytes": {
+                "bytesReceived": 0,
+                "bytesSent": 0,
+                "packetsReceived": 0,
+                "packetsSent": 0
+              }
+            },
+            "timestamp": "2025-09-29T16:51:09.177280575+08:00"
+          },
+          {
+            "systemMetrics": {
+              "calculatorServiceHealthy": false,
+              "cpuUsagePercent": 1,
+              "memoryUsageBytes": 116502528,
+              "memoryUsagePercent": 11.553554,
+              "networkIOBytes": {
+                "bytesReceived": 669,
+                "bytesSent": 613,
+                "packetsReceived": 6,
+                "packetsSent": 4
+              }
+            },
+            "timestamp": "2025-09-29T16:51:10.177843809+08:00"
+          },
+          {
+            "systemMetrics": {
+              "calculatorServiceHealthy": false,
+              "cpuUsagePercent": 2,
+              "memoryUsageBytes": 116502528,
+              "memoryUsagePercent": 11.553554,
+              "networkIOBytes": {
+                "bytesReceived": 0,
+                "bytesSent": 0,
+                "packetsReceived": 0,
+                "packetsSent": 0
+              }
+            },
+            "timestamp": "2025-09-29T16:51:11.177276135+08:00"
+          }
+        ],
+        "startTime": "2025-09-29T16:51:06.176885725+08:00"
+      },
+      "ip": "128.1.40.151",
+      "name": "1"
+    }
+  ]
+}

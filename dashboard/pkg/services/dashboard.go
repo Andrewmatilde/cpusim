@@ -227,6 +227,59 @@ func (s *DashboardService) GetExperimentData(ctx context.Context, experimentId s
 		Experiment:   experiment,
 	}
 
+	// Try to load consolidated data file first
+	consolidatedDataFile := filepath.Join(s.dataDir, experimentId, "data.json")
+	var consolidatedData map[string]any
+	if data, err := os.ReadFile(consolidatedDataFile); err == nil {
+		if err := json.Unmarshal(data, &consolidatedData); err == nil {
+			// Successfully loaded consolidated data
+			if hostsData, ok := consolidatedData["hosts"].([]any); ok {
+				var hosts []struct {
+					Data *dashboardAPI.CollectorExperimentData `json:"data,omitempty"`
+					Ip   string                              `json:"ip"`
+					Name string                              `json:"name"`
+				}
+
+				for _, hostData := range hostsData {
+					if hostMap, ok := hostData.(map[string]any); ok {
+						hostName, _ := hostMap["name"].(string)
+						hostIP, _ := hostMap["ip"].(string)
+
+						// If specific host requested, filter
+						if params.HostName != nil && *params.HostName != "" && hostName != *params.HostName {
+							continue
+						}
+
+						hostInfo := struct {
+							Data *dashboardAPI.CollectorExperimentData `json:"data,omitempty"`
+							Ip   string                              `json:"ip"`
+							Name string                              `json:"name"`
+						}{
+							Name: hostName,
+							Ip:   hostIP,
+						}
+
+						// Convert data if present
+						if rawData, ok := hostMap["data"]; ok {
+							// Convert raw data back to collectorAPI.ExperimentData
+							dataBytes, _ := json.Marshal(rawData)
+							var collectorData collectorAPI.ExperimentData
+							if err := json.Unmarshal(dataBytes, &collectorData); err == nil {
+								hostInfo.Data = convertCollectorDataToDashboard(&collectorData)
+							}
+						}
+
+						hosts = append(hosts, hostInfo)
+					}
+				}
+
+				response.Hosts = &hosts
+				return response, nil
+			}
+		}
+	}
+
+	// Fallback to old logic if consolidated data not found
 	// If specific host requested, get data from that host
 	if params.HostName != nil && *params.HostName != "" {
 		hostName := *params.HostName
@@ -244,34 +297,7 @@ func (s *DashboardService) GetExperimentData(ctx context.Context, experimentId s
 			return nil, fmt.Errorf("host %s not participating in experiment %s", hostName, experimentId)
 		}
 
-		// Try to load data from disk first
-		dataFile := filepath.Join(s.dataDir, experimentId, fmt.Sprintf("%s.json", hostName))
-		if data, err := os.ReadFile(dataFile); err == nil {
-			var collectorData collectorAPI.ExperimentData
-			if err := json.Unmarshal(data, &collectorData); err == nil {
-				hosts := []struct {
-					Data *dashboardAPI.CollectorExperimentData `json:"data,omitempty"`
-					Ip   string                              `json:"ip"`
-					Name string                              `json:"name"`
-				}{
-					{
-						Name: hostName,
-						Ip:   "", // Get from config
-						Data: convertCollectorDataToDashboard(&collectorData),
-					},
-				}
-
-				// Get IP from config
-				if hostConfig := s.config.GetHostByName(hostName); hostConfig != nil {
-					hosts[0].Ip = hostConfig.IP
-				}
-
-				response.Hosts = &hosts
-				return response, nil
-			}
-		}
-
-		// If not on disk, try to get from collector service
+		// Try to get from collector service directly
 		hostConfig := s.config.GetHostByName(hostName)
 		if hostConfig != nil {
 			client, _ := collectorAPI.NewClientWithResponses(hostConfig.GetCollectorServiceURL())
@@ -288,8 +314,27 @@ func (s *DashboardService) GetExperimentData(ctx context.Context, experimentId s
 					},
 				}
 				response.Hosts = &hosts
+				return response, nil
 			}
 		}
+
+		// Return empty response if no data found
+		hostIP := ""
+		if hostConfig != nil {
+			hostIP = hostConfig.IP
+		}
+		hosts := []struct {
+			Data *dashboardAPI.CollectorExperimentData `json:"data,omitempty"`
+			Ip   string                              `json:"ip"`
+			Name string                              `json:"name"`
+		}{
+			{
+				Name: hostName,
+				Ip:   hostIP,
+				Data: nil,
+			},
+		}
+		response.Hosts = &hosts
 	} else {
 		// Return summary for all hosts
 		var hosts []struct {
@@ -306,13 +351,7 @@ func (s *DashboardService) GetExperimentData(ctx context.Context, experimentId s
 			}{
 				Name: h.Name,
 				Ip:   h.Ip,
-			}
-
-			// Check if data exists on disk
-			dataFile := filepath.Join(s.dataDir, experimentId, fmt.Sprintf("%s.json", h.Name))
-			if _, err := os.Stat(dataFile); err == nil {
-				// Data exists but don't load it for summary view
-				hostInfo.Data = nil
+				Data: nil, // Summary view doesn't include data
 			}
 
 			hosts = append(hosts, hostInfo)
@@ -346,6 +385,9 @@ func (s *DashboardService) StopGlobalExperiment(ctx context.Context, experimentI
 		Ip    *string `json:"ip,omitempty"`
 		Name  *string `json:"name,omitempty"`
 	}
+
+	// Store collected data in memory instead of individual files
+	collectedData := make(map[string]*collectorAPI.ExperimentData)
 
 	// Stop experiment on all hosts and collect data
 	var wg sync.WaitGroup
@@ -425,28 +467,9 @@ func (s *DashboardService) StopGlobalExperiment(ctx context.Context, experimentI
 				return
 			}
 
-			// Save data to disk
-			expDir := filepath.Join(s.dataDir, experimentId)
-			os.MkdirAll(expDir, 0755)
-
-			dataFile := filepath.Join(expDir, fmt.Sprintf("%s.json", h.Name))
-			dataBytes, _ := json.MarshalIndent(dataResp.JSON200, "", "  ")
-			if err := os.WriteFile(dataFile, dataBytes, 0644); err != nil {
-				mu.Lock()
-				hostsFailed = append(hostsFailed, struct {
-					Error *string `json:"error,omitempty"`
-					Ip    *string `json:"ip,omitempty"`
-					Name  *string `json:"name,omitempty"`
-				}{
-					Name:  stringPtr(h.Name),
-					Ip:    stringPtr(h.Ip),
-					Error: stringPtr(fmt.Sprintf("failed to save data: %v", err)),
-				})
-				mu.Unlock()
-				return
-			}
-
+			// Store data in memory instead of saving to individual files
 			mu.Lock()
+			collectedData[h.Name] = dataResp.JSON200
 			hostsCollected = append(hostsCollected, struct {
 				Ip   *string `json:"ip,omitempty"`
 				Name *string `json:"name,omitempty"`
@@ -475,8 +498,11 @@ func (s *DashboardService) StopGlobalExperiment(ctx context.Context, experimentI
 		response.Message = stringPtr(fmt.Sprintf("Successfully stopped experiment and collected data from %d hosts", len(hostsCollected)))
 	}
 
-	// Create consolidated data file
-	s.createConsolidatedDataFile(experimentId)
+	// Create consolidated data file with collected data
+	if err := s.createConsolidatedDataFile(experimentId, experiment, collectedData); err != nil {
+		// Log error but don't fail the entire operation
+		fmt.Printf("Warning: failed to create consolidated data file: %v\n", err)
+	}
 
 	// Update experiment metadata to mark as completed
 	s.markExperimentCompleted(experimentId)
@@ -591,35 +617,22 @@ func (s *DashboardService) rollbackExperiment(ctx context.Context, experimentId 
 	}
 }
 
-func (s *DashboardService) createConsolidatedDataFile(experimentId string) error {
+func (s *DashboardService) createConsolidatedDataFile(experimentId string, experiment *dashboardAPI.Experiment, collectedData map[string]*collectorAPI.ExperimentData) error {
 	expDir := filepath.Join(s.dataDir, experimentId)
 
-	// Read experiment metadata
-	metadataFile := filepath.Join(expDir, "experiment.json")
-	metadataBytes, err := os.ReadFile(metadataFile)
-	if err != nil {
-		return err
-	}
+	// Ensure experiment directory exists
+	os.MkdirAll(expDir, 0755)
 
-	var experiment dashboardAPI.Experiment
-	if err := json.Unmarshal(metadataBytes, &experiment); err != nil {
-		return err
-	}
-
-	// Collect all host data
+	// Collect all host data from memory
 	var hosts []map[string]interface{}
 	for _, h := range experiment.ParticipatingHosts {
-		dataFile := filepath.Join(expDir, fmt.Sprintf("%s.json", h.Name))
-		if dataBytes, err := os.ReadFile(dataFile); err == nil {
-			var data map[string]interface{}
-			if err := json.Unmarshal(dataBytes, &data); err == nil {
-				hostData := map[string]interface{}{
-					"name": h.Name,
-					"ip":   h.Ip,
-					"data": data,
-				}
-				hosts = append(hosts, hostData)
+		if data, exists := collectedData[h.Name]; exists {
+			hostData := map[string]interface{}{
+				"name": h.Name,
+				"ip":   h.Ip,
+				"data": data,
 			}
+			hosts = append(hosts, hostData)
 		}
 	}
 

@@ -1,0 +1,14 @@
+{
+  "collectionInterval": 1000,
+  "completedAt": "2025-09-29T16:51:36+08:00",
+  "createdAt": "2025-09-29T16:51:06.136631+08:00",
+  "description": "",
+  "experimentId": "exp-1759135859485",
+  "participatingHosts": [
+    {
+      "ip": "128.1.40.151",
+      "name": "1"
+    }
+  ],
+  "timeout": 300
+}

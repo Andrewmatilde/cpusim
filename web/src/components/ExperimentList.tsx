@@ -5,9 +5,12 @@ import { Badge } from '@/components/ui/badge';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { ChartContainer, ChartTooltip, ChartTooltipContent } from '@/components/ui/chart';
+import type { ChartConfig } from '@/components/ui/chart';
+import { CartesianGrid, Line, LineChart, XAxis, YAxis } from 'recharts';
 import { apiClient } from '@/api/client';
 import type { Experiment, ExperimentDataResponse, StopAndCollectResponse } from '@/api/types';
-import { RefreshCw, Square, Download, Eye, Users, Clock } from 'lucide-react';
+import { RefreshCw, Square, Download, Eye, Users, Clock, TrendingUp } from 'lucide-react';
 import { toast } from 'sonner';
 
 interface ExperimentListProps {
@@ -76,17 +79,49 @@ export function ExperimentList({ refreshTrigger }: ExperimentListProps) {
     return new Date(dateString).toLocaleString();
   };
 
-  const getStatusBadge = (experiment: Experiment) => {
-    const createdTime = new Date(experiment.createdAt).getTime();
-    const now = Date.now();
-    const timeoutMs = (experiment.timeout || 300) * 1000;
+  const prepareCpuChartData = (experimentData: ExperimentDataResponse) => {
+    if (!experimentData.hosts || experimentData.hosts.length === 0) return [];
 
-    if (now - createdTime > timeoutMs) {
-      return <Badge variant="secondary">Completed</Badge>;
-    } else {
-      return <Badge variant="default">Running</Badge>;
-    }
+    // 收集所有主机的 CPU 数据
+    const allDataPoints = experimentData.hosts.flatMap(host => {
+      if (!host.data?.metrics) return [];
+
+      return host.data.metrics.map(metric => ({
+        timestamp: new Date(metric.timestamp).getTime(),
+        time: new Date(metric.timestamp).toLocaleTimeString(),
+        [`${host.name}_cpu`]: metric.systemMetrics.cpuUsagePercent,
+        hostName: host.name
+      }));
+    });
+
+    // 按时间戳分组
+    const groupedByTime = allDataPoints.reduce((acc, point) => {
+      const timeKey = point.timestamp;
+      if (!acc[timeKey]) {
+        acc[timeKey] = { timestamp: timeKey, time: point.time };
+      }
+      acc[timeKey][`${point.hostName}_cpu`] = point[`${point.hostName}_cpu`];
+      return acc;
+    }, {} as Record<number, any>);
+
+    // 转换为数组并排序
+    return Object.values(groupedByTime).sort((a: any, b: any) => a.timestamp - b.timestamp);
   };
+
+  const getCpuChartConfig = (experimentData: ExperimentDataResponse): ChartConfig => {
+    if (!experimentData.hosts) return {};
+
+    const config: ChartConfig = {};
+    experimentData.hosts.forEach((host, index) => {
+      config[`${host.name}_cpu`] = {
+        label: `${host.name} CPU`,
+        color: `hsl(var(--chart-${(index % 5) + 1}))`,
+      };
+    });
+
+    return config;
+  };
+
 
   return (
     <>
@@ -112,7 +147,6 @@ export function ExperimentList({ refreshTrigger }: ExperimentListProps) {
               <TableHeader>
                 <TableRow>
                   <TableHead>Experiment ID</TableHead>
-                  <TableHead>Status</TableHead>
                   <TableHead>Hosts</TableHead>
                   <TableHead>Created</TableHead>
                   <TableHead>Timeout</TableHead>
@@ -121,17 +155,9 @@ export function ExperimentList({ refreshTrigger }: ExperimentListProps) {
               </TableHeader>
               <TableBody>
                 {experiments.map((experiment) => {
-                  const isRunning = (() => {
-                    const createdTime = new Date(experiment.createdAt).getTime();
-                    const now = Date.now();
-                    const timeoutMs = (experiment.timeout || 300) * 1000;
-                    return now - createdTime <= timeoutMs;
-                  })();
-
                   return (
                     <TableRow key={experiment.experimentId}>
                       <TableCell className="font-medium">{experiment.experimentId}</TableCell>
-                      <TableCell>{getStatusBadge(experiment)}</TableCell>
                       <TableCell>
                         <div className="flex items-center gap-1">
                           <Users className="h-3 w-3" />
@@ -152,16 +178,14 @@ export function ExperimentList({ refreshTrigger }: ExperimentListProps) {
                             <Eye className="h-3 w-3 mr-1" />
                             Data
                           </Button>
-                          {isRunning && (
-                            <Button
-                              onClick={() => handleStopExperiment(experiment.experimentId)}
-                              variant="destructive"
-                              size="sm"
-                            >
-                              <Square className="h-3 w-3 mr-1" />
-                              Stop
-                            </Button>
-                          )}
+                          <Button
+                            onClick={() => handleStopExperiment(experiment.experimentId)}
+                            variant="outline"
+                            size="sm"
+                          >
+                            <Square className="h-3 w-3 mr-1" />
+                            Collect
+                          </Button>
                         </div>
                       </TableCell>
                     </TableRow>
@@ -175,7 +199,7 @@ export function ExperimentList({ refreshTrigger }: ExperimentListProps) {
 
       {/* Experiment Data Dialog */}
       <Dialog open={!!selectedExperiment} onOpenChange={() => setSelectedExperiment(null)}>
-        <DialogContent className="sm:max-w-[80vw] md:max-w-4xl lg:max-w-5xl max-h-[75vh] flex flex-col top-[45%] -translate-y-[45%]">
+        <DialogContent className="sm:max-w-[90vw] md:max-w-5xl lg:max-w-6xl xl:max-w-7xl max-h-[85vh] flex flex-col top-[40%] -translate-y-[40%]">
           <DialogHeader className="flex-shrink-0">
             <DialogTitle className="flex items-center gap-2">
               <Download className="h-5 w-5" />
@@ -190,7 +214,7 @@ export function ExperimentList({ refreshTrigger }: ExperimentListProps) {
                 Loading experiment data...
               </div>
             ) : experimentData ? (
-              <div className="space-y-4">
+              <div className="space-y-6">
                 <div className="grid grid-cols-2 gap-4 text-sm">
                   <div>
                     <strong>Experiment ID:</strong> {experimentData.experimentId}
@@ -200,37 +224,108 @@ export function ExperimentList({ refreshTrigger }: ExperimentListProps) {
                   </div>
                 </div>
 
+                {/* CPU Usage Chart */}
+                {experimentData.hosts && experimentData.hosts.length > 0 && prepareCpuChartData(experimentData).length > 0 && (
+                  <Card>
+                    <CardHeader>
+                      <CardTitle className="flex items-center gap-2">
+                        <TrendingUp className="h-5 w-5" />
+                        CPU Usage Over Time
+                      </CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                      <div className="w-full h-[400px]">
+                        <ChartContainer config={getCpuChartConfig(experimentData)} className="w-full h-full">
+                          <LineChart
+                            accessibilityLayer
+                            data={prepareCpuChartData(experimentData)}
+                            margin={{
+                              left: 20,
+                              right: 20,
+                              top: 20,
+                              bottom: 20,
+                            }}
+                            width={undefined}
+                            height={undefined}
+                          >
+                            <CartesianGrid vertical={false} />
+                            <XAxis
+                              dataKey="time"
+                              tickLine={false}
+                              axisLine={false}
+                              tickMargin={8}
+                              angle={-45}
+                              textAnchor="end"
+                              height={60}
+                              tickFormatter={(value) => value.slice(0, 8)}
+                            />
+                            <YAxis
+                              domain={[0, 100]}
+                              tickLine={false}
+                              axisLine={false}
+                              tickMargin={8}
+                              width={60}
+                              tickFormatter={(value) => `${value}%`}
+                            />
+                            <ChartTooltip
+                              content={<ChartTooltipContent />}
+                            />
+                            {experimentData.hosts?.map((host) => (
+                              <Line
+                                key={host.name}
+                                dataKey={`${host.name}_cpu`}
+                                type="monotone"
+                                stroke={`var(--color-${host.name}_cpu)`}
+                                strokeWidth={2}
+                                dot={false}
+                              />
+                            ))}
+                          </LineChart>
+                        </ChartContainer>
+                      </div>
+                    </CardContent>
+                  </Card>
+                )}
+
+                {/* Host Data Table */}
                 {experimentData.hosts && experimentData.hosts.length > 0 && (
-                  <Table>
-                    <TableHeader>
-                      <TableRow>
-                        <TableHead>Host</TableHead>
-                        <TableHead>IP</TableHead>
-                        <TableHead>Data Available</TableHead>
-                        <TableHead>Duration</TableHead>
-                        <TableHead>Data Points</TableHead>
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {experimentData.hosts.map((host) => (
-                        <TableRow key={host.name}>
-                          <TableCell className="font-medium">{host.name}</TableCell>
-                          <TableCell>{host.ip}</TableCell>
-                          <TableCell>
-                            <Badge variant={host.data ? "success" : "secondary"}>
-                              {host.data ? "Available" : "No Data"}
-                            </Badge>
-                          </TableCell>
-                          <TableCell>
-                            {host.data?.duration ? `${host.data.duration}s` : '-'}
-                          </TableCell>
-                          <TableCell>
-                            {host.data?.metrics?.length || 0}
-                          </TableCell>
-                        </TableRow>
-                      ))}
-                    </TableBody>
-                  </Table>
+                  <Card>
+                    <CardHeader>
+                      <CardTitle>Host Data Summary</CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                      <Table>
+                        <TableHeader>
+                          <TableRow>
+                            <TableHead>Host</TableHead>
+                            <TableHead>IP</TableHead>
+                            <TableHead>Data Available</TableHead>
+                            <TableHead>Duration</TableHead>
+                            <TableHead>Data Points</TableHead>
+                          </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                          {experimentData.hosts.map((host) => (
+                            <TableRow key={host.name}>
+                              <TableCell className="font-medium">{host.name}</TableCell>
+                              <TableCell>{host.ip}</TableCell>
+                              <TableCell>
+                                <Badge variant={host.data ? "default" : "secondary"}>
+                                  {host.data ? "Available" : "No Data"}
+                                </Badge>
+                              </TableCell>
+                              <TableCell>
+                                {host.data?.duration ? `${host.data.duration}s` : '-'}
+                              </TableCell>
+                              <TableCell>
+                                {host.data?.metrics?.length || 0}
+                              </TableCell>
+                            </TableRow>
+                          ))}
+                        </TableBody>
+                      </Table>
+                    </CardContent>
+                  </Card>
                 )}
               </div>
             ) : (
