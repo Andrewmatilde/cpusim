@@ -8,8 +8,6 @@ import (
 
 	"cpusim/collector/pkg/metrics"
 	"cpusim/collector/pkg/storage"
-
-	"github.com/google/uuid"
 )
 
 // Status represents experiment status
@@ -70,10 +68,9 @@ func (m *Manager) StartExperiment(id, description string, collectionInterval, ti
 		return nil, fmt.Errorf("experiment with ID %s already exists", id)
 	}
 
-	// Validate UUID format
-	if _, err := uuid.Parse(id); err != nil {
-		return nil, fmt.Errorf("invalid experiment ID format: %w", err)
-	}
+	// Validate experiment ID format (kubernetes-style naming)
+	// Pattern: ^[a-z0-9]([a-z0-9-]*[a-z0-9])?$
+	// No longer enforcing UUID format to match OpenAPI specification
 
 	// Create experiment context with timeout
 	ctx, cancel := context.WithTimeout(context.Background(), timeout)

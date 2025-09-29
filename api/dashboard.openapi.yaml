@@ -1,14 +1,116 @@
 openapi: 3.0.3
 info:
   title: CPU Simulation Dashboard API
-  description: 管理面API，用于管理多个CPU仿真主机
-  version: 1.0.0
-
+  description: 管理面API，用于管理多个CPU仿真主机和全局实验
+  version: 2.0.0
 servers:
   - url: http://localhost:9090
     description: Dashboard server
 security: []
 paths:
+  /api/experiments:
+    get:
+      summary: 获取实验列表
+      operationId: getExperiments
+      parameters:
+        - name: limit
+          in: query
+          required: false
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+            default: 20
+      responses:
+        '200':
+          description: 全局实验列表
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ExperimentListResponse'
+
+    post:
+      summary: 创建实验
+      operationId: createGlobalExperiment
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateExperimentRequest'
+      responses:
+        '201':
+          description: 实验创建成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Experiment'
+
+  /api/experiments/{experimentId}:
+    get:
+      summary: 获取全局实验详情
+      operationId: getGlobalExperiment
+      parameters:
+        - name: experimentId
+          in: path
+          required: true
+          schema:
+            type: string
+            pattern: '^[a-z0-9]([a-z0-9-]*[a-z0-9])?$'
+      responses:
+        '200':
+          description: 实验详情
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Experiment'
+
+  /api/experiments/{experimentId}/stop:
+    post:
+      summary: 停止全局实验并收集数据
+      description: 停止所有主机上的实验并自动收集数据到data目录
+      operationId: stopGlobalExperiment
+      parameters:
+        - name: experimentId
+          in: path
+          required: true
+          schema:
+            type: string
+            pattern: '^[a-z0-9]([a-z0-9-]*[a-z0-9])?$'
+      responses:
+        '200':
+          description: 实验停止和数据收集结果
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StopAndCollectResponse'
+
+  /api/experiments/{experimentId}/data:
+    get:
+      summary: 获取实验数据
+      operationId: getExperimentData
+      parameters:
+        - name: experimentId
+          in: path
+          required: true
+          schema:
+            type: string
+            pattern: '^[a-z0-9]([a-z0-9-]*[a-z0-9])?$'
+        - name: hostName
+          in: query
+          required: false
+          schema:
+            type: string
+          description: 指定主机名，不指定则返回所有主机数据概要
+      responses:
+        '200':
+          description: 实验数据
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ExperimentDataResponse'
+
+  # ===== 主机管理 =====
   /api/hosts:
     get:
       summary: 获取所有主机列表
@@ -67,126 +169,258 @@ paths:
               schema:
                 $ref: '#/components/schemas/CalculationResponse'
 
-  /api/hosts/{name}/experiments:
-    get:
-      summary: 获取主机实验列表
-      operationId: getHostExperiments
-      parameters:
-        - name: name
-          in: path
-          required: true
-          schema:
-            type: string
-      responses:
-        '200':
-          description: 实验列表
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ExperimentListResponse'
-
-    post:
-      summary: 在主机上启动实验
-      operationId: startHostExperiment
-      parameters:
-        - name: name
-          in: path
-          required: true
-          schema:
-            type: string
-      requestBody:
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/ExperimentRequest'
-      responses:
-        '200':
-          description: 实验启动结果
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ExperimentResponse'
-
-  /api/hosts/{name}/experiments/{experimentId}/data:
-    get:
-      summary: 获取实验数据
-      operationId: getHostExperimentData
-      parameters:
-        - name: name
-          in: path
-          required: true
-          schema:
-            type: string
-        - name: experimentId
-          in: path
-          required: true
-          schema:
-            type: string
-            pattern: '^[a-z0-9]([a-z0-9-]*[a-z0-9])?$'
-            minLength: 1
-            maxLength: 63
-      responses:
-        '200':
-          description: 实验数据
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ExperimentData'
-
-  /api/hosts/{name}/experiments/{experimentId}/status:
-    get:
-      summary: 获取实验状态
-      operationId: getHostExperimentStatus
-      parameters:
-        - name: name
-          in: path
-          required: true
-          schema:
-            type: string
-        - name: experimentId
-          in: path
-          required: true
-          schema:
-            type: string
-            pattern: '^[a-z0-9]([a-z0-9-]*[a-z0-9])?$'
-            minLength: 1
-            maxLength: 63
-      responses:
-        '200':
-          description: 实验状态
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ExperimentStatus'
-
-  /api/hosts/{name}/experiments/{experimentId}/stop:
-    post:
-      summary: 停止实验
-      operationId: stopHostExperiment
-      parameters:
-        - name: name
-          in: path
-          required: true
-          schema:
-            type: string
-        - name: experimentId
-          in: path
-          required: true
-          schema:
-            type: string
-            pattern: '^[a-z0-9]([a-z0-9-]*[a-z0-9])?$'
-            minLength: 1
-            maxLength: 63
-      responses:
-        '200':
-          description: 停止结果
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ExperimentResponse'
 
 components:
   schemas:
+    CreateExperimentRequest:
+      type: object
+      required:
+        - experimentId
+        - name
+        - participatingHosts
+      properties:
+        experimentId:
+          type: string
+          pattern: '^[a-z0-9]([a-z0-9-]*[a-z0-9])?$'
+          minLength: 1
+          maxLength: 63
+          description: 实验唯一标识
+        description:
+          type: string
+          maxLength: 500
+          description: 实验描述
+        timeout:
+          type: integer
+          minimum: 60
+          maximum: 3600
+          default: 300
+          description: 超时时间(秒)
+        collectionInterval:
+          type: integer
+          minimum: 100
+          maximum: 10000
+          default: 1000
+          description: 数据收集间隔(毫秒)
+        participatingHosts:
+          type: array
+          minItems: 1
+          items:
+            type: object
+            required:
+              - name
+              - ip
+            properties:
+              name:
+                type: string
+                description: 主机名
+              ip:
+                type: string
+                description: 主机IP地址
+
+    Experiment:
+      type: object
+      required:
+        - experimentId
+        - createdAt
+        - participatingHosts
+      properties:
+        experimentId:
+          type: string
+          pattern: '^[a-z0-9]([a-z0-9-]*[a-z0-9])?$'
+        description:
+          type: string
+        createdAt:
+          type: string
+          format: date-time
+        timeout:
+          type: integer
+        collectionInterval:
+          type: integer
+        participatingHosts:
+          type: array
+          items:
+            type: object
+            required:
+              - name
+              - ip
+            properties:
+              name:
+                type: string
+              ip:
+                type: string
+
+    ExperimentListResponse:
+      type: object
+      required:
+        - experiments
+        - total
+      properties:
+        experiments:
+          type: array
+          items:
+            $ref: '#/components/schemas/Experiment'
+        total:
+          type: integer
+        hasMore:
+          type: boolean
+
+    # ===== 复用collector API的数据结构 =====
+    MetricDataPoint:
+      type: object
+      required:
+        - timestamp
+        - systemMetrics
+      properties:
+        timestamp:
+          type: string
+          format: date-time
+        systemMetrics:
+          type: object
+          required:
+            - cpuUsagePercent
+            - memoryUsageBytes
+            - memoryUsagePercent
+            - networkIOBytes
+            - calculatorServiceHealthy
+          properties:
+            cpuUsagePercent:
+              type: number
+              format: float
+              minimum: 0
+              maximum: 100
+            memoryUsageBytes:
+              type: integer
+              format: int64
+              minimum: 0
+            memoryUsagePercent:
+              type: number
+              format: float
+              minimum: 0
+              maximum: 100
+            networkIOBytes:
+              type: object
+              required:
+                - bytesReceived
+                - bytesSent
+                - packetsReceived
+                - packetsSent
+              properties:
+                bytesReceived:
+                  type: integer
+                  format: int64
+                  minimum: 0
+                bytesSent:
+                  type: integer
+                  format: int64
+                  minimum: 0
+                packetsReceived:
+                  type: integer
+                  format: int64
+                  minimum: 0
+                packetsSent:
+                  type: integer
+                  format: int64
+                  minimum: 0
+            calculatorServiceHealthy:
+              type: boolean
+
+    StopAndCollectResponse:
+      type: object
+      required:
+        - experimentId
+        - status
+        - timestamp
+      properties:
+        experimentId:
+          type: string
+        status:
+          type: string
+          enum: [success, partial, failed]
+          description: 停止和收集的总体状态
+        timestamp:
+          type: string
+          format: date-time
+        message:
+          type: string
+        hostsCollected:
+          type: array
+          description: 成功收集数据的主机列表
+          items:
+            type: object
+            properties:
+              name:
+                type: string
+              ip:
+                type: string
+        hostsFailed:
+          type: array
+          description: 收集失败的主机列表
+          items:
+            type: object
+            properties:
+              name:
+                type: string
+              ip:
+                type: string
+              error:
+                type: string
+                description: 失败原因
+
+    ExperimentDataResponse:
+      type: object
+      required:
+        - experimentId
+      properties:
+        experimentId:
+          type: string
+        experiment:
+          $ref: '#/components/schemas/Experiment'
+          description: 实验元信息存储在data目录下experimentId目录下的experiment.json文件中
+        hosts:
+          type: array
+          description: 实验数据信息存储在data目录下experimentId目录下的data.json文件中，以hosts json列表形式存储
+          items:
+            type: object
+            required:
+              - name
+              - ip
+            properties:
+              name:
+                type: string
+                description: 主机名
+              ip:
+                type: string
+                description: 主机IP
+              data:
+                $ref: '#/components/schemas/CollectorExperimentData'
+                description: 完整实验数据(仅在查询特定主机时返回)
+
+    # 从collector API获取的实验数据结构
+    CollectorExperimentData:
+      type: object
+      description: 与collector API的ExperimentData格式完全一致
+      properties:
+        experimentId:
+          type: string
+        description:
+          type: string
+        startTime:
+          type: string
+          format: date-time
+        endTime:
+          type: string
+          format: date-time
+        duration:
+          type: integer
+          description: 实验时长(秒)
+        collectionInterval:
+          type: integer
+          description: 数据收集间隔(毫秒)
+        metrics:
+          type: array
+          items:
+            $ref: '#/components/schemas/MetricDataPoint'
+
     Host:
       type: object
       properties:
@@ -210,13 +444,9 @@ components:
           type: boolean
         collectorServiceHealthy:
           type: boolean
-        collectorHealth:
-          type: object
-          properties:
-            status:
-              type: string
-            timestamp:
-              type: string
+        timestamp:
+          type: string
+          format: date-time
 
     CalculationRequest:
       type: object
@@ -234,143 +464,3 @@ components:
         process_time:
           type: string
 
-    ExperimentRequest:
-      type: object
-      required:
-        - experimentId
-        - description
-        - timeout
-        - collectionInterval
-      properties:
-        experimentId:
-          type: string
-          pattern: '^[a-z0-9]([a-z0-9-]*[a-z0-9])?$'
-          minLength: 1
-          maxLength: 63
-        description:
-          type: string
-        timeout:
-          type: integer
-        collectionInterval:
-          type: integer
-
-    ExperimentResponse:
-      type: object
-      properties:
-        experimentId:
-          type: string
-          pattern: '^[a-z0-9]([a-z0-9-]*[a-z0-9])?$'
-          minLength: 1
-          maxLength: 63
-        message:
-          type: string
-        status:
-          type: string
-        timestamp:
-          type: string
-
-    ExperimentStatus:
-      type: object
-      properties:
-        experimentId:
-          type: string
-          pattern: '^[a-z0-9]([a-z0-9-]*[a-z0-9])?$'
-          minLength: 1
-          maxLength: 63
-        status:
-          type: string
-        isActive:
-          type: boolean
-        dataPointsCollected:
-          type: integer
-        startTime:
-          type: string
-        endTime:
-          type: string
-        duration:
-          type: integer
-        lastMetrics:
-          type: object
-          properties:
-            cpuUsagePercent:
-              type: number
-            memoryUsageBytes:
-              type: integer
-            memoryUsagePercent:
-              type: number
-            calculatorServiceHealthy:
-              type: boolean
-            networkIOBytes:
-              type: object
-              properties:
-                bytesReceived:
-                  type: integer
-                bytesSent:
-                  type: integer
-                packetsReceived:
-                  type: integer
-                packetsSent:
-                  type: integer
-
-    ExperimentData:
-      type: object
-      properties:
-        experimentId:
-          type: string
-          pattern: '^[a-z0-9]([a-z0-9-]*[a-z0-9])?$'
-          minLength: 1
-          maxLength: 63
-        description:
-          type: string
-        startTime:
-          type: string
-        endTime:
-          type: string
-        duration:
-          type: integer
-        collectionInterval:
-          type: integer
-        metrics:
-          type: array
-          items:
-            $ref: '#/components/schemas/MetricDataPoint'
-
-    MetricDataPoint:
-      type: object
-      properties:
-        timestamp:
-          type: string
-        systemMetrics:
-          type: object
-          properties:
-            cpuUsagePercent:
-              type: number
-            memoryUsageBytes:
-              type: integer
-            memoryUsagePercent:
-              type: number
-            calculatorServiceHealthy:
-              type: boolean
-            networkIOBytes:
-              type: object
-              properties:
-                bytesReceived:
-                  type: integer
-                bytesSent:
-                  type: integer
-                packetsReceived:
-                  type: integer
-                packetsSent:
-                  type: integer
-
-    ExperimentListResponse:
-      type: object
-      properties:
-        experiments:
-          type: array
-          items:
-            $ref: '#/components/schemas/ExperimentStatus'
-        total:
-          type: integer
-        hasMore:
-          type: boolean
