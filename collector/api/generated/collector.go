@@ -63,7 +63,7 @@ const (
 // ErrorResponse defines model for ErrorResponse.
 type ErrorResponse struct {
 	// Details Additional error details
-	Details *map[string]interface{} `json:"details,omitempty"`
+	Details map[string]interface{} `json:"details,omitempty"`
 
 	// Error Error code
 	Error string `json:"error"`
@@ -76,12 +76,12 @@ type ErrorResponse struct {
 // ExperimentData defines model for ExperimentData.
 type ExperimentData struct {
 	// CollectionInterval Collection interval in milliseconds
-	CollectionInterval *int    `json:"collectionInterval,omitempty"`
-	Description        *string `json:"description,omitempty"`
+	CollectionInterval int    `json:"collectionInterval,omitempty"`
+	Description        string `json:"description,omitempty"`
 
 	// Duration Duration in seconds
-	Duration     *int              `json:"duration,omitempty"`
-	EndTime      *time.Time        `json:"endTime,omitempty"`
+	Duration     int               `json:"duration,omitempty"`
+	EndTime      time.Time         `json:"endTime,omitempty"`
 	ExperimentId string            `json:"experimentId"`
 	Metrics      []MetricDataPoint `json:"metrics"`
 	StartTime    time.Time         `json:"startTime"`
@@ -92,7 +92,7 @@ type ExperimentListResponse struct {
 	Experiments []ExperimentSummary `json:"experiments"`
 
 	// HasMore Whether there are more experiments available
-	HasMore *bool `json:"hasMore,omitempty"`
+	HasMore bool `json:"hasMore,omitempty"`
 
 	// Total Total number of experiments matching the criteria
 	Total int `json:"total"`
@@ -101,7 +101,7 @@ type ExperimentListResponse struct {
 // ExperimentResponse defines model for ExperimentResponse.
 type ExperimentResponse struct {
 	ExperimentId string                   `json:"experimentId"`
-	Message      *string                  `json:"message,omitempty"`
+	Message      string                   `json:"message,omitempty"`
 	Status       ExperimentResponseStatus `json:"status"`
 	Timestamp    time.Time                `json:"timestamp"`
 }
@@ -112,14 +112,14 @@ type ExperimentResponseStatus string
 // ExperimentStatus defines model for ExperimentStatus.
 type ExperimentStatus struct {
 	// DataPointsCollected Number of metric data points collected
-	DataPointsCollected *int `json:"dataPointsCollected,omitempty"`
+	DataPointsCollected int `json:"dataPointsCollected,omitempty"`
 
 	// Duration Duration in seconds
-	Duration     *int                   `json:"duration,omitempty"`
-	EndTime      *time.Time             `json:"endTime,omitempty"`
+	Duration     int                    `json:"duration,omitempty"`
+	EndTime      time.Time              `json:"endTime,omitempty"`
 	ExperimentId string                 `json:"experimentId"`
 	IsActive     bool                   `json:"isActive"`
-	LastMetrics  *SystemMetrics         `json:"lastMetrics,omitempty"`
+	LastMetrics  SystemMetrics          `json:"lastMetrics,omitempty"`
 	StartTime    time.Time              `json:"startTime"`
 	Status       ExperimentStatusStatus `json:"status"`
 }
@@ -130,12 +130,12 @@ type ExperimentStatusStatus string
 // ExperimentSummary defines model for ExperimentSummary.
 type ExperimentSummary struct {
 	// DataPointsCollected Number of metric data points collected
-	DataPointsCollected *int    `json:"dataPointsCollected,omitempty"`
-	Description         *string `json:"description,omitempty"`
+	DataPointsCollected int    `json:"dataPointsCollected,omitempty"`
+	Description         string `json:"description,omitempty"`
 
 	// Duration Duration in seconds
-	Duration     *int                    `json:"duration,omitempty"`
-	EndTime      *time.Time              `json:"endTime,omitempty"`
+	Duration     int                     `json:"duration,omitempty"`
+	EndTime      time.Time               `json:"endTime,omitempty"`
 	ExperimentId string                  `json:"experimentId"`
 	IsActive     bool                    `json:"isActive"`
 	StartTime    time.Time               `json:"startTime"`
@@ -151,7 +151,7 @@ type HealthResponse struct {
 	Timestamp time.Time            `json:"timestamp"`
 
 	// Uptime Service uptime in seconds
-	Uptime *int `json:"uptime,omitempty"`
+	Uptime int `json:"uptime,omitempty"`
 }
 
 // HealthResponseStatus defines model for HealthResponse.Status.
@@ -181,16 +181,16 @@ type NetworkIO struct {
 // StartExperimentRequest defines model for StartExperimentRequest.
 type StartExperimentRequest struct {
 	// CollectionInterval Data collection interval in milliseconds (100-10000, default 1000)
-	CollectionInterval *int `json:"collectionInterval,omitempty"`
+	CollectionInterval int `json:"collectionInterval,omitempty"`
 
 	// Description Optional description of the experiment
-	Description *string `json:"description,omitempty"`
+	Description string `json:"description,omitempty"`
 
 	// ExperimentId Unique identifier for the experiment (kubernetes-style naming)
 	ExperimentId string `json:"experimentId"`
 
 	// Timeout Experiment timeout in seconds (1-3600, default 300)
-	Timeout *int `json:"timeout,omitempty"`
+	Timeout int `json:"timeout,omitempty"`
 }
 
 // SystemMetrics defines model for SystemMetrics.
@@ -212,10 +212,10 @@ type SystemMetrics struct {
 // ListExperimentsParams defines parameters for ListExperiments.
 type ListExperimentsParams struct {
 	// Status Filter experiments by status
-	Status *ListExperimentsParamsStatus `form:"status,omitempty" json:"status,omitempty"`
+	Status ListExperimentsParamsStatus `form:"status,omitempty" json:"status,omitempty"`
 
 	// Limit Maximum number of experiments to return
-	Limit *int `form:"limit,omitempty" json:"limit,omitempty"`
+	Limit int `form:"limit,omitempty" json:"limit,omitempty"`
 }
 
 // ListExperimentsParamsStatus defines parameters for ListExperiments.
@@ -424,36 +424,28 @@ func NewListExperimentsRequest(server string, params *ListExperimentsParams) (*h
 	if params != nil {
 		queryValues := queryURL.Query()
 
-		if params.Status != nil {
-
-			if queryFrag, err := runtime.StyleParamWithLocation("form", true, "status", runtime.ParamLocationQuery, *params.Status); err != nil {
-				return nil, err
-			} else if parsed, err := url.ParseQuery(queryFrag); err != nil {
-				return nil, err
-			} else {
-				for k, v := range parsed {
-					for _, v2 := range v {
-						queryValues.Add(k, v2)
-					}
+		if queryFrag, err := runtime.StyleParamWithLocation("form", true, "status", runtime.ParamLocationQuery, params.Status); err != nil {
+			return nil, err
+		} else if parsed, err := url.ParseQuery(queryFrag); err != nil {
+			return nil, err
+		} else {
+			for k, v := range parsed {
+				for _, v2 := range v {
+					queryValues.Add(k, v2)
 				}
 			}
-
 		}
 
-		if params.Limit != nil {
-
-			if queryFrag, err := runtime.StyleParamWithLocation("form", true, "limit", runtime.ParamLocationQuery, *params.Limit); err != nil {
-				return nil, err
-			} else if parsed, err := url.ParseQuery(queryFrag); err != nil {
-				return nil, err
-			} else {
-				for k, v := range parsed {
-					for _, v2 := range v {
-						queryValues.Add(k, v2)
-					}
+		if queryFrag, err := runtime.StyleParamWithLocation("form", true, "limit", runtime.ParamLocationQuery, params.Limit); err != nil {
+			return nil, err
+		} else if parsed, err := url.ParseQuery(queryFrag); err != nil {
+			return nil, err
+		} else {
+			for k, v := range parsed {
+				for _, v2 := range v {
+					queryValues.Add(k, v2)
 				}
 			}
-
 		}
 
 		queryURL.RawQuery = queryValues.Encode()

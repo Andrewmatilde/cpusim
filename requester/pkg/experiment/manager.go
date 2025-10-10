@@ -11,9 +11,9 @@ import (
 
 // Manager manages all request sending experiments
 type Manager struct {
-	experiments map[string]*Experiment  // Only running experiments
-	storage     *storage.FileStorage
-	mu          sync.RWMutex
+	currentExperiment *Experiment // Current running experiment (nil if no experiment is running)
+	storage           *storage.FileStorage
+	mu                sync.RWMutex
 }
 
 // NewManager creates a new experiment manager
@@ -29,8 +29,8 @@ func NewManager() *Manager {
 	}
 
 	return &Manager{
-		experiments: make(map[string]*Experiment),
-		storage:     fileStorage,
+		currentExperiment: nil,
+		storage:           fileStorage,
 	}
 }
 
@@ -39,19 +39,27 @@ func (m *Manager) StartExperiment(request generated.StartRequestExperimentReques
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
-	// Check if experiment already exists in memory (running)
-	if _, exists := m.experiments[request.ExperimentId]; exists {
-		return nil, fmt.Errorf("experiment already exists and is running")
+	// Check if there is already a running experiment
+	if m.currentExperiment != nil {
+		currentID := m.currentExperiment.config.ExperimentId
+
+		// If the current experiment has the same ID - return it (idempotent)
+		if currentID == request.ExperimentId {
+			return m.currentExperiment.ToRequestExperiment(), nil
+		}
+
+		// If another experiment is running, reject
+		return nil, fmt.Errorf("another experiment %s is already running on this host, please stop it first", currentID)
 	}
 
-	// Check if experiment exists in storage (stopped)
+	// Check if experiment exists in storage (stopped) - cannot restart
 	if m.storage.ExperimentExists(request.ExperimentId) {
-		return nil, fmt.Errorf("experiment already exists")
+		return nil, fmt.Errorf("experiment with ID %s already completed, cannot restart", request.ExperimentId)
 	}
 
 	// Create new experiment
-	experiment := NewExperiment(request)
-	m.experiments[request.ExperimentId] = experiment
+	experiment := NewExperiment(request, m.storage)
+	m.currentExperiment = experiment
 
 	// Start the experiment
 	go experiment.Start()
@@ -63,12 +71,13 @@ func (m *Manager) StartExperiment(request generated.StartRequestExperimentReques
 // GetExperiment gets an experiment by ID (from memory or storage)
 func (m *Manager) GetExperiment(experimentId string) (*generated.RequestExperiment, error) {
 	m.mu.RLock()
-	// Check if experiment is running (in memory)
-	if experiment, exists := m.experiments[experimentId]; exists {
-		m.mu.RUnlock()
+	experiment := m.currentExperiment
+	m.mu.RUnlock()
+
+	// Check if current experiment matches
+	if experiment != nil && experiment.config.ExperimentId == experimentId {
 		return experiment.ToRequestExperiment(), nil
 	}
-	m.mu.RUnlock()
 
 	// Check if experiment is stored (stopped)
 	data, err := m.storage.LoadExperiment(experimentId)
@@ -81,36 +90,40 @@ func (m *Manager) GetExperiment(experimentId string) (*generated.RequestExperime
 
 // StopExperiment stops an experiment
 func (m *Manager) StopExperiment(experimentId string) (*generated.StopExperimentResult, error) {
-	m.mu.RLock()
-	experiment, exists := m.experiments[experimentId]
-	m.mu.RUnlock()
-
-	if !exists {
-		// Check if it's already stopped and in storage
-		_, err := m.storage.LoadExperiment(experimentId)
-		if err == nil {
-			return nil, fmt.Errorf("experiment already stopped")
+	// Priority 1: Check storage first (source of truth for stopped experiments)
+	if data, err := m.storage.LoadExperiment(experimentId); err == nil {
+		// Experiment already stopped, return complete data (idempotent)
+		var duration int
+		if !data.Experiment.EndTime.IsZero() && !data.Experiment.StartTime.IsZero() {
+			duration = int(data.Experiment.EndTime.Sub(data.Experiment.StartTime).Seconds())
 		}
-		return nil, fmt.Errorf("experiment not found")
+
+		return &generated.StopExperimentResult{
+			ExperimentId: experimentId,
+			EndTime:      data.Experiment.EndTime,
+			Duration:     duration,
+			FinalStats:   *data.Stats,
+		}, nil
 	}
 
-	// Stop the experiment
+	// Priority 2: Check memory for running experiment
+	m.mu.RLock()
+	experiment := m.currentExperiment
+	m.mu.RUnlock()
+
+	if experiment == nil || experiment.config.ExperimentId != experimentId {
+		return nil, fmt.Errorf("experiment with ID %s not found", experimentId)
+	}
+
+	// Stop the experiment (Stop() will save to storage)
 	result, err := experiment.Stop()
 	if err != nil {
 		return nil, err
 	}
 
-	// Save to storage
-	experimentData := experiment.ToRequestExperiment()
-	stats := experiment.GetStats()
-	if err := m.storage.SaveExperiment(experimentData, stats); err != nil {
-		// Log error but don't fail the stop operation
-		fmt.Printf("Warning: failed to save experiment to storage: %v\n", err)
-	}
-
-	// Remove from memory
+	// Clear current experiment
 	m.mu.Lock()
-	delete(m.experiments, experimentId)
+	m.currentExperiment = nil
 	m.mu.Unlock()
 
 	return result, nil
@@ -119,12 +132,13 @@ func (m *Manager) StopExperiment(experimentId string) (*generated.StopExperiment
 // GetExperimentStats gets experiment statistics (from memory or storage)
 func (m *Manager) GetExperimentStats(experimentId string) (*generated.RequestExperimentStats, error) {
 	m.mu.RLock()
-	// Check if experiment is running (in memory)
-	if experiment, exists := m.experiments[experimentId]; exists {
-		m.mu.RUnlock()
+	experiment := m.currentExperiment
+	m.mu.RUnlock()
+
+	// Check if current experiment matches
+	if experiment != nil && experiment.config.ExperimentId == experimentId {
 		return experiment.GetStats(), nil
 	}
-	m.mu.RUnlock()
 
 	// Check if experiment is stored (stopped)
 	data, err := m.storage.LoadExperiment(experimentId)
@@ -139,19 +153,21 @@ func (m *Manager) GetExperimentStats(experimentId string) (*generated.RequestExp
 func (m *Manager) ListExperiments(statusFilter *string) []generated.RequestExperiment {
 	var result []generated.RequestExperiment
 
-	// Add running experiments from memory
+	// Add current running experiment if it exists
 	m.mu.RLock()
-	for _, experiment := range m.experiments {
+	experiment := m.currentExperiment
+	m.mu.RUnlock()
+
+	if experiment != nil {
 		exp := experiment.ToRequestExperiment()
 
 		// Apply status filter if provided
-		if statusFilter != nil && *statusFilter != "all" && exp.Status != nil && string(*exp.Status) != *statusFilter {
-			continue
+		if statusFilter != nil && *statusFilter != "all" && string(exp.Status) != *statusFilter {
+			// Don't add, skip to stored experiments
+		} else {
+			result = append(result, *exp)
 		}
-
-		result = append(result, *exp)
 	}
-	m.mu.RUnlock()
 
 	// Add stopped experiments from storage
 	if statusFilter == nil || *statusFilter == "all" || *statusFilter == "stopped" || *statusFilter == "completed" {
@@ -161,7 +177,7 @@ func (m *Manager) ListExperiments(statusFilter *string) []generated.RequestExper
 		} else {
 			for _, exp := range storedExperiments {
 				// Apply status filter if provided
-				if statusFilter != nil && *statusFilter != "all" && exp.Status != nil && string(*exp.Status) != *statusFilter {
+				if statusFilter != nil && *statusFilter != "all" && string(exp.Status) != *statusFilter {
 					continue
 				}
 				result = append(result, *exp)
@@ -175,17 +191,14 @@ func (m *Manager) ListExperiments(statusFilter *string) []generated.RequestExper
 // StopAllExperiments stops all running experiments
 func (m *Manager) StopAllExperiments() {
 	m.mu.RLock()
-	var experimentIds []string
-	for id := range m.experiments {
-		experimentIds = append(experimentIds, id)
-	}
+	experiment := m.currentExperiment
 	m.mu.RUnlock()
 
-	// Stop each experiment (this will save to storage and clean up memory)
-	for _, id := range experimentIds {
-		_, err := m.StopExperiment(id)
+	// Stop current experiment if it exists
+	if experiment != nil {
+		_, err := m.StopExperiment(experiment.config.ExperimentId)
 		if err != nil {
-			fmt.Printf("Warning: failed to stop experiment %s: %v\n", id, err)
+			fmt.Printf("Warning: failed to stop experiment %s: %v\n", experiment.config.ExperimentId, err)
 		}
 	}
 }

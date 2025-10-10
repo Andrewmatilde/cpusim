@@ -6,55 +6,49 @@ import (
 	"sync"
 	"time"
 
+	"cpusim/collector/api/generated"
 	"cpusim/collector/pkg/metrics"
 	"cpusim/collector/pkg/storage"
 )
 
-// Status represents experiment status
-type Status string
-
-const (
-	StatusRunning Status = "running"
-	StatusStopped Status = "stopped"
-	StatusTimeout Status = "timeout"
-	StatusError   Status = "error"
-)
-
 // Experiment represents an active or completed experiment
 type Experiment struct {
-	ID                  string                  `json:"experimentId"`
-	Description         string                  `json:"description,omitempty"`
-	StartTime           time.Time               `json:"startTime"`
-	EndTime             *time.Time              `json:"endTime,omitempty"`
-	Status              Status                  `json:"status"`
-	CollectionInterval  time.Duration           `json:"collectionInterval"`
-	Timeout             time.Duration           `json:"timeout"`
-	IsActive            bool                    `json:"isActive"`
-	DataPoints          []metrics.SystemMetrics `json:"dataPoints"`
-	DataPointsCollected int                     `json:"dataPointsCollected"`
-	LastMetrics         *metrics.SystemMetrics  `json:"lastMetrics,omitempty"`
+	ID                  string                            `json:"experimentId"`
+	Description         string                            `json:"description,omitempty"`
+	StartTime           time.Time                         `json:"startTime"`
+	EndTime             *time.Time                        `json:"endTime,omitempty"`
+	Status              generated.ExperimentStatusStatus  `json:"status"`
+	CollectionInterval  time.Duration                     `json:"collectionInterval"`
+	Timeout             time.Duration                     `json:"timeout"`
+	IsActive            bool                              `json:"isActive"`
+	DataPoints          []metrics.SystemMetrics           `json:"dataPoints"`
+	DataPointsCollected int                               `json:"dataPointsCollected"`
+	LastMetrics         *metrics.SystemMetrics            `json:"lastMetrics,omitempty"`
 
 	// Internal fields
-	ctx        context.Context
-	cancelFunc context.CancelFunc
-	ticker     *time.Ticker
-	mu         sync.RWMutex
+	storage       *storage.FileStorage
+	collector     *metrics.Collector
+	ctx           context.Context
+	cancelFunc    context.CancelFunc
+	ticker        *time.Ticker
+	done          chan struct{} // Signals that collection has finished
+	mu            sync.RWMutex
 }
 
 // Manager handles experiment lifecycle
 type Manager struct {
-	experiments      map[string]*Experiment
-	metricsCollector *metrics.Collector
-	storage          *storage.FileStorage
-	mu               sync.RWMutex
+	currentExperiment *Experiment // Current running experiment (nil if no experiment is running)
+	metricsCollector  *metrics.Collector
+	storage           *storage.FileStorage
+	mu                sync.RWMutex
 }
 
 // NewManager creates a new experiment manager
 func NewManager(metricsCollector *metrics.Collector, storage *storage.FileStorage) *Manager {
 	return &Manager{
-		experiments:      make(map[string]*Experiment),
-		metricsCollector: metricsCollector,
-		storage:          storage,
+		currentExperiment: nil,
+		metricsCollector:  metricsCollector,
+		storage:           storage,
 	}
 }
 
@@ -63,9 +57,27 @@ func (m *Manager) StartExperiment(id, description string, collectionInterval, ti
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
-	// Check if experiment already exists
-	if _, exists := m.experiments[id]; exists {
-		return nil, fmt.Errorf("experiment with ID %s already exists", id)
+	// Check if there is already a running experiment
+	if m.currentExperiment != nil {
+		m.currentExperiment.mu.RLock()
+		currentID := m.currentExperiment.ID
+		currentActive := m.currentExperiment.IsActive
+		m.currentExperiment.mu.RUnlock()
+
+		// If the current experiment has the same ID - return it (idempotent)
+		if currentID == id {
+			return m.currentExperiment, nil
+		}
+
+		// If another experiment is running, reject
+		if currentActive {
+			return nil, fmt.Errorf("another experiment %s is already running on this host, please stop it first", currentID)
+		}
+	}
+
+	// Check if experiment exists in storage (already completed) - cannot restart
+	if m.storage.ExperimentExists(id) {
+		return nil, fmt.Errorf("experiment with ID %s already completed, cannot restart", id)
 	}
 
 	// Validate experiment ID format (kubernetes-style naming)
@@ -79,61 +91,77 @@ func (m *Manager) StartExperiment(id, description string, collectionInterval, ti
 		ID:                 id,
 		Description:        description,
 		StartTime:          time.Now(),
-		Status:             StatusRunning,
+		Status:             generated.ExperimentStatusStatusRunning,
 		CollectionInterval: collectionInterval,
 		Timeout:            timeout,
 		IsActive:           true,
 		DataPoints:         make([]metrics.SystemMetrics, 0),
+		storage:            m.storage,
+		collector:          m.metricsCollector,
 		ctx:                ctx,
 		cancelFunc:         cancel,
+		done:               make(chan struct{}),
 	}
 
-	// Store experiment
-	m.experiments[id] = experiment
+	// Store as current experiment
+	m.currentExperiment = experiment
 
 	// Start data collection
-	go m.collectData(experiment)
-
-	// Start timeout monitor
-	go m.monitorTimeout(experiment)
+	go experiment.collectData()
 
 	return experiment, nil
 }
 
 // StopExperiment stops an active experiment
 func (m *Manager) StopExperiment(id string) (*Experiment, error) {
+	// Priority 1: Check storage first (source of truth for stopped experiments)
+	if data, err := m.storage.LoadExperimentData(id); err == nil {
+		// Experiment already stopped, return complete metadata (idempotent)
+		// Determine status from data
+		status := generated.ExperimentStatusStatusStopped
+		if data.EndTime == nil {
+			// Data exists but no EndTime, might be error state
+			status = generated.ExperimentStatusStatusError
+		}
+
+		return &Experiment{
+			ID:                  data.ExperimentID,
+			Description:         data.Description,
+			StartTime:           data.StartTime,
+			EndTime:             data.EndTime,
+			Status:              status,
+			IsActive:            false,
+			DataPointsCollected: len(data.Metrics),
+		}, nil
+	}
+
+	// Priority 2: Check memory for running experiment
 	m.mu.RLock()
-	experiment, exists := m.experiments[id]
+	experiment := m.currentExperiment
 	m.mu.RUnlock()
 
-	if !exists {
+	if experiment == nil || experiment.ID != id {
 		return nil, fmt.Errorf("experiment with ID %s not found", id)
 	}
 
-	experiment.mu.Lock()
-	defer experiment.mu.Unlock()
+	experiment.mu.RLock()
+	isActive := experiment.IsActive
+	experiment.mu.RUnlock()
 
-	if !experiment.IsActive {
+	if !isActive {
 		return experiment, nil // Already stopped
 	}
 
-	// Stop data collection
+	// Trigger stop by cancelling context
 	experiment.cancelFunc()
-	if experiment.ticker != nil {
-		experiment.ticker.Stop()
-	}
 
-	// Update experiment status
-	now := time.Now()
-	experiment.EndTime = &now
-	experiment.Status = StatusStopped
-	experiment.IsActive = false
+	// Wait for collection to finish (collectData will save to storage)
+	<-experiment.done
 
-	// Save data to storage
-	if err := m.storage.SaveExperimentData(experiment.ID, m.convertToStorageFormat(experiment)); err != nil {
-		// Log error but don't fail the stop operation
-		fmt.Printf("Warning: failed to save experiment data: %v\n", err)
-	}
+	// Clear current experiment
+	m.mu.Lock()
+	m.currentExperiment = nil
+	m.mu.Unlock()
 
 	return experiment, nil
 }
@@ -141,118 +169,119 @@ func (m *Manager) StopExperiment(id string) (*Experiment, error) {
 // GetExperiment returns experiment information
 func (m *Manager) GetExperiment(id string) (*Experiment, error) {
 	m.mu.RLock()
-	defer m.mu.RUnlock()
+	experiment := m.currentExperiment
+	m.mu.RUnlock()
 
-	experiment, exists := m.experiments[id]
-	if !exists {
-		return nil, fmt.Errorf("experiment with ID %s not found", id)
+	// Check if the current experiment matches the requested ID
+	if experiment != nil && experiment.ID == id {
+		experiment.mu.RLock()
+		defer experiment.mu.RUnlock()
+
+		// Return a copy to avoid race conditions
+		experimentCopy := Experiment{
+			ID:                  experiment.ID,
+			Description:         experiment.Description,
+			StartTime:           experiment.StartTime,
+			EndTime:             experiment.EndTime,
+			Status:              experiment.Status,
+			CollectionInterval:  experiment.CollectionInterval,
+			Timeout:             experiment.Timeout,
+			IsActive:            experiment.IsActive,
+			DataPoints:          make([]metrics.SystemMetrics, len(experiment.DataPoints)),
+			DataPointsCollected: experiment.DataPointsCollected,
+			LastMetrics:         experiment.LastMetrics,
+			// Note: intentionally not copying ctx, cancelFunc, ticker, or mu
+		}
+		copy(experimentCopy.DataPoints, experiment.DataPoints)
+
+		return &experimentCopy, nil
 	}
 
-	experiment.mu.RLock()
-	defer experiment.mu.RUnlock()
-
-	// Return a copy to avoid race conditions
-	experimentCopy := Experiment{
-		ID:                  experiment.ID,
-		Description:         experiment.Description,
-		StartTime:           experiment.StartTime,
-		EndTime:             experiment.EndTime,
-		Status:              experiment.Status,
-		CollectionInterval:  experiment.CollectionInterval,
-		Timeout:             experiment.Timeout,
-		IsActive:            experiment.IsActive,
-		DataPoints:          make([]metrics.SystemMetrics, len(experiment.DataPoints)),
-		DataPointsCollected: experiment.DataPointsCollected,
-		LastMetrics:         experiment.LastMetrics,
-		// Note: intentionally not copying ctx, cancelFunc, ticker, or mu
-	}
-	copy(experimentCopy.DataPoints, experiment.DataPoints)
-
-	return &experimentCopy, nil
+	// Not in memory, return error
+	return nil, fmt.Errorf("experiment with ID %s not found", id)
 }
 
 // GetExperimentData returns the collected data for an experiment
 func (m *Manager) GetExperimentData(id string) (*storage.ExperimentData, error) {
 	m.mu.RLock()
-	experiment, exists := m.experiments[id]
+	experiment := m.currentExperiment
 	m.mu.RUnlock()
 
-	if !exists {
-		// Try to load from storage
-		return m.storage.LoadExperimentData(id)
+	// Check if current experiment matches
+	if experiment != nil && experiment.ID == id {
+		return experiment.convertToStorageFormat(), nil
 	}
 
-	experiment.mu.RLock()
-	defer experiment.mu.RUnlock()
-
-	return m.convertToStorageFormat(experiment), nil
+	// Try to load from storage
+	return m.storage.LoadExperimentData(id)
 }
 
 // collectData runs the data collection loop for an experiment
-func (m *Manager) collectData(experiment *Experiment) {
-	experiment.ticker = time.NewTicker(experiment.CollectionInterval)
-	defer experiment.ticker.Stop()
+func (e *Experiment) collectData() {
+	e.ticker = time.NewTicker(e.CollectionInterval)
+	defer e.ticker.Stop()
+	defer close(e.done)
 
 	for {
 		select {
-		case <-experiment.ctx.Done():
+		case <-e.ctx.Done():
+			// Immediately set end time and status when loop exits
+			e.mu.Lock()
+			now := time.Now()
+			e.EndTime = &now
+			e.IsActive = false
+			if e.ctx.Err() == context.DeadlineExceeded {
+				e.Status = generated.ExperimentStatusStatusTimeout
+			} else {
+				e.Status = generated.ExperimentStatusStatusStopped
+			}
+			e.mu.Unlock()
+
+			// Save experiment data to storage
+			if err := e.storage.SaveExperimentData(e.ID, e.convertToStorageFormat()); err != nil {
+				fmt.Printf("Warning: failed to save experiment data: %v\n", err)
+			}
+
 			return
-		case <-experiment.ticker.C:
+
+		case <-e.ticker.C:
 			// Collect metrics
-			systemMetrics, err := m.metricsCollector.GetCurrentMetrics(experiment.ctx)
+			systemMetrics, err := e.collector.GetCurrentMetrics(e.ctx)
 			if err != nil {
-				fmt.Printf("Error collecting metrics for experiment %s: %v\n", experiment.ID, err)
+				fmt.Printf("Error collecting metrics for experiment %s: %v\n", e.ID, err)
 				continue
 			}
 
 			// Store metrics
-			experiment.mu.Lock()
-			experiment.DataPoints = append(experiment.DataPoints, *systemMetrics)
-			experiment.DataPointsCollected = len(experiment.DataPoints)
-			experiment.LastMetrics = systemMetrics
-			experiment.mu.Unlock()
-		}
-	}
-}
-
-// monitorTimeout handles experiment timeout
-func (m *Manager) monitorTimeout(experiment *Experiment) {
-	<-experiment.ctx.Done()
-
-	experiment.mu.Lock()
-	defer experiment.mu.Unlock()
-
-	// Check if context was cancelled due to timeout or manual stop
-	if experiment.ctx.Err() == context.DeadlineExceeded && experiment.IsActive {
-		now := time.Now()
-		experiment.EndTime = &now
-		experiment.Status = StatusTimeout
-		experiment.IsActive = false
-
-		// Save data to storage
-		if err := m.storage.SaveExperimentData(experiment.ID, m.convertToStorageFormat(experiment)); err != nil {
-			fmt.Printf("Warning: failed to save experiment data on timeout: %v\n", err)
+			e.mu.Lock()
+			e.DataPoints = append(e.DataPoints, *systemMetrics)
+			e.DataPointsCollected = len(e.DataPoints)
+			e.LastMetrics = systemMetrics
+			e.mu.Unlock()
 		}
 	}
 }
 
 // convertToStorageFormat converts experiment to storage format
-func (m *Manager) convertToStorageFormat(experiment *Experiment) *storage.ExperimentData {
+func (e *Experiment) convertToStorageFormat() *storage.ExperimentData {
+	e.mu.RLock()
+	defer e.mu.RUnlock()
+
 	data := &storage.ExperimentData{
-		ExperimentID:       experiment.ID,
-		Description:        experiment.Description,
-		StartTime:          experiment.StartTime,
-		CollectionInterval: int(experiment.CollectionInterval.Milliseconds()),
-		Metrics:            make([]storage.MetricDataPoint, 0, len(experiment.DataPoints)),
+		ExperimentID:       e.ID,
+		Description:        e.Description,
+		StartTime:          e.StartTime,
+		CollectionInterval: int(e.CollectionInterval.Milliseconds()),
+		Metrics:            make([]storage.MetricDataPoint, 0, len(e.DataPoints)),
 	}
 
-	if experiment.EndTime != nil {
-		data.EndTime = experiment.EndTime
-		data.Duration = int(experiment.EndTime.Sub(experiment.StartTime).Seconds())
+	if e.EndTime != nil {
+		data.EndTime = e.EndTime
+		data.Duration = int(e.EndTime.Sub(e.StartTime).Seconds())
 	}
 
 	// Convert metrics to storage format
-	for _, metric := range experiment.DataPoints {
+	for _, metric := range e.DataPoints {
 		dataPoint := storage.MetricDataPoint{
 			Timestamp: metric.Timestamp,
 			SystemMetrics: storage.SystemMetrics{
@@ -277,27 +306,28 @@ func (m *Manager) convertToStorageFormat(experiment *Experiment) *storage.Experi
 // ListAllExperiments returns summary information for all experiments (active and stored)
 func (m *Manager) ListAllExperiments() []ExperimentSummary {
 	m.mu.RLock()
-	defer m.mu.RUnlock()
+	experiment := m.currentExperiment
+	m.mu.RUnlock()
 
 	var summaries []ExperimentSummary
 
-	// Add active experiments
-	for _, exp := range m.experiments {
-		exp.mu.RLock()
+	// Add current experiment if it exists
+	if experiment != nil {
+		experiment.mu.RLock()
 		summary := ExperimentSummary{
-			ID:                  exp.ID,
-			Description:         exp.Description,
-			Status:              exp.Status,
-			StartTime:           exp.StartTime,
-			EndTime:             exp.EndTime,
-			IsActive:            exp.IsActive,
-			DataPointsCollected: exp.DataPointsCollected,
+			ID:                  experiment.ID,
+			Description:         experiment.Description,
+			Status:              experiment.Status,
+			StartTime:           experiment.StartTime,
+			EndTime:             experiment.EndTime,
+			IsActive:            experiment.IsActive,
+			DataPointsCollected: experiment.DataPointsCollected,
 		}
-		if exp.EndTime != nil {
-			duration := int(exp.EndTime.Sub(exp.StartTime).Seconds())
+		if experiment.EndTime != nil {
+			duration := int(experiment.EndTime.Sub(experiment.StartTime).Seconds())
 			summary.Duration = &duration
 		}
-		exp.mu.RUnlock()
+		experiment.mu.RUnlock()
 
 		summaries = append(summaries, summary)
 	}
@@ -307,12 +337,12 @@ func (m *Manager) ListAllExperiments() []ExperimentSummary {
 
 // ExperimentSummary represents a summary of an experiment
 type ExperimentSummary struct {
-	ID                  string     `json:"experimentId"`
-	Description         string     `json:"description,omitempty"`
-	Status              Status     `json:"status"`
-	StartTime           time.Time  `json:"startTime"`
-	EndTime             *time.Time `json:"endTime,omitempty"`
-	Duration            *int       `json:"duration,omitempty"` // Duration in seconds
-	IsActive            bool       `json:"isActive"`
-	DataPointsCollected int        `json:"dataPointsCollected"`
+	ID                  string                           `json:"experimentId"`
+	Description         string                           `json:"description,omitempty"`
+	Status              generated.ExperimentStatusStatus `json:"status"`
+	StartTime           time.Time                        `json:"startTime"`
+	EndTime             *time.Time                       `json:"endTime,omitempty"`
+	Duration            *int                             `json:"duration,omitempty"` // Duration in seconds
+	IsActive            bool                             `json:"isActive"`
+	DataPointsCollected int                              `json:"dataPointsCollected"`
 }

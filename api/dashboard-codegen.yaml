@@ -8,3 +8,8 @@ generate:
   models: true
   client: true
   embedded-spec: true
+output-options:
+  prefer-skip-optional-pointer: true
+import-mapping:
+  ./collector.openapi.yaml: cpusim/collector/api/generated
+  ./requester.openapi.yaml: cpusim/requester/api/generated

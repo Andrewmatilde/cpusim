@@ -21,13 +21,13 @@ type APIHandler struct {
 func (h *APIHandler) ListExperiments(c *gin.Context, params generated.ListExperimentsParams) {
 	// Set defaults
 	limit := 50
-	if params.Limit != nil {
-		limit = *params.Limit
+	if params.Limit != 0 {
+		limit = params.Limit
 	}
 
 	status := generated.ListExperimentsParamsStatusAll
-	if params.Status != nil {
-		status = *params.Status
+	if params.Status != "" {
+		status = params.Status
 	}
 
 	// Get all experiments from manager (active ones)
@@ -52,7 +52,7 @@ func (h *APIHandler) ListExperiments(c *gin.Context, params generated.ListExperi
 	response := generated.ExperimentListResponse{
 		Experiments: filteredExperiments,
 		Total:       total,
-		HasMore:     &hasMore,
+		HasMore:     hasMore,
 	}
 
 	c.JSON(http.StatusOK, response)
@@ -67,17 +67,9 @@ func (h *APIHandler) getAllExperiments() []generated.ExperimentSummary {
 	for _, summary := range activeSummaries {
 		expUUID := summary.ID
 
-		var statusEnum generated.ExperimentSummaryStatus
-		switch summary.Status {
-		case experiment.StatusRunning:
-			statusEnum = generated.ExperimentSummaryStatusRunning
-		case experiment.StatusStopped:
-			statusEnum = generated.ExperimentSummaryStatusStopped
-		case experiment.StatusTimeout:
-			statusEnum = generated.ExperimentSummaryStatusTimeout
-		default:
-			statusEnum = generated.ExperimentSummaryStatusError
-		}
+		// summary.Status is already generated.ExperimentStatusStatus type
+		// Convert to ExperimentSummaryStatus (same underlying values)
+		statusEnum := generated.ExperimentSummaryStatus(summary.Status)
 
 		apiSummary := generated.ExperimentSummary{
 			ExperimentId: expUUID,
@@ -87,16 +79,18 @@ func (h *APIHandler) getAllExperiments() []generated.ExperimentSummary {
 		}
 
 		if summary.Description != "" {
-			apiSummary.Description = &summary.Description
+			apiSummary.Description = summary.Description
 		}
 
 		if summary.EndTime != nil {
-			apiSummary.EndTime = summary.EndTime
-			apiSummary.Duration = summary.Duration
+			apiSummary.EndTime = *summary.EndTime
+			if summary.Duration != nil {
+				apiSummary.Duration = *summary.Duration
+			}
 		}
 
 		if summary.DataPointsCollected > 0 {
-			apiSummary.DataPointsCollected = &summary.DataPointsCollected
+			apiSummary.DataPointsCollected = summary.DataPointsCollected
 		}
 
 		experiments = append(experiments, apiSummary)
@@ -136,16 +130,16 @@ func (h *APIHandler) getAllExperiments() []generated.ExperimentSummary {
 				}
 
 				if data.Description != "" {
-					summary.Description = &data.Description
+					summary.Description = data.Description
 				}
 
 				if data.EndTime != nil {
-					summary.EndTime = data.EndTime
-					summary.Duration = &data.Duration
+					summary.EndTime = *data.EndTime
+					summary.Duration = data.Duration
 				}
 
 				dataPointsCount := len(data.Metrics)
-				summary.DataPointsCollected = &dataPointsCount
+				summary.DataPointsCollected = dataPointsCount
 
 				experiments = append(experiments, summary)
 			}
@@ -192,18 +186,18 @@ func (h *APIHandler) StartExperiment(c *gin.Context) {
 
 	// Set defaults
 	collectionInterval := time.Duration(defaultCollectionInterval) * time.Millisecond
-	if req.CollectionInterval != nil {
-		collectionInterval = time.Duration(*req.CollectionInterval) * time.Millisecond
+	if req.CollectionInterval != 0 {
+		collectionInterval = time.Duration(req.CollectionInterval) * time.Millisecond
 	}
 
 	timeout := time.Duration(defaultTimeout) * time.Second
-	if req.Timeout != nil {
-		timeout = time.Duration(*req.Timeout) * time.Second
+	if req.Timeout != 0 {
+		timeout = time.Duration(req.Timeout) * time.Second
 	}
 
 	description := ""
-	if req.Description != nil {
-		description = *req.Description
+	if req.Description != "" {
+		description = req.Description
 	}
 
 	// Start experiment
@@ -237,7 +231,7 @@ func (h *APIHandler) StartExperiment(c *gin.Context) {
 		ExperimentId: expUUID,
 		Status:       generated.ExperimentResponseStatusStarted,
 		Timestamp:    exp.StartTime,
-		Message:      &message,
+		Message:      message,
 	})
 }
 
@@ -265,7 +259,7 @@ func (h *APIHandler) StopExperiment(c *gin.Context, experimentId string) {
 
 	message := "Experiment stopped successfully"
 	status := generated.ExperimentResponseStatusStopped
-	if exp.Status == experiment.StatusTimeout {
+	if exp.Status == generated.ExperimentStatusStatusTimeout {
 		message = "Experiment stopped due to timeout"
 		status = generated.ExperimentResponseStatusTimeout
 	}
@@ -275,7 +269,7 @@ func (h *APIHandler) StopExperiment(c *gin.Context, experimentId string) {
 		ExperimentId: expUUID,
 		Status:       status,
 		Timestamp:    time.Now(),
-		Message:      &message,
+		Message:      message,
 	})
 }
 
@@ -296,34 +290,23 @@ func (h *APIHandler) GetExperimentStatus(c *gin.Context, experimentId string) {
 	expUUID := exp.ID
 	dataPointsCollected := exp.DataPointsCollected
 
-	var statusEnum generated.ExperimentStatusStatus
-	switch exp.Status {
-	case experiment.StatusRunning:
-		statusEnum = generated.ExperimentStatusStatusRunning
-	case experiment.StatusStopped:
-		statusEnum = generated.ExperimentStatusStatusStopped
-	case experiment.StatusTimeout:
-		statusEnum = generated.ExperimentStatusStatusTimeout
-	default:
-		statusEnum = generated.ExperimentStatusStatusError
-	}
-
+	// exp.Status is already generated.ExperimentStatusStatus type
 	status := generated.ExperimentStatus{
 		ExperimentId:        expUUID,
-		Status:              statusEnum,
+		Status:              exp.Status,
 		StartTime:           exp.StartTime,
 		IsActive:            exp.IsActive,
-		DataPointsCollected: &dataPointsCollected,
+		DataPointsCollected: dataPointsCollected,
 	}
 
 	if exp.EndTime != nil {
-		status.EndTime = exp.EndTime
+		status.EndTime = *exp.EndTime
 		duration := int(exp.EndTime.Sub(exp.StartTime).Seconds())
-		status.Duration = &duration
+		status.Duration = duration
 	}
 
 	if exp.LastMetrics != nil {
-		status.LastMetrics = &generated.SystemMetrics{
+		status.LastMetrics = generated.SystemMetrics{
 			CpuUsagePercent:          float32(exp.LastMetrics.CPUUsagePercent),
 			MemoryUsageBytes:         exp.LastMetrics.MemoryUsageBytes,
 			MemoryUsagePercent:       float32(exp.LastMetrics.MemoryUsagePercent),
@@ -360,17 +343,17 @@ func (h *APIHandler) GetExperimentData(c *gin.Context, experimentId string) {
 	result := generated.ExperimentData{
 		ExperimentId:       expUUID,
 		StartTime:          data.StartTime,
-		CollectionInterval: &collectionInterval,
+		CollectionInterval: collectionInterval,
 		Metrics:            make([]generated.MetricDataPoint, 0, len(data.Metrics)),
 	}
 
 	if data.Description != "" {
-		result.Description = &data.Description
+		result.Description = data.Description
 	}
 
 	if data.EndTime != nil {
-		result.EndTime = data.EndTime
-		result.Duration = &data.Duration
+		result.EndTime = *data.EndTime
+		result.Duration = data.Duration
 	}
 
 	// Convert metrics
@@ -401,6 +384,6 @@ func (h *APIHandler) HealthCheck(c *gin.Context) {
 	c.JSON(http.StatusOK, generated.HealthResponse{
 		Status:    "healthy",
 		Timestamp: time.Now(),
-		Uptime:    nil, // Could be implemented to track actual uptime
+		Uptime:    0, // Could be implemented to track actual uptime
 	})
 }

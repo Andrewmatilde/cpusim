@@ -9,7 +9,7 @@ import { useHosts } from '@/hooks/useHosts';
 import { ExperimentForm } from './ExperimentForm';
 import { ExperimentList } from './ExperimentList';
 import type { Host } from '@/api/types';
-import { RefreshCw, Server, Activity, AlertCircle, Wifi, WifiOff, FlaskConical } from 'lucide-react';
+import { RefreshCw, Server, AlertCircle, Wifi, WifiOff, FlaskConical } from 'lucide-react';
 import { Toaster } from '@/components/ui/sonner';
 import { apiClient } from '@/api/client';
 import { toast } from 'sonner';
@@ -21,7 +21,7 @@ export function Dashboard() {
   const handleRunTest = async (host: Host) => {
     try {
       const result = await apiClient.testHostCalculation(host.name || '');
-      toast.success(`Test completed! GCD: ${result.gcd}, Time: ${result.process_time}`);
+      toast.success(`Test completed! GCD: ${result.gcd}, Time: ${result.processTime}`);
     } catch (error) {
       toast.error('Test failed');
       console.error('Test error:', error);
@@ -117,7 +117,7 @@ export function Dashboard() {
                         return (
                           <TableRow key={host.name}>
                             <TableCell className="font-medium">{host.name}</TableCell>
-                            <TableCell>{host.ip}</TableCell>
+                            <TableCell>{host.externalIP}</TableCell>
                             <TableCell>
                               <Badge variant={health?.cpuServiceHealthy ? "success" : "destructive"}>
                                 {health?.cpuServiceHealthy ? "Healthy" : "Unhealthy"}

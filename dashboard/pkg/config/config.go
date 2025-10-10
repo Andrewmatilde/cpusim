@@ -6,9 +6,17 @@ import (
 	"os"
 )
 
+// Host type constants
+const (
+	HostTypeTarget = "target"
+	HostTypeClient = "client"
+)
+
 type Host struct {
-	Name string `json:"name"`
-	IP   string `json:"ip"`
+	Name       string `json:"name"`
+	ExternalIP string `json:"externalIP"`
+	InternalIP string `json:"internalIP,omitempty"`
+	HostType   string `json:"hostType"` // "target" or "client"
 }
 
 type Config struct {
@@ -43,9 +51,24 @@ func (c *Config) GetAllHosts() []Host {
 }
 
 func (h *Host) GetCPUServiceURL() string {
-	return fmt.Sprintf("http://%s:80", h.IP)
+	// cpusim-server runs on port 80 on target hosts
+	return fmt.Sprintf("http://%s:80", h.ExternalIP)
 }
 
 func (h *Host) GetCollectorServiceURL() string {
-	return fmt.Sprintf("http://%s:8080", h.IP)
+	// collector-server runs on port 8080 on target hosts
+	return fmt.Sprintf("http://%s:8080", h.ExternalIP)
+}
+
+func (h *Host) GetRequesterServiceURL() string {
+	// requester-server runs on port 80 on client hosts
+	return fmt.Sprintf("http://%s:80", h.ExternalIP)
+}
+
+func (h *Host) IsTarget() bool {
+	return h.HostType == HostTypeTarget
+}
+
+func (h *Host) IsClient() bool {
+	return h.HostType == HostTypeClient
 }

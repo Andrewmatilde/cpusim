@@ -9,35 +9,34 @@ import (
 	"time"
 
 	"cpusim/requester/api/generated"
-)
-
-// ExperimentStatus represents the status of an experiment
-type ExperimentStatus string
-
-const (
-	StatusRunning   ExperimentStatus = "running"
-	StatusStopped   ExperimentStatus = "stopped"
-	StatusCompleted ExperimentStatus = "completed"
-	StatusError     ExperimentStatus = "error"
+	"cpusim/requester/pkg/storage"
 )
 
 // Experiment represents a request sending experiment
 type Experiment struct {
 	config     generated.StartRequestExperimentRequest
-	status     ExperimentStatus
+	status     generated.RequestExperimentStatus
 	startTime  time.Time
 	endTime    *time.Time
 	stats      *RequestStats
 	httpClient *http.Client
+	storage    *storage.FileStorage
 	ctx        context.Context
 	cancel     context.CancelFunc
-	stopChan   chan struct{}
+	done       chan struct{} // Signals that Start() has finished
 	mu         sync.RWMutex
 }
 
 // NewExperiment creates a new experiment
-func NewExperiment(config generated.StartRequestExperimentRequest) *Experiment {
-	ctx, cancel := context.WithCancel(context.Background())
+func NewExperiment(config generated.StartRequestExperimentRequest, storage *storage.FileStorage) *Experiment {
+	// Create context with timeout if specified
+	var ctx context.Context
+	var cancel context.CancelFunc
+	if config.Timeout > 0 {
+		ctx, cancel = context.WithTimeout(context.Background(), time.Duration(config.Timeout)*time.Second)
+	} else {
+		ctx, cancel = context.WithCancel(context.Background())
+	}
 
 	// Configure HTTP transport for high concurrency
 	transport := &http.Transport{
@@ -54,12 +53,13 @@ func NewExperiment(config generated.StartRequestExperimentRequest) *Experiment {
 
 	return &Experiment{
 		config:     config,
-		status:     StatusRunning,
+		status:     generated.RequestExperimentStatusRunning,
 		stats:      NewRequestStats(),
 		httpClient: httpClient,
+		storage:    storage,
 		ctx:        ctx,
 		cancel:     cancel,
-		stopChan:   make(chan struct{}),
+		done:       make(chan struct{}),
 	}
 }
 
@@ -69,17 +69,13 @@ func (e *Experiment) Start() {
 	e.startTime = time.Now()
 	e.mu.Unlock()
 
-	// Set up timeout if specified
-	var timeoutTimer *time.Timer
-	if e.config.Timeout > 0 {
-		timeoutTimer = time.NewTimer(time.Duration(e.config.Timeout) * time.Second)
-		defer timeoutTimer.Stop()
-	}
+	// Close done channel when finished
+	defer close(e.done)
 
 	// Calculate QPS interval
 	qps := e.config.Qps
 	if qps <= 0 {
-		qps = 1  // Fallback to 1 QPS if invalid
+		qps = 1 // Fallback to 1 QPS if invalid
 	}
 
 	interval := time.Second / time.Duration(qps)
@@ -94,16 +90,25 @@ func (e *Experiment) Start() {
 			// Send request in goroutine to maintain QPS timing
 			go e.sendRequest(targetURL)
 
-		case <-e.stopChan:
-			e.setStatus(StatusStopped)
-			return
-
-		case <-timeoutTimer.C:
-			e.setStatus(StatusCompleted)
-			return
-
 		case <-e.ctx.Done():
-			e.setStatus(StatusStopped)
+			// Immediately set end time and status when loop exits
+			e.mu.Lock()
+			now := time.Now()
+			e.endTime = &now
+			if e.ctx.Err() == context.DeadlineExceeded {
+				e.status = generated.RequestExperimentStatusCompleted // Timeout
+			} else {
+				e.status = generated.RequestExperimentStatusStopped // Manual stop
+			}
+			e.mu.Unlock()
+
+			// Save experiment data to storage
+			experimentData := e.ToRequestExperiment()
+			stats := e.GetStats()
+			if err := e.storage.SaveExperiment(experimentData, stats); err != nil {
+				fmt.Printf("Warning: failed to save experiment data: %v\n", err)
+			}
+
 			return
 		}
 	}
@@ -143,32 +148,45 @@ func (e *Experiment) sendRequest(targetURL string) {
 
 // Stop stops the experiment
 func (e *Experiment) Stop() (*generated.StopExperimentResult, error) {
-	e.mu.Lock()
-	defer e.mu.Unlock()
+	e.mu.RLock()
+	status := e.status
+	e.mu.RUnlock()
 
-	if e.status == StatusStopped || e.status == StatusCompleted {
-		return nil, fmt.Errorf("experiment already stopped")
+	// Check if already stopped (idempotent)
+	if status == generated.RequestExperimentStatusStopped || status == generated.RequestExperimentStatusCompleted {
+		return e.getStopResult(), nil
 	}
 
-	// Signal stop
-	close(e.stopChan)
+	// Trigger stop by cancelling context
 	e.cancel()
 
-	// Set end time
-	now := time.Now()
-	e.endTime = &now
-	e.status = StatusStopped
+	// Wait for Start() goroutine to finish
+	<-e.done
 
-	// Calculate duration
-	duration := int(e.endTime.Sub(e.startTime).Seconds())
+	return e.getStopResult(), nil
+}
+
+// getStopResult builds the stop result from current state
+func (e *Experiment) getStopResult() *generated.StopExperimentResult {
+	e.mu.RLock()
+	defer e.mu.RUnlock()
+
+	var duration int
+	if e.endTime != nil {
+		duration = int(e.endTime.Sub(e.startTime).Seconds())
+	}
+
+	var endTime time.Time
+	if e.endTime != nil {
+		endTime = *e.endTime
+	}
 
 	return &generated.StopExperimentResult{
-		ExperimentId: &e.config.ExperimentId,
-		StopStatus:   stringPtr("stopped"),
-		EndTime:      e.endTime,
-		Duration:     &duration,
-		FinalStats:   e.stats.ToRequestExperimentStats(e.config.ExperimentId, string(e.status), e.startTime, e.endTime),
-	}, nil
+		ExperimentId: e.config.ExperimentId,
+		EndTime:      endTime,
+		Duration:     duration,
+		FinalStats:   *e.stats.ToRequestExperimentStats(e.config.ExperimentId, string(e.status), e.startTime, e.endTime),
+	}
 }
 
 // GetStats returns the current statistics
@@ -184,41 +202,28 @@ func (e *Experiment) ToRequestExperiment() *generated.RequestExperiment {
 	e.mu.RLock()
 	defer e.mu.RUnlock()
 
-	var duration *int
+	var duration int
 	if e.endTime != nil {
-		d := int(e.endTime.Sub(e.startTime).Seconds())
-		duration = &d
+		duration = int(e.endTime.Sub(e.startTime).Seconds())
 	}
 
-	var endTimePtr *time.Time
+	var endTime time.Time
 	if e.endTime != nil {
-		endTimePtr = e.endTime
-	}
-
-	var status generated.RequestExperimentStatus
-	switch e.status {
-	case StatusRunning:
-		status = generated.RequestExperimentStatusRunning
-	case StatusStopped:
-		status = generated.RequestExperimentStatusStopped
-	case StatusCompleted:
-		status = generated.RequestExperimentStatusCompleted
-	case StatusError:
-		status = generated.RequestExperimentStatusError
+		endTime = *e.endTime
 	}
 
 	return &generated.RequestExperiment{
-		ExperimentId: &e.config.ExperimentId,
-		TargetIP:     &e.config.TargetIP,
-		TargetPort:   &e.config.TargetPort,
-		Timeout:      &e.config.Timeout,
-		Qps:          &e.config.Qps,
+		ExperimentId: e.config.ExperimentId,
+		TargetIP:     e.config.TargetIP,
+		TargetPort:   e.config.TargetPort,
+		Timeout:      e.config.Timeout,
+		Qps:          e.config.Qps,
 		Description:  e.config.Description,
-		Status:       &status,
-		StartTime:    &e.startTime,
-		EndTime:      endTimePtr,
+		Status:       e.status, // Directly use status since it's already the correct type
+		StartTime:    e.startTime,
+		EndTime:      endTime,
 		Duration:     duration,
-		CreatedAt:    &e.startTime,
+		CreatedAt:    e.startTime,
 	}
 }
 
@@ -226,7 +231,7 @@ func (e *Experiment) ToRequestExperiment() *generated.RequestExperiment {
 func (e *Experiment) IsCompleted() bool {
 	e.mu.RLock()
 	defer e.mu.RUnlock()
-	return e.status == StatusCompleted || e.status == StatusStopped
+	return e.status == generated.RequestExperimentStatusCompleted || e.status == generated.RequestExperimentStatusStopped
 }
 
 // GetEndTime returns the end time if available
@@ -237,23 +242,4 @@ func (e *Experiment) GetEndTime() time.Time {
 		return *e.endTime
 	}
 	return time.Time{}
-}
-
-// setStatus sets the experiment status
-func (e *Experiment) setStatus(status ExperimentStatus) {
-	e.mu.Lock()
-	defer e.mu.Unlock()
-
-	e.status = status
-	if status == StatusCompleted || status == StatusStopped || status == StatusError {
-		if e.endTime == nil {
-			now := time.Now()
-			e.endTime = &now
-		}
-	}
-}
-
-// Helper function to create string pointer
-func stringPtr(s string) *string {
-	return &s
 }

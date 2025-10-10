@@ -50,13 +50,13 @@ const (
 // ErrorResponse defines model for ErrorResponse.
 type ErrorResponse struct {
 	// Error 错误类型
-	Error *string `json:"error,omitempty"`
+	Error string `json:"error,omitempty"`
 
 	// ExperimentId 相关实验ID
-	ExperimentId *string `json:"experimentId"`
+	ExperimentId string `json:"experimentId"`
 
 	// Message 错误详细信息
-	Message *string `json:"message,omitempty"`
+	Message string `json:"message,omitempty"`
 
 	// Timestamp 错误时间
 	Timestamp time.Time `json:"timestamp"`
@@ -64,52 +64,52 @@ type ErrorResponse struct {
 
 // HealthResponse defines model for HealthResponse.
 type HealthResponse struct {
-	Status *string `json:"status,omitempty"`
+	Status string `json:"status,omitempty"`
 
 	// Timestamp 健康检查时间
-	Timestamp *time.Time `json:"timestamp,omitempty"`
+	Timestamp time.Time `json:"timestamp,omitempty"`
 
 	// Uptime 服务运行时间（秒）
-	Uptime *int `json:"uptime,omitempty"`
+	Uptime int `json:"uptime,omitempty"`
 
 	// Version 服务版本
-	Version *string `json:"version,omitempty"`
+	Version string `json:"version,omitempty"`
 }
 
 // RequestExperiment defines model for RequestExperiment.
 type RequestExperiment struct {
 	// CreatedAt 创建时间
-	CreatedAt *time.Time `json:"createdAt,omitempty"`
+	CreatedAt time.Time `json:"createdAt,omitempty"`
 
 	// Description 实验描述
-	Description *string `json:"description,omitempty"`
+	Description string `json:"description,omitempty"`
 
 	// Duration 实验持续时间（秒）
-	Duration *int `json:"duration"`
+	Duration int `json:"duration"`
 
 	// EndTime 实验结束时间
-	EndTime *time.Time `json:"endTime"`
+	EndTime time.Time `json:"endTime"`
 
 	// ExperimentId 实验ID
-	ExperimentId *string `json:"experimentId,omitempty"`
+	ExperimentId string `json:"experimentId,omitempty"`
 
 	// Qps 每秒请求数（QPS）
-	Qps *int `json:"qps,omitempty"`
+	Qps int `json:"qps,omitempty"`
 
 	// StartTime 实验开始时间
-	StartTime *time.Time `json:"startTime,omitempty"`
+	StartTime time.Time `json:"startTime,omitempty"`
 
 	// Status 实验状态
-	Status *RequestExperimentStatus `json:"status,omitempty"`
+	Status RequestExperimentStatus `json:"status,omitempty"`
 
 	// TargetIP 目标CPU仿真服务IP地址
-	TargetIP *string `json:"targetIP,omitempty"`
+	TargetIP string `json:"targetIP,omitempty"`
 
 	// TargetPort 目标CPU仿真服务端口
-	TargetPort *int `json:"targetPort,omitempty"`
+	TargetPort int `json:"targetPort,omitempty"`
 
 	// Timeout 超时时间（秒）
-	Timeout *int `json:"timeout,omitempty"`
+	Timeout int `json:"timeout,omitempty"`
 }
 
 // RequestExperimentStatus 实验状态
@@ -117,64 +117,64 @@ type RequestExperimentStatus string
 
 // RequestExperimentListResponse defines model for RequestExperimentListResponse.
 type RequestExperimentListResponse struct {
-	Experiments *[]RequestExperiment `json:"experiments,omitempty"`
+	Experiments []RequestExperiment `json:"experiments,omitempty"`
 
 	// Total 总实验数量
-	Total *int `json:"total,omitempty"`
+	Total int `json:"total,omitempty"`
 }
 
 // RequestExperimentStats defines model for RequestExperimentStats.
 type RequestExperimentStats struct {
 	// AverageResponseTime 平均响应时间（毫秒）
-	AverageResponseTime *float32 `json:"averageResponseTime,omitempty"`
+	AverageResponseTime float32 `json:"averageResponseTime,omitempty"`
 
 	// Duration 持续时间（秒）
-	Duration *int `json:"duration,omitempty"`
+	Duration int `json:"duration,omitempty"`
 
 	// EndTime 结束时间
-	EndTime *time.Time `json:"endTime"`
+	EndTime time.Time `json:"endTime"`
 
 	// ErrorRate 错误率（百分比）
-	ErrorRate *float32 `json:"errorRate,omitempty"`
+	ErrorRate float32 `json:"errorRate,omitempty"`
 
 	// ExperimentId 实验ID
-	ExperimentId *string `json:"experimentId,omitempty"`
+	ExperimentId string `json:"experimentId,omitempty"`
 
 	// FailedRequests 失败请求数
-	FailedRequests *int `json:"failedRequests,omitempty"`
+	FailedRequests int `json:"failedRequests,omitempty"`
 
 	// LastUpdated 最后更新时间
-	LastUpdated *time.Time `json:"lastUpdated,omitempty"`
+	LastUpdated time.Time `json:"lastUpdated,omitempty"`
 
 	// MaxResponseTime 最大响应时间（毫秒）
-	MaxResponseTime *float32 `json:"maxResponseTime,omitempty"`
+	MaxResponseTime float32 `json:"maxResponseTime,omitempty"`
 
 	// MinResponseTime 最小响应时间（毫秒）
-	MinResponseTime *float32 `json:"minResponseTime,omitempty"`
+	MinResponseTime float32 `json:"minResponseTime,omitempty"`
 
 	// RequestsPerSecond 每秒请求数（QPS）
-	RequestsPerSecond *float32 `json:"requestsPerSecond,omitempty"`
+	RequestsPerSecond float32 `json:"requestsPerSecond,omitempty"`
 
 	// ResponseTimeP50 50%分位响应时间（毫秒）
-	ResponseTimeP50 *float32 `json:"responseTimeP50,omitempty"`
+	ResponseTimeP50 float32 `json:"responseTimeP50,omitempty"`
 
 	// ResponseTimeP95 95%分位响应时间（毫秒）
-	ResponseTimeP95 *float32 `json:"responseTimeP95,omitempty"`
+	ResponseTimeP95 float32 `json:"responseTimeP95,omitempty"`
 
 	// ResponseTimeP99 99%分位响应时间（毫秒）
-	ResponseTimeP99 *float32 `json:"responseTimeP99,omitempty"`
+	ResponseTimeP99 float32 `json:"responseTimeP99,omitempty"`
 
 	// StartTime 开始时间
-	StartTime *time.Time `json:"startTime,omitempty"`
+	StartTime time.Time `json:"startTime,omitempty"`
 
 	// Status 实验状态
-	Status *RequestExperimentStatsStatus `json:"status,omitempty"`
+	Status RequestExperimentStatsStatus `json:"status,omitempty"`
 
 	// SuccessfulRequests 成功请求数
-	SuccessfulRequests *int `json:"successfulRequests,omitempty"`
+	SuccessfulRequests int `json:"successfulRequests,omitempty"`
 
 	// TotalRequests 总请求数
-	TotalRequests *int `json:"totalRequests,omitempty"`
+	TotalRequests int `json:"totalRequests,omitempty"`
 }
 
 // RequestExperimentStatsStatus 实验状态
@@ -183,7 +183,7 @@ type RequestExperimentStatsStatus string
 // StartRequestExperimentRequest defines model for StartRequestExperimentRequest.
 type StartRequestExperimentRequest struct {
 	// Description 实验描述
-	Description *string `json:"description,omitempty"`
+	Description string `json:"description,omitempty"`
 
 	// ExperimentId 实验唯一标识符
 	ExperimentId string `json:"experimentId"`
@@ -204,26 +204,26 @@ type StartRequestExperimentRequest struct {
 // StopExperimentResult defines model for StopExperimentResult.
 type StopExperimentResult struct {
 	// Duration 运行时长（秒）
-	Duration *int `json:"duration,omitempty"`
+	Duration int `json:"duration,omitempty"`
 
 	// EndTime 停止时间
-	EndTime *time.Time `json:"endTime,omitempty"`
+	EndTime time.Time `json:"endTime,omitempty"`
 
 	// ExperimentId 实验ID
-	ExperimentId *string                 `json:"experimentId,omitempty"`
-	FinalStats   *RequestExperimentStats `json:"finalStats,omitempty"`
+	ExperimentId string                 `json:"experimentId,omitempty"`
+	FinalStats   RequestExperimentStats `json:"finalStats,omitempty"`
 
 	// StopStatus 停止状态
-	StopStatus *string `json:"stopStatus,omitempty"`
+	StopStatus string `json:"stopStatus,omitempty"`
 }
 
 // ListRequestExperimentsParams defines parameters for ListRequestExperiments.
 type ListRequestExperimentsParams struct {
 	// Status 按状态过滤实验
-	Status *ListRequestExperimentsParamsStatus `form:"status,omitempty" json:"status,omitempty"`
+	Status ListRequestExperimentsParamsStatus `form:"status,omitempty" json:"status,omitempty"`
 
 	// Limit 返回的实验数量限制
-	Limit *int `form:"limit,omitempty" json:"limit,omitempty"`
+	Limit int `form:"limit,omitempty" json:"limit,omitempty"`
 }
 
 // ListRequestExperimentsParamsStatus defines parameters for ListRequestExperiments.
@@ -432,36 +432,28 @@ func NewListRequestExperimentsRequest(server string, params *ListRequestExperime
 	if params != nil {
 		queryValues := queryURL.Query()
 
-		if params.Status != nil {
-
-			if queryFrag, err := runtime.StyleParamWithLocation("form", true, "status", runtime.ParamLocationQuery, *params.Status); err != nil {
-				return nil, err
-			} else if parsed, err := url.ParseQuery(queryFrag); err != nil {
-				return nil, err
-			} else {
-				for k, v := range parsed {
-					for _, v2 := range v {
-						queryValues.Add(k, v2)
-					}
+		if queryFrag, err := runtime.StyleParamWithLocation("form", true, "status", runtime.ParamLocationQuery, params.Status); err != nil {
+			return nil, err
+		} else if parsed, err := url.ParseQuery(queryFrag); err != nil {
+			return nil, err
+		} else {
+			for k, v := range parsed {
+				for _, v2 := range v {
+					queryValues.Add(k, v2)
 				}
 			}
-
 		}
 
-		if params.Limit != nil {
-
-			if queryFrag, err := runtime.StyleParamWithLocation("form", true, "limit", runtime.ParamLocationQuery, *params.Limit); err != nil {
-				return nil, err
-			} else if parsed, err := url.ParseQuery(queryFrag); err != nil {
-				return nil, err
-			} else {
-				for k, v := range parsed {
-					for _, v2 := range v {
-						queryValues.Add(k, v2)
-					}
+		if queryFrag, err := runtime.StyleParamWithLocation("form", true, "limit", runtime.ParamLocationQuery, params.Limit); err != nil {
+			return nil, err
+		} else if parsed, err := url.ParseQuery(queryFrag); err != nil {
+			return nil, err
+		} else {
+			for k, v := range parsed {
+				for _, v2 := range v {
+					queryValues.Add(k, v2)
 				}
 			}
-
 		}
 
 		queryURL.RawQuery = queryValues.Encode()

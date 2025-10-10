@@ -189,39 +189,24 @@ func (s *RequestStats) ToRequestExperimentStats(experimentId, status string, sta
 		statsStatus = generated.RequestExperimentStatsStatusError
 	}
 
-	// Convert int64 to int
-	totalRequests := int(s.TotalRequests)
-	successfulRequests := int(s.SuccessfulRequests)
-	failedRequests := int(s.FailedRequests)
-
-	// Convert float64 to float32
-	avgResponseTimeF32 := float32(avgResponseTime)
-	minResponseTimeF32 := float32(minResponseTime)
-	maxResponseTimeF32 := float32(maxResponseTime)
-	qpsF32 := float32(qps)
-	errorRateF32 := float32(errorRate)
-	p50F32 := float32(p50)
-	p95F32 := float32(p95)
-	p99F32 := float32(p99)
-
 	return &generated.RequestExperimentStats{
-		ExperimentId:        &experimentId,
-		Status:              &statsStatus,
-		TotalRequests:       &totalRequests,
-		SuccessfulRequests:  &successfulRequests,
-		FailedRequests:      &failedRequests,
-		AverageResponseTime: &avgResponseTimeF32,
-		MinResponseTime:     &minResponseTimeF32,
-		MaxResponseTime:     &maxResponseTimeF32,
-		RequestsPerSecond:   &qpsF32,
-		ErrorRate:           &errorRateF32,
-		ResponseTimeP50:     &p50F32,
-		ResponseTimeP95:     &p95F32,
-		ResponseTimeP99:     &p99F32,
-		StartTime:           &startTime,
-		EndTime:             endTime,
-		Duration:            &duration,
-		LastUpdated:         &s.LastUpdated,
+		ExperimentId:        experimentId,
+		Status:              statsStatus,
+		TotalRequests:       int(s.TotalRequests),
+		SuccessfulRequests:  int(s.SuccessfulRequests),
+		FailedRequests:      int(s.FailedRequests),
+		AverageResponseTime: float32(avgResponseTime),
+		MinResponseTime:     float32(minResponseTime),
+		MaxResponseTime:     float32(maxResponseTime),
+		RequestsPerSecond:   float32(qps),
+		ErrorRate:           float32(errorRate),
+		ResponseTimeP50:     float32(p50),
+		ResponseTimeP95:     float32(p95),
+		ResponseTimeP99:     float32(p99),
+		StartTime:           startTime,
+		EndTime:             *endTime,
+		Duration:            duration,
+		LastUpdated:         s.LastUpdated,
 	}
 }
 

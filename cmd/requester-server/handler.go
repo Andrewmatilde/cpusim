@@ -21,10 +21,10 @@ func (h *APIHandler) HealthCheck(c *gin.Context) {
 	uptime := 0 // This should be calculated from service start time
 
 	response := generated.HealthResponse{
-		Status:    stringPtr("healthy"),
-		Timestamp: &now,
-		Uptime:    &uptime,
-		Version:   stringPtr("1.0.0"),
+		Status:    "healthy",
+		Timestamp: now,
+		Uptime:    uptime,
+		Version:   "1.0.0",
 	}
 	c.JSON(http.StatusOK, response)
 }
@@ -32,16 +32,16 @@ func (h *APIHandler) HealthCheck(c *gin.Context) {
 // ListRequestExperiments implements getting list of experiments
 func (h *APIHandler) ListRequestExperiments(c *gin.Context, params generated.ListRequestExperimentsParams) {
 	var statusFilter *string
-	if params.Status != nil {
-		status := string(*params.Status)
+	if params.Status != "" {
+		status := string(params.Status)
 		statusFilter = &status
 	}
 
 	experiments := h.experimentManager.ListExperiments(statusFilter)
 
 	response := generated.RequestExperimentListResponse{
-		Experiments: &experiments,
-		Total:       intPtr(len(experiments)),
+		Experiments: experiments,
+		Total:       len(experiments),
 	}
 
 	c.JSON(http.StatusOK, response)
@@ -52,9 +52,10 @@ func (h *APIHandler) StartRequestExperiment(c *gin.Context) {
 	var request generated.StartRequestExperimentRequest
 	if err := c.ShouldBindJSON(&request); err != nil {
 		c.JSON(http.StatusBadRequest, generated.ErrorResponse{
-			Error:     stringPtr("invalid_request"),
-			Message:   stringPtr(err.Error()),
-			Timestamp: time.Now(),
+			Error:        "invalid_request",
+			Message:      err.Error(),
+			Timestamp:    time.Now(),
+			ExperimentId: request.ExperimentId,
 		})
 		return
 	}
@@ -70,10 +71,10 @@ func (h *APIHandler) StartRequestExperiment(c *gin.Context) {
 		}
 
 		c.JSON(statusCode, generated.ErrorResponse{
-			Error:        stringPtr(errorType),
-			Message:      stringPtr(err.Error()),
+			Error:        errorType,
+			Message:      err.Error(),
 			Timestamp:    time.Now(),
-			ExperimentId: &request.ExperimentId,
+			ExperimentId: request.ExperimentId,
 		})
 		return
 	}
@@ -86,10 +87,10 @@ func (h *APIHandler) GetRequestExperimentStatus(c *gin.Context, experimentId str
 	experiment, err := h.experimentManager.GetExperiment(experimentId)
 	if err != nil {
 		c.JSON(http.StatusNotFound, generated.ErrorResponse{
-			Error:        stringPtr("experiment_not_found"),
-			Message:      stringPtr(err.Error()),
+			Error:        "experiment_not_found",
+			Message:      err.Error(),
 			Timestamp:    time.Now(),
-			ExperimentId: &experimentId,
+			ExperimentId: experimentId,
 		})
 		return
 	}
@@ -113,10 +114,10 @@ func (h *APIHandler) StopRequestExperiment(c *gin.Context, experimentId string) 
 		}
 
 		c.JSON(statusCode, generated.ErrorResponse{
-			Error:        stringPtr(errorType),
-			Message:      stringPtr(err.Error()),
+			Error:        errorType,
+			Message:      err.Error(),
 			Timestamp:    time.Now(),
-			ExperimentId: &experimentId,
+			ExperimentId: experimentId,
 		})
 		return
 	}
@@ -129,23 +130,13 @@ func (h *APIHandler) GetRequestExperimentStats(c *gin.Context, experimentId stri
 	stats, err := h.experimentManager.GetExperimentStats(experimentId)
 	if err != nil {
 		c.JSON(http.StatusNotFound, generated.ErrorResponse{
-			Error:        stringPtr("experiment_not_found"),
-			Message:      stringPtr(err.Error()),
+			Error:        "experiment_not_found",
+			Message:      err.Error(),
 			Timestamp:    time.Now(),
-			ExperimentId: &experimentId,
+			ExperimentId: experimentId,
 		})
 		return
 	}
 
 	c.JSON(http.StatusOK, stats)
-}
-
-// Helper function to create string pointer
-func stringPtr(s string) *string {
-	return &s
-}
-
-// Helper function to create int pointer
-func intPtr(i int) *int {
-	return &i
 }

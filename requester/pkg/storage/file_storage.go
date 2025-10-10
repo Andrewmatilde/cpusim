@@ -36,8 +36,8 @@ type ExperimentData struct {
 
 // SaveExperiment saves experiment and its stats to filesystem
 func (fs *FileStorage) SaveExperiment(experiment *generated.RequestExperiment, stats *generated.RequestExperimentStats) error {
-	if experiment.ExperimentId == nil {
-		return fmt.Errorf("experiment ID cannot be nil")
+	if experiment.ExperimentId == "" {
+		return fmt.Errorf("experiment ID cannot be empty")
 	}
 
 	data := &ExperimentData{
@@ -46,7 +46,7 @@ func (fs *FileStorage) SaveExperiment(experiment *generated.RequestExperiment, s
 		SavedAt:    time.Now(),
 	}
 
-	filename := fmt.Sprintf("%s.json", *experiment.ExperimentId)
+	filename := fmt.Sprintf("%s.json", experiment.ExperimentId)
 	filepath := filepath.Join(fs.basePath, filename)
 
 	file, err := os.Create(filepath)

@@ -1,7 +1,6 @@
 // API Client for CPU Simulation Dashboard
 
 import type {
-  Host,
   HostHealth,
   CalculationRequest,
   CalculationResponse,
@@ -10,6 +9,8 @@ import type {
   ExperimentListResponse,
   ExperimentDataResponse,
   StopAndCollectResponse,
+  ExperimentOperationResponse,
+  ExperimentPhases,
   HostsResponse
 } from './types';
 
@@ -70,6 +71,26 @@ export class DashboardAPIClient {
     return this.request<ExperimentDataResponse>(`/experiments/${encodeURIComponent(experimentId)}/data${query}`);
   }
 
+  // New experiment phase management
+  async getExperimentPhases(experimentId: string): Promise<ExperimentPhases> {
+    return this.request<ExperimentPhases>(`/experiments/${encodeURIComponent(experimentId)}/phases`);
+  }
+
+  async startCompleteExperiment(experimentId: string): Promise<ExperimentOperationResponse> {
+    return this.request<ExperimentOperationResponse>(
+      `/experiments/${encodeURIComponent(experimentId)}/start`,
+      { method: 'POST' }
+    );
+  }
+
+  async stopCompleteExperiment(experimentId: string): Promise<ExperimentOperationResponse> {
+    return this.request<ExperimentOperationResponse>(
+      `/experiments/${encodeURIComponent(experimentId)}/stop`,
+      { method: 'POST' }
+    );
+  }
+
+  // Legacy stop method (kept for backward compatibility)
   async stopGlobalExperiment(experimentId: string): Promise<StopAndCollectResponse> {
     return this.request<StopAndCollectResponse>(
       `/experiments/${encodeURIComponent(experimentId)}/stop`,

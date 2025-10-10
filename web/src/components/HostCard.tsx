@@ -2,7 +2,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import type { Host, HostHealth } from '@/api/types';
-import { Activity, Server, Wifi, WifiOff } from 'lucide-react';
+import { Activity, Server, Laptop, Wifi, WifiOff } from 'lucide-react';
 
 interface HostCardProps {
   host: Host;
@@ -13,6 +13,9 @@ interface HostCardProps {
 
 export function HostCard({ host, health, onViewDetails, onRunTest }: HostCardProps) {
   const isHealthy = health?.cpuServiceHealthy && health?.collectorServiceHealthy;
+  const isClient = host.hostType === 'client';
+  const hostTypeLabel = isClient ? 'Client' : 'Target';
+  const hostTypeColor = isClient ? 'blue' : 'green';
 
   return (
     <Card className="hover:shadow-lg transition-shadow">
@@ -20,45 +23,67 @@ export function HostCard({ host, health, onViewDetails, onRunTest }: HostCardPro
         <div className="flex items-start justify-between">
           <div>
             <CardTitle className="flex items-center gap-2">
-              <Server className="h-5 w-5" />
+              {isClient ? <Laptop className="h-5 w-5" /> : <Server className="h-5 w-5" />}
               {host.name}
             </CardTitle>
-            <CardDescription>{host.ip}</CardDescription>
+            <CardDescription className="space-y-1">
+              <div>{host.externalIP}</div>
+              {host.internalIP && (
+                <div className="text-xs">Internal: {host.internalIP}</div>
+              )}
+            </CardDescription>
           </div>
-          <Badge variant={isHealthy ? "default" : health ? "destructive" : "secondary"}>
-            {isHealthy ? (
-              <>
-                <Wifi className="h-3 w-3 mr-1" />
-                Online
-              </>
-            ) : health ? (
-              <>
-                <WifiOff className="h-3 w-3 mr-1" />
-                Offline
-              </>
-            ) : (
-              "Unknown"
-            )}
-          </Badge>
+          <div className="flex flex-col gap-2 items-end">
+            <Badge variant="outline" className={`border-${hostTypeColor}-500 text-${hostTypeColor}-700`}>
+              {hostTypeLabel} Host
+            </Badge>
+            <Badge variant={isHealthy ? "default" : health ? "destructive" : "secondary"}>
+              {isHealthy ? (
+                <>
+                  <Wifi className="h-3 w-3 mr-1" />
+                  Online
+                </>
+              ) : health ? (
+                <>
+                  <WifiOff className="h-3 w-3 mr-1" />
+                  Offline
+                </>
+              ) : (
+                "Unknown"
+              )}
+            </Badge>
+          </div>
         </div>
       </CardHeader>
       <CardContent className="space-y-4">
         <div className="space-y-2">
-          <div className="flex items-center justify-between text-sm">
-            <span className="text-muted-foreground">CPU Service:</span>
-            <Badge variant={health?.cpuServiceHealthy ? "success" : "destructive"} className="text-xs">
-              {health?.cpuServiceHealthy ? "Healthy" : "Unhealthy"}
-            </Badge>
-          </div>
-          <div className="flex items-center justify-between text-sm">
-            <span className="text-muted-foreground">Collector Service:</span>
-            <Badge variant={health?.collectorServiceHealthy ? "success" : "destructive"} className="text-xs">
-              {health?.collectorServiceHealthy ? "Healthy" : "Unhealthy"}
-            </Badge>
-          </div>
-          {health?.collectorHealth && (
+          {!isClient && (
+            <>
+              <div className="flex items-center justify-between text-sm">
+                <span className="text-muted-foreground">CPU Service:</span>
+                <Badge variant={health?.cpuServiceHealthy ? "success" : "destructive"} className="text-xs">
+                  {health?.cpuServiceHealthy ? "Healthy" : "Unhealthy"}
+                </Badge>
+              </div>
+              <div className="flex items-center justify-between text-sm">
+                <span className="text-muted-foreground">Collector Service:</span>
+                <Badge variant={health?.collectorServiceHealthy ? "success" : "destructive"} className="text-xs">
+                  {health?.collectorServiceHealthy ? "Healthy" : "Unhealthy"}
+                </Badge>
+              </div>
+            </>
+          )}
+          {isClient && (
+            <div className="flex items-center justify-between text-sm">
+              <span className="text-muted-foreground">Requester Service:</span>
+              <Badge variant={health?.requesterServiceHealthy ? "success" : "destructive"} className="text-xs">
+                {health?.requesterServiceHealthy ? "Healthy" : "Unhealthy"}
+              </Badge>
+            </div>
+          )}
+          {health?.timestamp && (
             <div className="text-xs text-muted-foreground mt-2">
-              Last updated: {new Date(health.collectorHealth.timestamp).toLocaleTimeString()}
+              Last updated: {new Date(health.timestamp).toLocaleTimeString()}
             </div>
           )}
         </div>
@@ -73,14 +98,16 @@ export function HostCard({ host, health, onViewDetails, onRunTest }: HostCardPro
             <Activity className="h-4 w-4 mr-1" />
             Details
           </Button>
-          <Button
-            onClick={() => onRunTest(host)}
-            size="sm"
-            className="flex-1"
-            disabled={!isHealthy}
-          >
-            Run Test
-          </Button>
+          {!isClient && (
+            <Button
+              onClick={() => onRunTest(host)}
+              size="sm"
+              className="flex-1"
+              disabled={!isHealthy}
+            >
+              Run Test
+            </Button>
+          )}
         </div>
       </CardContent>
     </Card>

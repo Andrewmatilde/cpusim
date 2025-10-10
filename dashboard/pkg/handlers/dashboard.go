@@ -100,3 +100,31 @@ func (h *DashboardHandler) TestHostCalculation(c *gin.Context, name string) {
 	}
 	c.JSON(http.StatusOK, result)
 }
+
+// New experiment phase management endpoints
+func (h *DashboardHandler) GetExperimentPhases(c *gin.Context, experimentId string) {
+	phases, err := h.service.GetExperimentPhases(c.Request.Context(), experimentId)
+	if err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, phases)
+}
+
+func (h *DashboardHandler) StartCompleteExperiment(c *gin.Context, experimentId string) {
+	result, err := h.service.StartCompleteExperiment(c.Request.Context(), experimentId)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, result)
+}
+
+func (h *DashboardHandler) StopCompleteExperiment(c *gin.Context, experimentId string) {
+	result, err := h.service.StopCompleteExperiment(c.Request.Context(), experimentId)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, result)
+}

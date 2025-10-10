@@ -40,7 +40,7 @@ export function useHosts() {
   }, []);
 
   const refreshAllHealth = useCallback(async () => {
-    const healthPromises = hosts.map(host => fetchHostHealth(host.name));
+    const healthPromises = hosts.map(host => fetchHostHealth(host.name || ''));
     await Promise.all(healthPromises);
   }, [hosts, fetchHostHealth]);
 

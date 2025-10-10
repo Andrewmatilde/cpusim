@@ -25,7 +25,7 @@ export function CalculationTest({ host }: CalculationTestProps) {
     try {
       setLoading(true);
       setResult(null);
-      const response = await apiClient.testHostCalculation(host.name, formData);
+      const response = await apiClient.testHostCalculation(host.name || '', formData);
       setResult(response);
       toast.success('Calculation completed successfully');
     } catch (error) {
@@ -101,7 +101,7 @@ export function CalculationTest({ host }: CalculationTestProps) {
                   <Clock className="h-4 w-4" />
                   Processing Time:
                 </span>
-                <span className="font-mono">{result.process_time}</span>
+                <span className="font-mono">{result.processTime}</span>
               </div>
             </AlertDescription>
           </Alert>

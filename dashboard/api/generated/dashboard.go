@@ -17,136 +17,284 @@ import (
 	"strings"
 	"time"
 
+	externalRef0 "cpusim/collector/api/generated"
+	externalRef1 "cpusim/requester/api/generated"
+
 	"github.com/getkin/kin-openapi/openapi3"
 	"github.com/gin-gonic/gin"
 	"github.com/oapi-codegen/runtime"
 )
 
+// Defines values for ExperimentStatus.
+const (
+	ExperimentStatusCompleted ExperimentStatus = "completed"
+	ExperimentStatusFailed    ExperimentStatus = "failed"
+	ExperimentStatusPending   ExperimentStatus = "pending"
+	ExperimentStatusRunning   ExperimentStatus = "running"
+	ExperimentStatusStopping  ExperimentStatus = "stopping"
+)
+
+// Defines values for ExperimentOperationResponseStatus.
+const (
+	ExperimentOperationResponseStatusFailed  ExperimentOperationResponseStatus = "failed"
+	ExperimentOperationResponseStatusPartial ExperimentOperationResponseStatus = "partial"
+	ExperimentOperationResponseStatusSuccess ExperimentOperationResponseStatus = "success"
+)
+
+// Defines values for HostHostType.
+const (
+	HostHostTypeClient HostHostType = "client"
+	HostHostTypeTarget HostHostType = "target"
+)
+
+// Defines values for HostHealthHostType.
+const (
+	HostHealthHostTypeClient HostHealthHostType = "client"
+	HostHealthHostTypeTarget HostHealthHostType = "target"
+)
+
+// Defines values for PhaseStatusStatus.
+const (
+	PhaseStatusStatusCompleted PhaseStatusStatus = "completed"
+	PhaseStatusStatusFailed    PhaseStatusStatus = "failed"
+	PhaseStatusStatusPending   PhaseStatusStatus = "pending"
+	PhaseStatusStatusRunning   PhaseStatusStatus = "running"
+)
+
+// Defines values for StopAndCollectResponseHostsCollectedHostType.
+const (
+	StopAndCollectResponseHostsCollectedHostTypeClient StopAndCollectResponseHostsCollectedHostType = "client"
+	StopAndCollectResponseHostsCollectedHostTypeTarget StopAndCollectResponseHostsCollectedHostType = "target"
+)
+
+// Defines values for StopAndCollectResponseHostsFailedHostType.
+const (
+	StopAndCollectResponseHostsFailedHostTypeClient StopAndCollectResponseHostsFailedHostType = "client"
+	StopAndCollectResponseHostsFailedHostTypeTarget StopAndCollectResponseHostsFailedHostType = "target"
+)
+
 // Defines values for StopAndCollectResponseStatus.
 const (
-	Failed  StopAndCollectResponseStatus = "failed"
-	Partial StopAndCollectResponseStatus = "partial"
-	Success StopAndCollectResponseStatus = "success"
+	StopAndCollectResponseStatusFailed  StopAndCollectResponseStatus = "failed"
+	StopAndCollectResponseStatusPartial StopAndCollectResponseStatus = "partial"
+	StopAndCollectResponseStatusSuccess StopAndCollectResponseStatus = "success"
 )
 
 // CalculationRequest defines model for CalculationRequest.
 type CalculationRequest struct {
-	A *int `json:"a,omitempty"`
-	B *int `json:"b,omitempty"`
+	A int `json:"a,omitempty"`
+	B int `json:"b,omitempty"`
 }
 
 // CalculationResponse defines model for CalculationResponse.
 type CalculationResponse struct {
-	Gcd         *string `json:"gcd,omitempty"`
-	ProcessTime *string `json:"process_time,omitempty"`
+	Gcd         string `json:"gcd,omitempty"`
+	ProcessTime string `json:"process_time,omitempty"`
 }
 
-// CollectorExperimentData 与collector API的ExperimentData格式完全一致
-type CollectorExperimentData struct {
-	// CollectionInterval 数据收集间隔(毫秒)
-	CollectionInterval *int    `json:"collectionInterval,omitempty"`
-	Description        *string `json:"description,omitempty"`
-
-	// Duration 实验时长(秒)
-	Duration     *int               `json:"duration,omitempty"`
-	EndTime      *time.Time         `json:"endTime,omitempty"`
-	ExperimentId *string            `json:"experimentId,omitempty"`
-	Metrics      *[]MetricDataPoint `json:"metrics,omitempty"`
-	StartTime    *time.Time         `json:"startTime,omitempty"`
-}
+// CollectorExperimentData defines model for CollectorExperimentData.
+type CollectorExperimentData = externalRef0.ExperimentData
 
 // CreateExperimentRequest defines model for CreateExperimentRequest.
 type CreateExperimentRequest struct {
+	ClientHost HostConfig `json:"clientHost"`
+
 	// CollectionInterval 数据收集间隔(毫秒)
-	CollectionInterval *int `json:"collectionInterval,omitempty"`
+	CollectionInterval int `json:"collectionInterval,omitempty"`
 
 	// Description 实验描述
-	Description *string `json:"description,omitempty"`
+	Description string `json:"description,omitempty"`
 
 	// ExperimentId 实验唯一标识
-	ExperimentId       string `json:"experimentId"`
-	ParticipatingHosts []struct {
-		// Ip 主机IP地址
-		Ip string `json:"ip"`
+	ExperimentId  string        `json:"experimentId"`
+	RequestConfig RequestConfig `json:"requestConfig"`
 
-		// Name 主机名
-		Name string `json:"name"`
-	} `json:"participatingHosts"`
+	// TargetHosts 目标主机列表（运行cpusim-server和collector-server）
+	TargetHosts []HostConfig `json:"targetHosts"`
 
 	// Timeout 超时时间(秒)
-	Timeout *int `json:"timeout,omitempty"`
+	Timeout int `json:"timeout,omitempty"`
 }
 
 // Experiment defines model for Experiment.
 type Experiment struct {
-	CollectionInterval *int      `json:"collectionInterval,omitempty"`
-	CreatedAt          time.Time `json:"createdAt"`
-	Description        *string   `json:"description,omitempty"`
-	ExperimentId       string    `json:"experimentId"`
-	ParticipatingHosts []struct {
-		Ip   string `json:"ip"`
-		Name string `json:"name"`
-	} `json:"participatingHosts"`
-	Timeout *int `json:"timeout,omitempty"`
+	ClientHost         HostConfig `json:"clientHost"`
+	CollectionInterval int        `json:"collectionInterval,omitempty"`
+	CreatedAt          time.Time  `json:"createdAt"`
+	Description        string     `json:"description,omitempty"`
+	ExperimentId       string     `json:"experimentId"`
+
+	// Phases 实验各阶段执行状态
+	Phases        ExperimentPhases `json:"phases,omitempty"`
+	RequestConfig RequestConfig    `json:"requestConfig"`
+
+	// Status 实验状态
+	Status ExperimentStatus `json:"status,omitempty"`
+
+	// TargetHosts 目标主机列表
+	TargetHosts []HostConfig `json:"targetHosts"`
+	Timeout     int          `json:"timeout,omitempty"`
 }
+
+// ExperimentStatus 实验状态
+type ExperimentStatus string
 
 // ExperimentDataResponse defines model for ExperimentDataResponse.
 type ExperimentDataResponse struct {
-	Experiment   *Experiment `json:"experiment,omitempty"`
-	ExperimentId string      `json:"experimentId"`
+	// ClientHost 客户端主机实验数据
+	ClientHost struct {
+		// ExternalIP 主机外网IP
+		ExternalIP string `json:"externalIP"`
 
-	// Hosts 实验数据信息存储在data目录下experimentId目录下的data.json文件中，以hosts json列表形式存储
-	Hosts *[]struct {
-		// Data 与collector API的ExperimentData格式完全一致
-		Data *CollectorExperimentData `json:"data,omitempty"`
-
-		// Ip 主机IP
-		Ip string `json:"ip"`
+		// InternalIP 主机内网IP
+		InternalIP string `json:"internalIP,omitempty"`
 
 		// Name 主机名
 		Name string `json:"name"`
-	} `json:"hosts,omitempty"`
+
+		// RequesterData requester收集的数据（仅在查询特定主机时返回）
+		RequesterData struct {
+			Stats externalRef1.RequestExperimentStats `json:"stats,omitempty"`
+		} `json:"requesterData,omitempty"`
+	} `json:"clientHost,omitempty"`
+	Experiment   Experiment `json:"experiment,omitempty"`
+	ExperimentId string     `json:"experimentId"`
+
+	// TargetHosts 目标主机实验数据
+	TargetHosts []struct {
+		CollectorData CollectorExperimentData `json:"collectorData,omitempty"`
+
+		// ExternalIP 主机外网IP
+		ExternalIP string `json:"externalIP"`
+
+		// InternalIP 主机内网IP
+		InternalIP string `json:"internalIP,omitempty"`
+
+		// Name 主机名
+		Name string `json:"name"`
+	} `json:"targetHosts,omitempty"`
 }
 
 // ExperimentListResponse defines model for ExperimentListResponse.
 type ExperimentListResponse struct {
 	Experiments []Experiment `json:"experiments"`
-	HasMore     *bool        `json:"hasMore,omitempty"`
+	HasMore     bool         `json:"hasMore,omitempty"`
 	Total       int          `json:"total"`
+}
+
+// ExperimentOperationResponse defines model for ExperimentOperationResponse.
+type ExperimentOperationResponse struct {
+	ExperimentId string `json:"experimentId"`
+	Message      string `json:"message,omitempty"`
+
+	// Phases 实验各阶段执行状态
+	Phases ExperimentPhases `json:"phases,omitempty"`
+
+	// Status 操作总体状态
+	Status    ExperimentOperationResponseStatus `json:"status"`
+	Timestamp time.Time                         `json:"timestamp"`
+}
+
+// ExperimentOperationResponseStatus 操作总体状态
+type ExperimentOperationResponseStatus string
+
+// ExperimentPhases 实验各阶段执行状态
+type ExperimentPhases struct {
+	CollectorStart PhaseStatus `json:"collectorStart,omitempty"`
+	CollectorStop  PhaseStatus `json:"collectorStop,omitempty"`
+	RequesterStart PhaseStatus `json:"requesterStart,omitempty"`
+	RequesterStop  PhaseStatus `json:"requesterStop,omitempty"`
 }
 
 // Host defines model for Host.
 type Host struct {
-	CollectorServiceUrl *string `json:"collectorServiceUrl,omitempty"`
-	CpuServiceUrl       *string `json:"cpuServiceUrl,omitempty"`
-	Ip                  *string `json:"ip,omitempty"`
-	Name                *string `json:"name,omitempty"`
+	CollectorServiceUrl string `json:"collectorServiceUrl,omitempty"`
+	CpuServiceUrl       string `json:"cpuServiceUrl,omitempty"`
+
+	// ExternalIP 外网IP
+	ExternalIP string `json:"externalIP,omitempty"`
+
+	// HostType 主机类型
+	HostType HostHostType `json:"hostType,omitempty"`
+
+	// InternalIP 内网IP（可选）
+	InternalIP string `json:"internalIP,omitempty"`
+	Name       string `json:"name,omitempty"`
+
+	// RequesterServiceUrl 仅适用于client类型主机
+	RequesterServiceUrl string `json:"requesterServiceUrl,omitempty"`
+}
+
+// HostHostType 主机类型
+type HostHostType string
+
+// HostConfig defines model for HostConfig.
+type HostConfig struct {
+	// CollectorServicePort 数据收集服务端口
+	CollectorServicePort int `json:"collectorServicePort,omitempty"`
+
+	// CpuServicePort CPU服务端口
+	CpuServicePort int `json:"cpuServicePort,omitempty"`
+
+	// ExternalIP 外网IP地址
+	ExternalIP string `json:"externalIP"`
+
+	// InternalIP 内网IP地址（用于内网通信）
+	InternalIP string `json:"internalIP,omitempty"`
+
+	// Name 主机名
+	Name string `json:"name"`
+
+	// RequesterServicePort 请求发送服务端口（仅适用于clientHosts）
+	RequesterServicePort int `json:"requesterServicePort,omitempty"`
 }
 
 // HostHealth defines model for HostHealth.
 type HostHealth struct {
-	CollectorServiceHealthy *bool      `json:"collectorServiceHealthy,omitempty"`
-	CpuServiceHealthy       *bool      `json:"cpuServiceHealthy,omitempty"`
-	Ip                      *string    `json:"ip,omitempty"`
-	Name                    *string    `json:"name,omitempty"`
-	Timestamp               *time.Time `json:"timestamp,omitempty"`
+	CollectorServiceHealthy bool               `json:"collectorServiceHealthy,omitempty"`
+	CpuServiceHealthy       bool               `json:"cpuServiceHealthy,omitempty"`
+	ExternalIP              string             `json:"externalIP,omitempty"`
+	HostType                HostHealthHostType `json:"hostType,omitempty"`
+	InternalIP              string             `json:"internalIP,omitempty"`
+	Name                    string             `json:"name,omitempty"`
+
+	// RequesterServiceHealthy 仅适用于client类型主机
+	RequesterServiceHealthy bool      `json:"requesterServiceHealthy,omitempty"`
+	Timestamp               time.Time `json:"timestamp,omitempty"`
 }
 
-// MetricDataPoint defines model for MetricDataPoint.
-type MetricDataPoint struct {
-	SystemMetrics struct {
-		CalculatorServiceHealthy bool    `json:"calculatorServiceHealthy"`
-		CpuUsagePercent          float32 `json:"cpuUsagePercent"`
-		MemoryUsageBytes         int64   `json:"memoryUsageBytes"`
-		MemoryUsagePercent       float32 `json:"memoryUsagePercent"`
-		NetworkIOBytes           struct {
-			BytesReceived   int64 `json:"bytesReceived"`
-			BytesSent       int64 `json:"bytesSent"`
-			PacketsReceived int64 `json:"packetsReceived"`
-			PacketsSent     int64 `json:"packetsSent"`
-		} `json:"networkIOBytes"`
-	} `json:"systemMetrics"`
-	Timestamp time.Time `json:"timestamp"`
+// HostHealthHostType defines model for HostHealth.HostType.
+type HostHealthHostType string
+
+// PhaseStatus defines model for PhaseStatus.
+type PhaseStatus struct {
+	EndTime time.Time `json:"endTime,omitempty"`
+
+	// Message 状态消息或错误信息
+	Message   string            `json:"message,omitempty"`
+	StartTime time.Time         `json:"startTime,omitempty"`
+	Status    PhaseStatusStatus `json:"status,omitempty"`
+}
+
+// PhaseStatusStatus defines model for PhaseStatus.Status.
+type PhaseStatusStatus string
+
+// RequestConfig defines model for RequestConfig.
+type RequestConfig struct {
+	// Qps 每秒请求数
+	Qps int `json:"qps"`
+
+	// RequestBody 请求体（JSON）
+	RequestBody map[string]interface{} `json:"requestBody,omitempty"`
+
+	// RequestTimeout 单个请求超时时间（秒）
+	RequestTimeout int `json:"requestTimeout"`
+
+	// TargetEndpoint 目标服务端点
+	TargetEndpoint string `json:"targetEndpoint,omitempty"`
+
+	// TargetHostName 目标主机名（必须是targetHosts中的一个主机名）
+	TargetHostName string `json:"targetHostName"`
 }
 
 // StopAndCollectResponse defines model for StopAndCollectResponse.
@@ -154,37 +302,48 @@ type StopAndCollectResponse struct {
 	ExperimentId string `json:"experimentId"`
 
 	// HostsCollected 成功收集数据的主机列表
-	HostsCollected *[]struct {
-		Ip   *string `json:"ip,omitempty"`
-		Name *string `json:"name,omitempty"`
+	HostsCollected []struct {
+		ExternalIP string                                       `json:"externalIP,omitempty"`
+		HostType   StopAndCollectResponseHostsCollectedHostType `json:"hostType,omitempty"`
+		Name       string                                       `json:"name,omitempty"`
 	} `json:"hostsCollected,omitempty"`
 
 	// HostsFailed 收集失败的主机列表
-	HostsFailed *[]struct {
+	HostsFailed []struct {
 		// Error 失败原因
-		Error *string `json:"error,omitempty"`
-		Ip    *string `json:"ip,omitempty"`
-		Name  *string `json:"name,omitempty"`
+		Error      string                                    `json:"error,omitempty"`
+		ExternalIP string                                    `json:"externalIP,omitempty"`
+		HostType   StopAndCollectResponseHostsFailedHostType `json:"hostType,omitempty"`
+		Name       string                                    `json:"name,omitempty"`
 	} `json:"hostsFailed,omitempty"`
-	Message *string `json:"message,omitempty"`
+	Message string `json:"message,omitempty"`
+
+	// Phases 实验各阶段执行状态
+	Phases ExperimentPhases `json:"phases,omitempty"`
 
 	// Status 停止和收集的总体状态
 	Status    StopAndCollectResponseStatus `json:"status"`
 	Timestamp time.Time                    `json:"timestamp"`
 }
 
+// StopAndCollectResponseHostsCollectedHostType defines model for StopAndCollectResponse.HostsCollected.HostType.
+type StopAndCollectResponseHostsCollectedHostType string
+
+// StopAndCollectResponseHostsFailedHostType defines model for StopAndCollectResponse.HostsFailed.HostType.
+type StopAndCollectResponseHostsFailedHostType string
+
 // StopAndCollectResponseStatus 停止和收集的总体状态
 type StopAndCollectResponseStatus string
 
 // GetExperimentsParams defines parameters for GetExperiments.
 type GetExperimentsParams struct {
-	Limit *int `form:"limit,omitempty" json:"limit,omitempty"`
+	Limit int `form:"limit,omitempty" json:"limit,omitempty"`
 }
 
 // GetExperimentDataParams defines parameters for GetExperimentData.
 type GetExperimentDataParams struct {
 	// HostName 指定主机名，不指定则返回所有主机数据概要
-	HostName *string `form:"hostName,omitempty" json:"hostName,omitempty"`
+	HostName string `form:"hostName,omitempty" json:"hostName,omitempty"`
 }
 
 // CreateGlobalExperimentJSONRequestBody defines body for CreateGlobalExperiment for application/json ContentType.
@@ -280,8 +439,14 @@ type ClientInterface interface {
 	// GetExperimentData request
 	GetExperimentData(ctx context.Context, experimentId string, params *GetExperimentDataParams, reqEditors ...RequestEditorFn) (*http.Response, error)
 
-	// StopGlobalExperiment request
-	StopGlobalExperiment(ctx context.Context, experimentId string, reqEditors ...RequestEditorFn) (*http.Response, error)
+	// GetExperimentPhases request
+	GetExperimentPhases(ctx context.Context, experimentId string, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// StartCompleteExperiment request
+	StartCompleteExperiment(ctx context.Context, experimentId string, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// StopCompleteExperiment request
+	StopCompleteExperiment(ctx context.Context, experimentId string, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// GetHosts request
 	GetHosts(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error)
@@ -355,8 +520,32 @@ func (c *Client) GetExperimentData(ctx context.Context, experimentId string, par
 	return c.Client.Do(req)
 }
 
-func (c *Client) StopGlobalExperiment(ctx context.Context, experimentId string, reqEditors ...RequestEditorFn) (*http.Response, error) {
-	req, err := NewStopGlobalExperimentRequest(c.Server, experimentId)
+func (c *Client) GetExperimentPhases(ctx context.Context, experimentId string, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewGetExperimentPhasesRequest(c.Server, experimentId)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) StartCompleteExperiment(ctx context.Context, experimentId string, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewStartCompleteExperimentRequest(c.Server, experimentId)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) StopCompleteExperiment(ctx context.Context, experimentId string, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewStopCompleteExperimentRequest(c.Server, experimentId)
 	if err != nil {
 		return nil, err
 	}
@@ -437,20 +626,16 @@ func NewGetExperimentsRequest(server string, params *GetExperimentsParams) (*htt
 	if params != nil {
 		queryValues := queryURL.Query()
 
-		if params.Limit != nil {
-
-			if queryFrag, err := runtime.StyleParamWithLocation("form", true, "limit", runtime.ParamLocationQuery, *params.Limit); err != nil {
-				return nil, err
-			} else if parsed, err := url.ParseQuery(queryFrag); err != nil {
-				return nil, err
-			} else {
-				for k, v := range parsed {
-					for _, v2 := range v {
-						queryValues.Add(k, v2)
-					}
+		if queryFrag, err := runtime.StyleParamWithLocation("form", true, "limit", runtime.ParamLocationQuery, params.Limit); err != nil {
+			return nil, err
+		} else if parsed, err := url.ParseQuery(queryFrag); err != nil {
+			return nil, err
+		} else {
+			for k, v := range parsed {
+				for _, v2 := range v {
+					queryValues.Add(k, v2)
 				}
 			}
-
 		}
 
 		queryURL.RawQuery = queryValues.Encode()
@@ -567,20 +752,16 @@ func NewGetExperimentDataRequest(server string, experimentId string, params *Get
 	if params != nil {
 		queryValues := queryURL.Query()
 
-		if params.HostName != nil {
-
-			if queryFrag, err := runtime.StyleParamWithLocation("form", true, "hostName", runtime.ParamLocationQuery, *params.HostName); err != nil {
-				return nil, err
-			} else if parsed, err := url.ParseQuery(queryFrag); err != nil {
-				return nil, err
-			} else {
-				for k, v := range parsed {
-					for _, v2 := range v {
-						queryValues.Add(k, v2)
-					}
+		if queryFrag, err := runtime.StyleParamWithLocation("form", true, "hostName", runtime.ParamLocationQuery, params.HostName); err != nil {
+			return nil, err
+		} else if parsed, err := url.ParseQuery(queryFrag); err != nil {
+			return nil, err
+		} else {
+			for k, v := range parsed {
+				for _, v2 := range v {
+					queryValues.Add(k, v2)
 				}
 			}
-
 		}
 
 		queryURL.RawQuery = queryValues.Encode()
@@ -594,8 +775,76 @@ func NewGetExperimentDataRequest(server string, experimentId string, params *Get
 	return req, nil
 }
 
-// NewStopGlobalExperimentRequest generates requests for StopGlobalExperiment
-func NewStopGlobalExperimentRequest(server string, experimentId string) (*http.Request, error) {
+// NewGetExperimentPhasesRequest generates requests for GetExperimentPhases
+func NewGetExperimentPhasesRequest(server string, experimentId string) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithLocation("simple", false, "experimentId", runtime.ParamLocationPath, experimentId)
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/api/experiments/%s/phases", pathParam0)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest("GET", queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
+// NewStartCompleteExperimentRequest generates requests for StartCompleteExperiment
+func NewStartCompleteExperimentRequest(server string, experimentId string) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithLocation("simple", false, "experimentId", runtime.ParamLocationPath, experimentId)
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/api/experiments/%s/start", pathParam0)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest("POST", queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
+// NewStopCompleteExperimentRequest generates requests for StopCompleteExperiment
+func NewStopCompleteExperimentRequest(server string, experimentId string) (*http.Request, error) {
 	var err error
 
 	var pathParam0 string
@@ -793,8 +1042,14 @@ type ClientWithResponsesInterface interface {
 	// GetExperimentDataWithResponse request
 	GetExperimentDataWithResponse(ctx context.Context, experimentId string, params *GetExperimentDataParams, reqEditors ...RequestEditorFn) (*GetExperimentDataResponse, error)
 
-	// StopGlobalExperimentWithResponse request
-	StopGlobalExperimentWithResponse(ctx context.Context, experimentId string, reqEditors ...RequestEditorFn) (*StopGlobalExperimentResponse, error)
+	// GetExperimentPhasesWithResponse request
+	GetExperimentPhasesWithResponse(ctx context.Context, experimentId string, reqEditors ...RequestEditorFn) (*GetExperimentPhasesResponse, error)
+
+	// StartCompleteExperimentWithResponse request
+	StartCompleteExperimentWithResponse(ctx context.Context, experimentId string, reqEditors ...RequestEditorFn) (*StartCompleteExperimentResponse, error)
+
+	// StopCompleteExperimentWithResponse request
+	StopCompleteExperimentWithResponse(ctx context.Context, experimentId string, reqEditors ...RequestEditorFn) (*StopCompleteExperimentResponse, error)
 
 	// GetHostsWithResponse request
 	GetHostsWithResponse(ctx context.Context, reqEditors ...RequestEditorFn) (*GetHostsResponse, error)
@@ -896,14 +1151,14 @@ func (r GetExperimentDataResponse) StatusCode() int {
 	return 0
 }
 
-type StopGlobalExperimentResponse struct {
+type GetExperimentPhasesResponse struct {
 	Body         []byte
 	HTTPResponse *http.Response
-	JSON200      *StopAndCollectResponse
+	JSON200      *ExperimentPhases
 }
 
 // Status returns HTTPResponse.Status
-func (r StopGlobalExperimentResponse) Status() string {
+func (r GetExperimentPhasesResponse) Status() string {
 	if r.HTTPResponse != nil {
 		return r.HTTPResponse.Status
 	}
@@ -911,7 +1166,51 @@ func (r StopGlobalExperimentResponse) Status() string {
 }
 
 // StatusCode returns HTTPResponse.StatusCode
-func (r StopGlobalExperimentResponse) StatusCode() int {
+func (r GetExperimentPhasesResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+type StartCompleteExperimentResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	JSON200      *ExperimentOperationResponse
+}
+
+// Status returns HTTPResponse.Status
+func (r StartCompleteExperimentResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r StartCompleteExperimentResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+type StopCompleteExperimentResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	JSON200      *StopAndCollectResponse
+}
+
+// Status returns HTTPResponse.Status
+func (r StopCompleteExperimentResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r StopCompleteExperimentResponse) StatusCode() int {
 	if r.HTTPResponse != nil {
 		return r.HTTPResponse.StatusCode
 	}
@@ -922,7 +1221,7 @@ type GetHostsResponse struct {
 	Body         []byte
 	HTTPResponse *http.Response
 	JSON200      *struct {
-		Hosts *[]Host `json:"hosts,omitempty"`
+		Hosts []Host `json:"hosts,omitempty"`
 	}
 }
 
@@ -1030,13 +1329,31 @@ func (c *ClientWithResponses) GetExperimentDataWithResponse(ctx context.Context,
 	return ParseGetExperimentDataResponse(rsp)
 }
 
-// StopGlobalExperimentWithResponse request returning *StopGlobalExperimentResponse
-func (c *ClientWithResponses) StopGlobalExperimentWithResponse(ctx context.Context, experimentId string, reqEditors ...RequestEditorFn) (*StopGlobalExperimentResponse, error) {
-	rsp, err := c.StopGlobalExperiment(ctx, experimentId, reqEditors...)
+// GetExperimentPhasesWithResponse request returning *GetExperimentPhasesResponse
+func (c *ClientWithResponses) GetExperimentPhasesWithResponse(ctx context.Context, experimentId string, reqEditors ...RequestEditorFn) (*GetExperimentPhasesResponse, error) {
+	rsp, err := c.GetExperimentPhases(ctx, experimentId, reqEditors...)
 	if err != nil {
 		return nil, err
 	}
-	return ParseStopGlobalExperimentResponse(rsp)
+	return ParseGetExperimentPhasesResponse(rsp)
+}
+
+// StartCompleteExperimentWithResponse request returning *StartCompleteExperimentResponse
+func (c *ClientWithResponses) StartCompleteExperimentWithResponse(ctx context.Context, experimentId string, reqEditors ...RequestEditorFn) (*StartCompleteExperimentResponse, error) {
+	rsp, err := c.StartCompleteExperiment(ctx, experimentId, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseStartCompleteExperimentResponse(rsp)
+}
+
+// StopCompleteExperimentWithResponse request returning *StopCompleteExperimentResponse
+func (c *ClientWithResponses) StopCompleteExperimentWithResponse(ctx context.Context, experimentId string, reqEditors ...RequestEditorFn) (*StopCompleteExperimentResponse, error) {
+	rsp, err := c.StopCompleteExperiment(ctx, experimentId, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseStopCompleteExperimentResponse(rsp)
 }
 
 // GetHostsWithResponse request returning *GetHostsResponse
@@ -1178,15 +1495,67 @@ func ParseGetExperimentDataResponse(rsp *http.Response) (*GetExperimentDataRespo
 	return response, nil
 }
 
-// ParseStopGlobalExperimentResponse parses an HTTP response from a StopGlobalExperimentWithResponse call
-func ParseStopGlobalExperimentResponse(rsp *http.Response) (*StopGlobalExperimentResponse, error) {
+// ParseGetExperimentPhasesResponse parses an HTTP response from a GetExperimentPhasesWithResponse call
+func ParseGetExperimentPhasesResponse(rsp *http.Response) (*GetExperimentPhasesResponse, error) {
 	bodyBytes, err := io.ReadAll(rsp.Body)
 	defer func() { _ = rsp.Body.Close() }()
 	if err != nil {
 		return nil, err
 	}
 
-	response := &StopGlobalExperimentResponse{
+	response := &GetExperimentPhasesResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest ExperimentPhases
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseStartCompleteExperimentResponse parses an HTTP response from a StartCompleteExperimentWithResponse call
+func ParseStartCompleteExperimentResponse(rsp *http.Response) (*StartCompleteExperimentResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &StartCompleteExperimentResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest ExperimentOperationResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseStopCompleteExperimentResponse parses an HTTP response from a StopCompleteExperimentWithResponse call
+func ParseStopCompleteExperimentResponse(rsp *http.Response) (*StopCompleteExperimentResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &StopCompleteExperimentResponse{
 		Body:         bodyBytes,
 		HTTPResponse: rsp,
 	}
@@ -1220,7 +1589,7 @@ func ParseGetHostsResponse(rsp *http.Response) (*GetHostsResponse, error) {
 	switch {
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
 		var dest struct {
-			Hosts *[]Host `json:"hosts,omitempty"`
+			Hosts []Host `json:"hosts,omitempty"`
 		}
 		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
 			return nil, err
@@ -1298,9 +1667,15 @@ type ServerInterface interface {
 	// 获取实验数据
 	// (GET /api/experiments/{experimentId}/data)
 	GetExperimentData(c *gin.Context, experimentId string, params GetExperimentDataParams)
-	// 停止全局实验并收集数据
+	// 获取实验各阶段状态
+	// (GET /api/experiments/{experimentId}/phases)
+	GetExperimentPhases(c *gin.Context, experimentId string)
+	// 启动完整实验流程
+	// (POST /api/experiments/{experimentId}/start)
+	StartCompleteExperiment(c *gin.Context, experimentId string)
+	// 停止完整实验流程并收集数据
 	// (POST /api/experiments/{experimentId}/stop)
-	StopGlobalExperiment(c *gin.Context, experimentId string)
+	StopCompleteExperiment(c *gin.Context, experimentId string)
 	// 获取所有主机列表
 	// (GET /api/hosts)
 	GetHosts(c *gin.Context)
@@ -1419,8 +1794,8 @@ func (siw *ServerInterfaceWrapper) GetExperimentData(c *gin.Context) {
 	siw.Handler.GetExperimentData(c, experimentId, params)
 }
 
-// StopGlobalExperiment operation middleware
-func (siw *ServerInterfaceWrapper) StopGlobalExperiment(c *gin.Context) {
+// GetExperimentPhases operation middleware
+func (siw *ServerInterfaceWrapper) GetExperimentPhases(c *gin.Context) {
 
 	var err error
 
@@ -1440,7 +1815,55 @@ func (siw *ServerInterfaceWrapper) StopGlobalExperiment(c *gin.Context) {
 		}
 	}
 
-	siw.Handler.StopGlobalExperiment(c, experimentId)
+	siw.Handler.GetExperimentPhases(c, experimentId)
+}
+
+// StartCompleteExperiment operation middleware
+func (siw *ServerInterfaceWrapper) StartCompleteExperiment(c *gin.Context) {
+
+	var err error
+
+	// ------------- Path parameter "experimentId" -------------
+	var experimentId string
+
+	err = runtime.BindStyledParameterWithOptions("simple", "experimentId", c.Param("experimentId"), &experimentId, runtime.BindStyledParameterOptions{Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandler(c, fmt.Errorf("Invalid format for parameter experimentId: %w", err), http.StatusBadRequest)
+		return
+	}
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		middleware(c)
+		if c.IsAborted() {
+			return
+		}
+	}
+
+	siw.Handler.StartCompleteExperiment(c, experimentId)
+}
+
+// StopCompleteExperiment operation middleware
+func (siw *ServerInterfaceWrapper) StopCompleteExperiment(c *gin.Context) {
+
+	var err error
+
+	// ------------- Path parameter "experimentId" -------------
+	var experimentId string
+
+	err = runtime.BindStyledParameterWithOptions("simple", "experimentId", c.Param("experimentId"), &experimentId, runtime.BindStyledParameterOptions{Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandler(c, fmt.Errorf("Invalid format for parameter experimentId: %w", err), http.StatusBadRequest)
+		return
+	}
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		middleware(c)
+		if c.IsAborted() {
+			return
+		}
+	}
+
+	siw.Handler.StopCompleteExperiment(c, experimentId)
 }
 
 // GetHosts operation middleware
@@ -1535,7 +1958,9 @@ func RegisterHandlersWithOptions(router gin.IRouter, si ServerInterface, options
 	router.POST(options.BaseURL+"/api/experiments", wrapper.CreateGlobalExperiment)
 	router.GET(options.BaseURL+"/api/experiments/:experimentId", wrapper.GetGlobalExperiment)
 	router.GET(options.BaseURL+"/api/experiments/:experimentId/data", wrapper.GetExperimentData)
-	router.POST(options.BaseURL+"/api/experiments/:experimentId/stop", wrapper.StopGlobalExperiment)
+	router.GET(options.BaseURL+"/api/experiments/:experimentId/phases", wrapper.GetExperimentPhases)
+	router.POST(options.BaseURL+"/api/experiments/:experimentId/start", wrapper.StartCompleteExperiment)
+	router.POST(options.BaseURL+"/api/experiments/:experimentId/stop", wrapper.StopCompleteExperiment)
 	router.GET(options.BaseURL+"/api/hosts", wrapper.GetHosts)
 	router.POST(options.BaseURL+"/api/hosts/:name/calculate", wrapper.TestHostCalculation)
 	router.GET(options.BaseURL+"/api/hosts/:name/health", wrapper.GetHostHealth)
@@ -1544,38 +1969,57 @@ func RegisterHandlersWithOptions(router gin.IRouter, si ServerInterface, options
 // Base64 encoded, gzipped, json marshaled Swagger object
 var swaggerSpec = []string{
 
-	"H4sIAAAAAAAC/+RZb08byRn/Kmh6L7hqwSa0SPGbiuOud5YurXUcrxCthvWA9253ZzM7puciS+YKgeMc",
-	"iBIIrSEhpCFFqWKIRB0HiPgy3rV5la9Qzc7a3j+zxvxLK90bhMfPPM8zv+f3/JnxLJCxZmAd6dQEiVlg",
-	"yhmkQeffEajKWRVSBevfoLtZZFK2ahBsIEIV5MhA9ofmDAQSQNEpmkYE5CUwKVrOS80lPPkdkikT9Nkw",
-	"DaybKGxkWk579JmUKPo022wQLCPT/DNVNCQQENrDqopkiskXPxiIKBrS6eeQOqdII1MmisFcAQlQq67I",
-	"Tdme4VSyXpr3b7GfnVgnq1a5aC3s1aqFxuIhkAJ+uwoUrCd1isgMVMN27PUD+37ZXqucbd472zg8K631",
-	"2vv/rv/r4adAEgDr2yyAJJ0lsPml35BVfnr2qmhvVM7WT3sj9SM9/a2L5hQmGqQgAdKQoj4HYylsELVA",
-	"SYqDpCFKFNnBQ6FIc/75hKApkAC/irW5F3OJF7vjyDOEU1jRnaC5OiEhMMc+mxQSehE3hUwgCFLUjmkk",
-	"xaOiOAWzKgWJgXg8Ll0kqBr8QdGyGt8Zl4Cm6K3PXYRcGNXV1cbpAdf9NdKnaQYkfuvRFh0ukTZrbb9W",
-	"LdjPFhv79/w6hwYdd5sfByRgQEoRYXv/NA77/hrvuz3R6/7TN/Hr5tKnv/tExB0DEqrIigGpok9/hU3q",
-	"Z4k/DIohStJje+sombK2DqwnBZEJHXKWiPZZD+4LqULQ3axCUBokxvl+iRmfEHBIU/Qk93YgzFJGRZyl",
-	"PrIMhrnSqCzYGxWWlxuHvUGKDA75GDIkIEjAYV+Apab/AqRF52lnQ7dpEKar7ORVeph2X0POK2pB0n5s",
-	"0kWy6irc6UCXi4W4Dfgl4szqbHTjRT4+dKraHuZ00xQyTdyF1cypnrXTHXtu33r9d+vHPWtrLw0prG+W",
-	"rffrterPXv2txXppngn1f2di3X68WDuu1KqvP5wUa8e7jrke9oW1tNHY2bPeP2e929HNIiQOftodDDqd",
-	"O2qeyEsdC9bHL1V+unViVGfCfK2YtBvCdN/w/dQJpkUGmncw8WbbJMYqgrojjKm4DEWezwTNXaJjsoyJ",
-	"rHyYjCIyo8hojKhCUstG9hyJC5cToYdfIaiy9nuen1wuJ4au7WxHsYt5zKuYSaFmXGU0C46AoZOaOZMi",
-	"7U57sgwA4V4qukZizITTKIWI7Fa6luNTKoY0MLN5+nG7HetZbZL3Pw1pmOQcjZ/lKHeopU/R6dBvgFCD",
-	"p4V6VFyTUzqif8Hk++QfWy75EZtky98gGSkzKH0Jj539o0FHu9trQPl7RK9i3dVwKfuBSuEHwnuwsKN+",
-	"w+F6ElAd5JmAKsLQh6InRRNcWPkvkZJev9v7pUDiiayNUmwM62m3L3bTKTqNCK4aJLir2EsPrOVtfsfi",
-	"E0O9NO92S6fJRzf2q5fhUJdizv4eKqrQU8dH68WbxuFu1z4iQjARTEiOFmtl29p8Jhoirv9oGjIZG4Vq",
-	"TQppVjTHzW3Zr59bD4v86PXSvF04rr1/VF+u2IU5IAGks3QcB2ZWlpFpNidXqAIJTHEYJ6Tr6S4dJmfX",
-	"fa9eQRYzVPUpHD5lvbxTf3Dv7Mnz4VTyw0mxvrZXO1rhi9aLUq36aiQ1Vjs+rW9tuyF/WLQW9qw3BT7m",
-	"OnapymyNpMZ6RhXNfQjr+RyamUkMSbpnOJUEEphBxOQmb/XH++MMCWwgHRoKSIDB/nj/oAMgzTihiEFD",
-	"iQUGsWnkVEZGMMcEyznwJaJf+AYjAxKoIYqICRLjs0BhFu9mEck1L5IJoCqawkoSH958d9tb8ciWNCCo",
-	"uxMsNLw6OC7eisf5EKNTt45Dw1AV2fE3xmb39vNk9yOlb1x1YhlgqicgbkoyITOraZDk2PV85a21+tgv",
-	"IAHDHRT9gPInpS9VPAlVz1TLOYhM+hlO567tjFHvV3k/6SnJonwI6oEbgFoIr4vbpnV8xAt2AF7+lZsQ",
-	"7Ksge2Oz3qTNdyKzAHgRo1mitAkdKAl+4Lw8v8Kjw0fienQAGvsv7b8tiJntSQCP2DlhiDXvxucXFuc6",
-	"/H8TCSnUnIuLVrnUumV/OCnWqvf5orX0j8bpmrX51P6pYG/9xGXcp92XPzZeskYmqpFsGPgDv4y3nf7f",
-	"UML3vBNJD36mDoXPI3AeMUyKne7crJCiwcCLZ626XC/Nu3XiXaWx+Mpa3vNOddbSQfvtB0gBqrFx85eZ",
-	"9xGDdnQRbs1knh8n6seP7KdbwZrMJb2d8V3FG5I2EVrveFF1gL9BXhEG/2ScCb3ZdoLJedIRvX8Jxjzh",
-	"y1v0UOClsUesDUxslpEtH2te15A3MfxQfYtMByvP76Fd0dh99Iumr5CSNzCNhH8rzruTyA3xX/TLsSCK",
-	"jfJOvbwh5Ln9n58b++s8fiOpMS4ZEcJM682tE9Pdl7mbC9wNYenxPToR5nato7fuDS4A5D8L9vauUIzJ",
-	"ITLTBMKvuH3P4TJAAlmisg5KqZGIxVQsQ5WFIXE7fjsO8hP5/wYAAP//E+kkxq4gAAA=",
+	"H4sIAAAAAAAC/+xb708bR/r/V6z99iu1Jyd2kiYqfnNKSa/l1LS+EHQvolw1rAe87f7K7JiDiyyZXCEm",
+	"gUAJCS2QUNKkoFTFRJcSAuT4X07etf2Kf+E0M2vv7O7s2vzqtWrfRGR3dp55nufz/JzHNyXZ0ExDhzq2",
+	"pMxNyZLzUAP0z26gygUVYMXQr8AbBWhh8tREhgkRViBdA8g/eMSEUkZSdAwHIZKKSalf9LiYbD4y+j+H",
+	"MiYLfTQs09AtGCYyKOe4/SyMFH2QfGwiQ4aW9RlWNChYIKRnqCqUsYE+GDYhUjSo40sAgzBNmS1UDL1H",
+	"xxANAZU8zUFLRopJHkuZ5maKoScUd1FC0ROaoqqKBWVDz1lSUiAd3y4CvnIFBJov/RQvuW8ImTgKUM9d",
+	"dYUyYCANYCkj5QCGp6iokmGSsCWOHiprDQx/DPVBnJcyF84lJU3Rm/89k5RMgDFE5Dx/uwZO/SN9quv6",
+	"2+4fp67/ofnonT++JaKkQYwUmcpYwVCjf7yF4ICUkf4v5WEx5QIxJTc19tll+iVRV9ZQdKpOd3eAEBgh",
+	"/7cwQPggnBeTEoI3CgqCOSlzzS8Gfjvv3NdFqEIQYOhBKtJcZFWBOv7IYO/i2CZrug19QKFCi0LjACio",
+	"WMqcSafTAVhJzoMNZ2rdmdtsLI435l82Fubedio/1FZn3yHMgGFFK2jsyzTVb+v/HSDWT8lef9x4PulM",
+	"T9f3NtjeTayc53aLxppoN3uuUt0qOd/erlfG/XseMxwRU5Ur6jZKueJbTPAH0CCk+rTCnNQW151vb1e3",
+	"dpylbbs8X19Z298t1/dm6iuTslmwFO2UBdEQRPbsZAvk7qP93Qkp2Zl9+IGiKXoP++pM2DqICRgF7IPO",
+	"uTBy6ptjzvymM7/ZmH/5dhAw5y748HJBAJd4m9IBs0NOckneLoIqEdmbZ2knbWJhU5Cprecu4s6dazt/",
+	"HzSIIwHazAMLtkWNJ8EsW39kU7AwwAUryp5rdzad0qhEIhOBzTXJhHqOnDgpoYKus78sbJgm+5NQVCGG",
+	"BDEDQFFhjgOCx+wB7e9wNhVjRgeDvgedY8M/iYbRiZPfFoJ6eeKUX9V+qLgCYk6cBg0pGdgHDhM8ArUn",
+	"G97H/fzpw9qbr3qyIkTS3Cj+6/GxyK+pv4j6bmYqxqdD1Ezt/N+2XrPgWFv4krG9v1uu7ozZS2vO8rN6",
+	"5Ult4rW9vsAIOfOb9b05e/Exc8x+6RDkt4VUi+hnruV4Ouyl3wvS1QCaXM/JKUOEDejzjZ35AJETOoKt",
+	"+aHUsjhhgm20lBR31Ki0vZj8dWHzUBr1+584FxPvKz5WLBztK7yNOs/N/QgK+sk8sC4biK/M+g1DhUCn",
+	"iw0sjrCR/NFKh34Vz+anJkRtCsq2WNegZYFBKK46Dx1go0Kkc3+q+mbJKe1U39wPBUqrIJMil3gdgLAC",
+	"1DYRUdGghYFmHlsFRI7M7xsv/WxLOsK0fubLxtebzvpPzsRqfcXLCiJcQy+pv9pJmlLsZef08jjysWEe",
+	"8NuWkz4MYe7jAxIWNSqaQTtKMhANKTLsQ6oQo7JZaLMizm3GOcy8YeGr9KHY7dVe7NiP73L4ZWGjleMI",
+	"QRvnhZv+d3+3bE9XGqUJFoIjfXF0NuCXSODwO2ON0q3a3Fp1+x47KGOEMSW0GqHKvOQ5XnFZA/nrsPfS",
+	"78WW8M7SlH1npfZDxZ7+Ttjy8VQu2Du4c3e2r+2GnSDEXtqwH5WkQ6qUfb2/W2ZyZ48bpYXq3kobJR8m",
+	"GexcOvXKK+fFLXv6q0ZplBcTSxADOKEJke+4UaGss2hP9vsIAhXn26OIrRsRR1gPELHL/GqOtffDm/Th",
+	"rZU7++Esls85DhEbQ/rhPXc4sTho35VLNAIJNQ2NzmbZGa045YeNuW/qlUp1b8UZrYj2OXDjk89G4mry",
+	"jgpxkZyuBLsJfkndMEWJUGW6tjrLzM95sBFsVPJ9SpHHcrHzvpET4IXtWn1zf3+3/OfeTz9hJguHAeHP",
+	"vco4c/Ycvbt49/wFEUvu/lcFbbQzISdiTz2obj1nVPmOGnF3q7OMeou7C215Yzb3gZ4zae+bpy2lZPcW",
+	"hehZVJe1nFjt1mspto3yidDB+qq7mSkSivfGGis7ztcVriqsbv1YW/iyulWqbj3n1k60zTkJFkLSDZ1K",
+	"5CxJqnVRz7nl4RESfuLmLHcbKOhKO+UZ+86yG4ppWKasiltLcc2TY3OwER602LaAdJn9EzPmMKeUR/vp",
+	"i/rLZ53ziJCBRGkC2cW+t2wvfiu+dfqliebnLfzs0SXnxyf27KTXifoVF4HeTd3vl6u/X64e2+Vq9BlD",
+	"uLJGLAy1y54QOuO91/fZMdiP930ycKZ4Bj+B+O8G+qLn0zBr/SMYWlegDJUhkdd+n7xOIPd9woTIhTBx",
+	"FE0GFB1feFfiMg3hXS+l1At1HEXFgjo+EgUTyF9AHMNNli04Hn5camKOmpSOyFNA/35l8SINM+8/YDw+",
+	"eoP4DrhVNw002hZPf81DnIco4X2RsNgnCYWIneRRbikgLCz7SJDMQiQLhdqd7UsUyAoiUbKERFROogOq",
+	"AXAguRfKVy9o/UyJGtQMNELJUhCGiV6mK1y6ip6gMj84WjhCkfz5SB0bi3rT+FsMdua9PKcRhGFQUQIx",
+	"ChkOnSUZDa3r0XVS9F1XeIxsCCIwCJsJfDPIBLKl1/+yH92270/Z23OtWorNtLAqIyT9kIyjg78zOVrb",
+	"+TFcosWG/0CVtHPfebTMtuBPw8cNvaCqoJ8UnBgVoChXIJn0FVLKhfZnPYDavdvkfN/82y6PO5W5Tjnv",
+	"ZOim55Iop2B5pqtJKyrJ54v2sMxUYOE+kwhCVHEsleyZe87iS+fhRrz0wvkOGI7HDNn76eqRMKMpensa",
+	"G9NHouFajJWFqJcFoHa9kf3d8l+yvZ3v7zGQPZ8O734+/f92ebz6ZuqIbHBkus6HyXSdP34yXQIyXcdB",
+	"xpfvBjC/W7JX7x4QrAeckAnMxdBUge/GsZpbVP651eJAQY22WtbQiLdaetsas0VpJ+57wTwD7QsPGALX",
+	"ub5SmxlvPHpyMduzvzvJurrsof10obr1vDvbV93Zqy0tu/2I2Ul7bM1+UWKyo6UpJl6V5h69iubOFCcu",
+	"ASvfbwCUS1zM9khJaQgii5E8ezp9Ok24NEyoA1ORMtK50+nT52hChvOU3xQwlVTgYnwQ0ozAaN4yE3cq",
+	"fQi5GOeW6UCDGCJLyly7KSmE4o0CRCPNCbiMpCqaQnDHIrqvo3c2HZk5CJqDxeueSdAjnk2nWZWtYzd/",
+	"AaapKjI9b+pzi8U/j25n7Qzf+ADVZQDGnELcflGRglHTABqRMlL93it7+qF/QVIy3YtOv0DZRO2HqtEP",
+	"VG7KINTjPRYeo8Z3i/6EikTsYkjUZ05A1ELxunJbtHe2mfEGxMteuQZBXgXRm7rJJwHFODALBC9CNDEU",
+	"D9CB+t4vOB7nR2hx/ExYj1ZAvfK9888xMbI5A+CWtVFDKue2yNo7FtpM+8VoIhlOoW+3BuZo53+yujXF",
+	"Htrlb9j8nDNRcpYm3KE6dr39/a369yTuiXxkvtn85w/9v4GEb9IyEh7u1Fu04+MWtAOG129uDw231/wb",
+	"M9Nmhz1KG2zWyM2sYoJRcyqJW9lOOVZzQsgUTtc6kxONlW17e5oNOu3vLtgzFfvOWqtsT/xnfDbBnrXK",
+	"ZSkZUDEdQ+p2c77frjcOT/RFx0cqUVKJP14Kxkf6yl6fdB68dG3xp9Ha2t0O1c1mujrWNr3ZaWmWaZs+",
+	"8yOAv1EUqN8wf6vaj7jZjVZ86yqNG5oS44CtDOHAfr3p00YLFvnmyHOUG25O8R9JGP6GWItmx79XEE4K",
+	"Cwow4ehUdLrOB2xumSeY1E0CuSI3g8CZiV9UV6FFZcX96LMjMLuDU9EgFgLzBOqE8A9ii26NcEJWIPp5",
+	"rECL9fWV2vq8EO3OT3frlQdMf93ZPrYyQoX51thZHNLd4bSTU9wJyZI7e7QhjD6zt18JEwbnu5Kz/Ey4",
+	"jKyjP9tjggjcKrc6EGyNlJQKSCW5LcZmJpVSDRmoRA2ZrnRXWipeL/43AAD//2KvfpKTPQAA",
 }
 
 // GetSwagger returns the content of the embedded swagger specification file
@@ -1615,6 +2059,18 @@ func PathToRawSpec(pathToFile string) map[string]func() ([]byte, error) {
 		res[pathToFile] = rawSpec
 	}
 
+	for rawPath, rawFunc := range externalRef0.PathToRawSpec(path.Join(path.Dir(pathToFile), "./collector.openapi.yaml")) {
+		if _, ok := res[rawPath]; ok {
+			// it is not possible to compare functions in golang, so always overwrite the old value
+		}
+		res[rawPath] = rawFunc
+	}
+	for rawPath, rawFunc := range externalRef1.PathToRawSpec(path.Join(path.Dir(pathToFile), "./requester.openapi.yaml")) {
+		if _, ok := res[rawPath]; ok {
+			// it is not possible to compare functions in golang, so always overwrite the old value
+		}
+		res[rawPath] = rawFunc
+	}
 	return res
 }
 

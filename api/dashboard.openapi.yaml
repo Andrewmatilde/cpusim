@@ -65,11 +65,50 @@ paths:
               schema:
                 $ref: '#/components/schemas/Experiment'
 
+  /api/experiments/{experimentId}/phases:
+    get:
+      summary: 获取实验各阶段状态
+      operationId: getExperimentPhases
+      parameters:
+        - name: experimentId
+          in: path
+          required: true
+          schema:
+            type: string
+            pattern: '^[a-z0-9]([a-z0-9-]*[a-z0-9])?$'
+      responses:
+        '200':
+          description: 实验阶段状态
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ExperimentPhases'
+
+  /api/experiments/{experimentId}/start:
+    post:
+      summary: 启动完整实验流程
+      description: 按顺序执行：启动collector → 启动requester
+      operationId: startCompleteExperiment
+      parameters:
+        - name: experimentId
+          in: path
+          required: true
+          schema:
+            type: string
+            pattern: '^[a-z0-9]([a-z0-9-]*[a-z0-9])?$'
+      responses:
+        '200':
+          description: 实验启动结果
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ExperimentOperationResponse'
+
   /api/experiments/{experimentId}/stop:
     post:
-      summary: 停止全局实验并收集数据
-      description: 停止所有主机上的实验并自动收集数据到data目录
-      operationId: stopGlobalExperiment
+      summary: 停止完整实验流程并收集数据
+      description: 按顺序执行：停止requester → 停止collector → 收集数据
+      operationId: stopCompleteExperiment
       parameters:
         - name: experimentId
           in: path
@@ -177,7 +216,9 @@ components:
       required:
         - experimentId
         - name
-        - participatingHosts
+        - targetHosts
+        - clientHost
+        - requestConfig
       properties:
         experimentId:
           type: string
@@ -201,28 +242,27 @@ components:
           maximum: 10000
           default: 1000
           description: 数据收集间隔(毫秒)
-        participatingHosts:
+        targetHosts:
           type: array
           minItems: 1
+          description: 目标主机列表（运行cpusim-server和collector-server）
           items:
-            type: object
-            required:
-              - name
-              - ip
-            properties:
-              name:
-                type: string
-                description: 主机名
-              ip:
-                type: string
-                description: 主机IP地址
+            $ref: '#/components/schemas/HostConfig'
+        clientHost:
+          $ref: '#/components/schemas/HostConfig'
+          description: 客户端主机（运行requester-server）
+        requestConfig:
+          $ref: '#/components/schemas/RequestConfig'
+          description: 请求发送配置
 
     Experiment:
       type: object
       required:
         - experimentId
         - createdAt
-        - participatingHosts
+        - targetHosts
+        - clientHost
+        - requestConfig
       properties:
         experimentId:
           type: string
@@ -236,18 +276,23 @@ components:
           type: integer
         collectionInterval:
           type: integer
-        participatingHosts:
+        targetHosts:
           type: array
+          description: 目标主机列表
           items:
-            type: object
-            required:
-              - name
-              - ip
-            properties:
-              name:
-                type: string
-              ip:
-                type: string
+            $ref: '#/components/schemas/HostConfig'
+        clientHost:
+          $ref: '#/components/schemas/HostConfig'
+          description: 客户端主机
+        requestConfig:
+          $ref: '#/components/schemas/RequestConfig'
+        status:
+          type: string
+          enum: [pending, running, stopping, completed, failed]
+          description: 实验状态
+        phases:
+          $ref: '#/components/schemas/ExperimentPhases'
+          description: 实验各阶段状态
 
     ExperimentListResponse:
       type: object
@@ -266,63 +311,7 @@ components:
 
     # ===== 复用collector API的数据结构 =====
     MetricDataPoint:
-      type: object
-      required:
-        - timestamp
-        - systemMetrics
-      properties:
-        timestamp:
-          type: string
-          format: date-time
-        systemMetrics:
-          type: object
-          required:
-            - cpuUsagePercent
-            - memoryUsageBytes
-            - memoryUsagePercent
-            - networkIOBytes
-            - calculatorServiceHealthy
-          properties:
-            cpuUsagePercent:
-              type: number
-              format: float
-              minimum: 0
-              maximum: 100
-            memoryUsageBytes:
-              type: integer
-              format: int64
-              minimum: 0
-            memoryUsagePercent:
-              type: number
-              format: float
-              minimum: 0
-              maximum: 100
-            networkIOBytes:
-              type: object
-              required:
-                - bytesReceived
-                - bytesSent
-                - packetsReceived
-                - packetsSent
-              properties:
-                bytesReceived:
-                  type: integer
-                  format: int64
-                  minimum: 0
-                bytesSent:
-                  type: integer
-                  format: int64
-                  minimum: 0
-                packetsReceived:
-                  type: integer
-                  format: int64
-                  minimum: 0
-                packetsSent:
-                  type: integer
-                  format: int64
-                  minimum: 0
-            calculatorServiceHealthy:
-              type: boolean
+      $ref: './collector.openapi.yaml#/components/schemas/MetricDataPoint'
 
     StopAndCollectResponse:
       type: object
@@ -342,6 +331,9 @@ components:
           format: date-time
         message:
           type: string
+        phases:
+          $ref: '#/components/schemas/ExperimentPhases'
+          description: 各阶段执行状态
         hostsCollected:
           type: array
           description: 成功收集数据的主机列表
@@ -350,8 +342,11 @@ components:
             properties:
               name:
                 type: string
-              ip:
+              externalIP:
                 type: string
+              hostType:
+                type: string
+                enum: [target, client]
         hostsFailed:
           type: array
           description: 收集失败的主机列表
@@ -360,11 +355,36 @@ components:
             properties:
               name:
                 type: string
-              ip:
+              externalIP:
                 type: string
+              hostType:
+                type: string
+                enum: [target, client]
               error:
                 type: string
                 description: 失败原因
+
+    ExperimentOperationResponse:
+      type: object
+      required:
+        - experimentId
+        - status
+        - timestamp
+      properties:
+        experimentId:
+          type: string
+        status:
+          type: string
+          enum: [success, partial, failed]
+          description: 操作总体状态
+        timestamp:
+          type: string
+          format: date-time
+        message:
+          type: string
+        phases:
+          $ref: '#/components/schemas/ExperimentPhases'
+          description: 各阶段执行状态
 
     ExperimentDataResponse:
       type: object
@@ -376,74 +396,183 @@ components:
         experiment:
           $ref: '#/components/schemas/Experiment'
           description: 实验元信息存储在data目录下experimentId目录下的experiment.json文件中
-        hosts:
+        targetHosts:
           type: array
-          description: 实验数据信息存储在data目录下experimentId目录下的data.json文件中，以hosts json列表形式存储
+          description: 目标主机实验数据
           items:
             type: object
             required:
               - name
-              - ip
+              - externalIP
             properties:
               name:
                 type: string
                 description: 主机名
-              ip:
+              externalIP:
                 type: string
-                description: 主机IP
-              data:
+                description: 主机外网IP
+              internalIP:
+                type: string
+                description: 主机内网IP
+              collectorData:
                 $ref: '#/components/schemas/CollectorExperimentData'
-                description: 完整实验数据(仅在查询特定主机时返回)
+                description: collector收集的数据（仅在查询特定主机时返回）
+        clientHost:
+          type: object
+          description: 客户端主机实验数据
+          required:
+            - name
+            - externalIP
+          properties:
+            name:
+              type: string
+              description: 主机名
+            externalIP:
+              type: string
+              description: 主机外网IP
+            internalIP:
+              type: string
+              description: 主机内网IP
+            requesterData:
+              type: object
+              description: requester收集的数据（仅在查询特定主机时返回）
+              properties:
+                stats:
+                  $ref: './requester.openapi.yaml#/components/schemas/RequestExperimentStats'
 
     # 从collector API获取的实验数据结构
     CollectorExperimentData:
-      type: object
-      description: 与collector API的ExperimentData格式完全一致
-      properties:
-        experimentId:
-          type: string
-        description:
-          type: string
-        startTime:
-          type: string
-          format: date-time
-        endTime:
-          type: string
-          format: date-time
-        duration:
-          type: integer
-          description: 实验时长(秒)
-        collectionInterval:
-          type: integer
-          description: 数据收集间隔(毫秒)
-        metrics:
-          type: array
-          items:
-            $ref: '#/components/schemas/MetricDataPoint'
+      $ref: './collector.openapi.yaml#/components/schemas/ExperimentData'
 
     Host:
       type: object
       properties:
         name:
           type: string
-        ip:
+        hostType:
           type: string
+          enum: [target, client]
+          description: 主机类型
+        externalIP:
+          type: string
+          description: 外网IP
+        internalIP:
+          type: string
+          description: 内网IP（可选）
         cpuServiceUrl:
           type: string
         collectorServiceUrl:
           type: string
+        requesterServiceUrl:
+          type: string
+          description: 仅适用于client类型主机
+
+    HostConfig:
+      type: object
+      required:
+        - name
+        - externalIP
+      properties:
+        name:
+          type: string
+          description: 主机名
+        externalIP:
+          type: string
+          description: 外网IP地址
+        internalIP:
+          type: string
+          description: 内网IP地址（用于内网通信）
+        cpuServicePort:
+          type: integer
+          default: 80
+          description: CPU服务端口
+        collectorServicePort:
+          type: integer
+          default: 8080
+          description: 数据收集服务端口
+        requesterServicePort:
+          type: integer
+          default: 80
+          description: 请求发送服务端口（仅适用于clientHosts）
+
+    RequestConfig:
+      type: object
+      required:
+        - qps
+        - requestTimeout
+        - targetHostName
+      properties:
+        targetHostName:
+          type: string
+          description: 目标主机名（必须是targetHosts中的一个主机名）
+        qps:
+          type: integer
+          minimum: 1
+          maximum: 1000
+          description: 每秒请求数
+        requestTimeout:
+          type: integer
+          minimum: 1
+          maximum: 60
+          default: 10
+          description: 单个请求超时时间（秒）
+        targetEndpoint:
+          type: string
+          default: "/calculate"
+          description: 目标服务端点
+        requestBody:
+          type: object
+          description: 请求体（JSON）
+          example: {"a": 123, "b": 456}
+
+    ExperimentPhases:
+      type: object
+      description: 实验各阶段执行状态
+      properties:
+        collectorStart:
+          $ref: '#/components/schemas/PhaseStatus'
+        requesterStart:
+          $ref: '#/components/schemas/PhaseStatus'
+        requesterStop:
+          $ref: '#/components/schemas/PhaseStatus'
+        collectorStop:
+          $ref: '#/components/schemas/PhaseStatus'
+
+    PhaseStatus:
+      type: object
+      properties:
+        status:
+          type: string
+          enum: [pending, running, completed, failed]
+        startTime:
+          type: string
+          format: date-time
+        endTime:
+          type: string
+          format: date-time
+        message:
+          type: string
+          description: 状态消息或错误信息
 
     HostHealth:
       type: object
       properties:
         name:
           type: string
-        ip:
+        externalIP:
           type: string
+        internalIP:
+          type: string
+        hostType:
+          type: string
+          enum: [target, client]
         cpuServiceHealthy:
           type: boolean
         collectorServiceHealthy:
           type: boolean
+        requesterServiceHealthy:
+          type: boolean
+          description: 仅适用于client类型主机
         timestamp:
           type: string
           format: date-time
