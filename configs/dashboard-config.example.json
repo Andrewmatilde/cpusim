@@ -1,0 +1,17 @@
+{
+  "target_hosts": [
+    {
+      "name": "target-server-1",
+      "external_ip": "203.0.113.10",
+      "internal_ip": "10.0.1.10",
+      "cpu_service_url": "http://203.0.113.10:80",
+      "collector_service_url": "http://203.0.113.10:8080"
+    }
+  ],
+  "client_host": {
+    "name": "client-server-1",
+    "external_ip": "203.0.113.20",
+    "internal_ip": "10.0.2.10",
+    "requester_service_url": "http://203.0.113.20:80"
+  }
+}
