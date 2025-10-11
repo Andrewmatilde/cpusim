@@ -1,0 +1,335 @@
+package dashboard
+
+import (
+	"context"
+	"fmt"
+	"time"
+
+	"cpusim/pkg/exp"
+	"github.com/rs/zerolog"
+)
+
+// Service manages dashboard experiments using the exp framework
+type Service struct {
+	exp.Manager[*ExperimentData]
+
+	fs     exp.FileStorage[*ExperimentData]
+	logger zerolog.Logger
+	config Config
+
+	// HTTP clients for sub-experiments
+	collectorClients map[string]CollectorClient // key: host name
+	requesterClient  RequesterClient
+}
+
+// CollectorClient interface for communicating with collector services
+type CollectorClient interface {
+	StartExperiment(ctx context.Context, experimentID string, timeout time.Duration) error
+	StopExperiment(ctx context.Context, experimentID string) error
+	GetExperiment(ctx context.Context, experimentID string) (*CollectorExperimentData, error)
+}
+
+// RequesterClient interface for communicating with requester services
+type RequesterClient interface {
+	StartExperiment(ctx context.Context, experimentID string, timeout time.Duration) error
+	StopExperiment(ctx context.Context, experimentID string) error
+	GetExperiment(ctx context.Context, experimentID string) (*RequesterExperimentData, error)
+}
+
+// CollectorExperimentData represents collector experiment data
+type CollectorExperimentData struct {
+	DataPointsCollected int
+}
+
+// RequesterExperimentData represents requester experiment data
+type RequesterExperimentData struct {
+	TotalRequests   int64
+	Successful      int64
+	Failed          int64
+	AvgResponseTime float64
+}
+
+// NewService creates a new dashboard service
+func NewService(storagePath string, config Config, logger zerolog.Logger) (*Service, error) {
+	fs, err := exp.NewFileStorage[*ExperimentData](storagePath)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create file storage: %w", err)
+	}
+
+	s := &Service{
+		fs:               *fs,
+		logger:           logger,
+		config:           config,
+		collectorClients: make(map[string]CollectorClient),
+	}
+
+	// Create collector function
+	collectFunc := func(ctx context.Context) (*ExperimentData, error) {
+		return s.runExperiment(ctx)
+	}
+
+	// Create and embed the manager
+	s.Manager = *exp.NewManager[*ExperimentData](*fs, collectFunc, logger)
+
+	return s, nil
+}
+
+// SetCollectorClient sets the collector client for a specific host
+func (s *Service) SetCollectorClient(hostName string, client CollectorClient) {
+	s.collectorClients[hostName] = client
+}
+
+// SetRequesterClient sets the requester client
+func (s *Service) SetRequesterClient(client RequesterClient) {
+	s.requesterClient = client
+}
+
+// StartExperiment starts a new dashboard experiment
+func (s *Service) StartExperiment(id string, timeout time.Duration) error {
+	// Check status before starting
+	status := s.GetStatus()
+	if status != exp.Pending {
+		return fmt.Errorf("cannot start experiment: current status is %s, must be %s", status, exp.Pending)
+	}
+
+	s.logger.Info().
+		Str("experiment_id", id).
+		Int("num_targets", len(s.config.TargetHosts)).
+		Msg("Starting dashboard experiment")
+
+	return s.Manager.Start(id, timeout)
+}
+
+// StopExperiment stops the current running experiment
+func (s *Service) StopExperiment() error {
+	status := s.GetStatus()
+	if status != exp.Running {
+		return fmt.Errorf("cannot stop experiment: current status is %s, must be %s", status, exp.Running)
+	}
+
+	return s.Manager.Stop()
+}
+
+// StopAll stops all sub-experiments and cleans up state
+func (s *Service) StopAll(ctx context.Context, experimentID string) error {
+	s.logger.Warn().
+		Str("experiment_id", experimentID).
+		Msg("Stopping all sub-experiments (cleanup)")
+
+	var errors []ExperimentError
+
+	// Stop requester first
+	if s.requesterClient != nil {
+		if err := s.requesterClient.StopExperiment(ctx, experimentID); err != nil {
+			s.logger.Error().Err(err).Msg("Failed to stop requester")
+			errors = append(errors, ExperimentError{
+				Timestamp: time.Now(),
+				Phase:     "stop_requester",
+				Message:   err.Error(),
+			})
+		}
+	}
+
+	// Stop all collectors
+	for hostName, client := range s.collectorClients {
+		if err := client.StopExperiment(ctx, experimentID); err != nil {
+			s.logger.Error().
+				Err(err).
+				Str("host", hostName).
+				Msg("Failed to stop collector")
+			errors = append(errors, ExperimentError{
+				Timestamp: time.Now(),
+				Phase:     "stop_collector",
+				HostName:  hostName,
+				Message:   err.Error(),
+			})
+		}
+	}
+
+	// Stop the main experiment if running
+	if s.GetStatus() == exp.Running {
+		if err := s.StopExperiment(); err != nil {
+			s.logger.Error().Err(err).Msg("Failed to stop main experiment")
+		}
+	}
+
+	if len(errors) > 0 {
+		return fmt.Errorf("stopAll completed with %d errors", len(errors))
+	}
+
+	s.logger.Info().Msg("StopAll completed successfully")
+	return nil
+}
+
+// GetExperiment retrieves experiment data by ID
+func (s *Service) GetExperiment(id string) (*ExperimentData, error) {
+	return s.fs.Load(id)
+}
+
+// runExperiment executes the complete dashboard experiment
+func (s *Service) runExperiment(ctx context.Context) (*ExperimentData, error) {
+	data := &ExperimentData{
+		Config:           s.config,
+		StartTime:        time.Now(),
+		Status:           "running",
+		CollectorResults: make(map[string]CollectorResult),
+		Errors:           make([]ExperimentError, 0),
+	}
+
+	// Phase 1: Start collectors on all target hosts
+	s.logger.Info().Msg("Phase 1: Starting collectors on all targets")
+	for _, target := range s.config.TargetHosts {
+		client, ok := s.collectorClients[target.Name]
+		if !ok {
+			err := fmt.Errorf("collector client not found for host: %s", target.Name)
+			s.logger.Error().Err(err).Str("host", target.Name).Msg("Collector client missing")
+			data.Errors = append(data.Errors, ExperimentError{
+				Timestamp: time.Now(),
+				Phase:     "collector_start",
+				HostName:  target.Name,
+				Message:   err.Error(),
+			})
+			data.CollectorResults[target.Name] = CollectorResult{
+				HostName: target.Name,
+				Status:   "failed",
+				Error:    err.Error(),
+			}
+			// Rollback: stop all
+			s.StopAll(ctx, "rollback")
+			return data, err
+		}
+
+		// Start collector experiment
+		// Use the experiment timeout from the context or a default value
+		timeout := 60 * time.Second
+		if deadline, ok := ctx.Deadline(); ok {
+			timeout = time.Until(deadline)
+		}
+		if err := client.StartExperiment(ctx, "exp", timeout); err != nil {
+			s.logger.Error().
+				Err(err).
+				Str("host", target.Name).
+				Msg("Failed to start collector")
+			data.Errors = append(data.Errors, ExperimentError{
+				Timestamp: time.Now(),
+				Phase:     "collector_start",
+				HostName:  target.Name,
+				Message:   err.Error(),
+			})
+			data.CollectorResults[target.Name] = CollectorResult{
+				HostName: target.Name,
+				Status:   "failed",
+				Error:    err.Error(),
+			}
+			// Rollback: stop all
+			s.StopAll(ctx, "rollback")
+			return data, err
+		}
+
+		data.CollectorResults[target.Name] = CollectorResult{
+			HostName: target.Name,
+			Status:   "started",
+		}
+		s.logger.Info().Str("host", target.Name).Msg("Collector started successfully")
+	}
+
+	// Phase 2: Start requester on client host
+	s.logger.Info().Msg("Phase 2: Starting requester on client")
+	if s.requesterClient == nil {
+		err := fmt.Errorf("requester client not configured")
+		s.logger.Error().Err(err).Msg("Requester client missing")
+		data.Errors = append(data.Errors, ExperimentError{
+			Timestamp: time.Now(),
+			Phase:     "requester_start",
+			Message:   err.Error(),
+		})
+		data.RequesterResult = &RequesterResult{
+			Status: "failed",
+			Error:  err.Error(),
+		}
+		// Rollback: stop all
+		s.StopAll(ctx, "rollback")
+		return data, err
+	}
+
+	// Use the experiment timeout from the context or a default value
+	timeout := 60 * time.Second
+	if deadline, ok := ctx.Deadline(); ok {
+		timeout = time.Until(deadline)
+	}
+	if err := s.requesterClient.StartExperiment(ctx, "exp", timeout); err != nil {
+		s.logger.Error().Err(err).Msg("Failed to start requester")
+		data.Errors = append(data.Errors, ExperimentError{
+			Timestamp: time.Now(),
+			Phase:     "requester_start",
+			Message:   err.Error(),
+		})
+		data.RequesterResult = &RequesterResult{
+			Status: "failed",
+			Error:  err.Error(),
+		}
+		// Rollback: stop all
+		s.StopAll(ctx, "rollback")
+		return data, err
+	}
+
+	data.RequesterResult = &RequesterResult{
+		Status: "started",
+	}
+	s.logger.Info().Msg("Requester started successfully")
+
+	// Wait for completion or cancellation
+	<-ctx.Done()
+
+	// Phase 3: Collect results
+	s.logger.Info().Msg("Phase 3: Collecting results from sub-experiments")
+	data.EndTime = time.Now()
+	data.Duration = data.EndTime.Sub(data.StartTime).Seconds()
+
+	// Collect collector results
+	for hostName := range data.CollectorResults {
+		client := s.collectorClients[hostName]
+		if collectorData, err := client.GetExperiment(ctx, "exp"); err == nil {
+			data.CollectorResults[hostName] = CollectorResult{
+				HostName:            hostName,
+				Status:              "completed",
+				DataPointsCollected: collectorData.DataPointsCollected,
+			}
+		} else {
+			s.logger.Error().Err(err).Str("host", hostName).Msg("Failed to get collector results")
+			result := data.CollectorResults[hostName]
+			result.Status = "failed"
+			result.Error = err.Error()
+			data.CollectorResults[hostName] = result
+		}
+	}
+
+	// Collect requester results
+	if requesterData, err := s.requesterClient.GetExperiment(ctx, "exp"); err == nil {
+		data.RequesterResult = &RequesterResult{
+			Status:          "completed",
+			TotalRequests:   requesterData.TotalRequests,
+			Successful:      requesterData.Successful,
+			Failed:          requesterData.Failed,
+			AvgResponseTime: requesterData.AvgResponseTime,
+		}
+	} else {
+		s.logger.Error().Err(err).Msg("Failed to get requester results")
+		data.RequesterResult.Status = "failed"
+		data.RequesterResult.Error = err.Error()
+	}
+
+	// Determine overall status
+	if len(data.Errors) > 0 {
+		data.Status = "failed"
+	} else {
+		data.Status = "completed"
+	}
+
+	s.logger.Info().
+		Str("status", data.Status).
+		Float64("duration", data.Duration).
+		Msg("Dashboard experiment completed")
+
+	return data, nil
+}

@@ -5,219 +5,80 @@ import (
 	"time"
 
 	"cpusim/collector/api/generated"
-	"cpusim/collector/pkg/experiment"
-	"cpusim/collector/pkg/storage"
+	"cpusim/pkg/collector"
 
 	"github.com/gin-gonic/gin"
+	"github.com/rs/zerolog"
 )
 
-// APIHandler implements the generated OpenAPI interface
+// APIHandler implements the OpenAPI generated ServerInterface
 type APIHandler struct {
-	experimentManager *experiment.Manager
-	storage          *storage.FileStorage
+	service *collector.Service
+	config  collector.Config
+	logger  zerolog.Logger
 }
 
-// ListExperiments returns a list of all experiments
+// GetServiceConfig implements getting the service configuration
+func (h *APIHandler) GetServiceConfig(c *gin.Context) {
+	response := generated.ServiceConfig{
+		CollectionInterval: h.config.CollectionInterval,
+		CalculatorProcess:  h.config.CalculatorProcess,
+	}
+	c.JSON(http.StatusOK, response)
+}
+
+// HealthCheck implements the health check endpoint
+func (h *APIHandler) HealthCheck(c *gin.Context) {
+	response := generated.HealthResponse{
+		Status:    "healthy",
+		Timestamp: time.Now(),
+		Uptime:    0, // Could be calculated from service start time
+	}
+	c.JSON(http.StatusOK, response)
+}
+
+// ListExperiments implements getting list of experiments
 func (h *APIHandler) ListExperiments(c *gin.Context, params generated.ListExperimentsParams) {
-	// Set defaults
-	limit := 50
-	if params.Limit != 0 {
-		limit = params.Limit
-	}
-
-	status := generated.ListExperimentsParamsStatusAll
-	if params.Status != "" {
-		status = params.Status
-	}
-
-	// Get all experiments from manager (active ones)
-	experiments := h.getAllExperiments()
-
-	// Filter by status if specified
-	var filteredExperiments []generated.ExperimentSummary
-	for _, exp := range experiments {
-		if shouldIncludeExperiment(exp, status) {
-			filteredExperiments = append(filteredExperiments, exp)
-		}
-	}
-
-	// Apply limit
-	total := len(filteredExperiments)
-	hasMore := false
-	if len(filteredExperiments) > limit {
-		filteredExperiments = filteredExperiments[:limit]
-		hasMore = true
-	}
+	// Note: Current Service design only supports one experiment at a time
+	// This is a simplified implementation that returns empty list
+	// In the future, we can add support for storing experiment history
 
 	response := generated.ExperimentListResponse{
-		Experiments: filteredExperiments,
-		Total:       total,
-		HasMore:     hasMore,
+		Experiments: []generated.ExperimentSummary{},
+		Total:       0,
+		HasMore:     false,
 	}
 
 	c.JSON(http.StatusOK, response)
 }
 
-// getAllExperiments gets all experiments from both manager and storage
-func (h *APIHandler) getAllExperiments() []generated.ExperimentSummary {
-	var experiments []generated.ExperimentSummary
-
-	// Get active experiments from manager
-	activeSummaries := h.experimentManager.ListAllExperiments()
-	for _, summary := range activeSummaries {
-		expUUID := summary.ID
-
-		// summary.Status is already generated.ExperimentStatusStatus type
-		// Convert to ExperimentSummaryStatus (same underlying values)
-		statusEnum := generated.ExperimentSummaryStatus(summary.Status)
-
-		apiSummary := generated.ExperimentSummary{
-			ExperimentId: expUUID,
-			Status:       statusEnum,
-			StartTime:    summary.StartTime,
-			IsActive:     summary.IsActive,
-		}
-
-		if summary.Description != "" {
-			apiSummary.Description = summary.Description
-		}
-
-		if summary.EndTime != nil {
-			apiSummary.EndTime = *summary.EndTime
-			if summary.Duration != nil {
-				apiSummary.Duration = *summary.Duration
-			}
-		}
-
-		if summary.DataPointsCollected > 0 {
-			apiSummary.DataPointsCollected = summary.DataPointsCollected
-		}
-
-		experiments = append(experiments, apiSummary)
-	}
-
-	// Get experiments from storage (completed ones not in manager)
-	if storedExperiments, err := h.storage.ListExperiments(); err == nil {
-		for _, stored := range storedExperiments {
-			// Check if this experiment is already in active list
-			found := false
-			for _, active := range activeSummaries {
-				if active.ID == stored.ExperimentID {
-					found = true
-					break
-				}
-			}
-			if found {
-				continue // Skip if already included from active experiments
-			}
-
-			expUUID := stored.ExperimentID
-
-			// Try to load the experiment data to get more details
-			if data, err := h.storage.LoadExperimentData(stored.ExperimentID); err == nil {
-				var statusEnum generated.ExperimentSummaryStatus
-				if data.EndTime != nil {
-					statusEnum = generated.ExperimentSummaryStatusStopped
-				} else {
-					statusEnum = generated.ExperimentSummaryStatusError
-				}
-
-				summary := generated.ExperimentSummary{
-					ExperimentId: expUUID,
-					Status:       statusEnum,
-					StartTime:    data.StartTime,
-					IsActive:     false,
-				}
-
-				if data.Description != "" {
-					summary.Description = data.Description
-				}
-
-				if data.EndTime != nil {
-					summary.EndTime = *data.EndTime
-					summary.Duration = data.Duration
-				}
-
-				dataPointsCount := len(data.Metrics)
-				summary.DataPointsCollected = dataPointsCount
-
-				experiments = append(experiments, summary)
-			}
-		}
-	}
-
-	return experiments
-}
-
-// shouldIncludeExperiment checks if experiment should be included based on status filter
-func shouldIncludeExperiment(exp generated.ExperimentSummary, statusFilter generated.ListExperimentsParamsStatus) bool {
-	if statusFilter == generated.ListExperimentsParamsStatusAll {
-		return true
-	}
-
-	switch statusFilter {
-	case generated.ListExperimentsParamsStatusRunning:
-		return exp.Status == generated.ExperimentSummaryStatusRunning
-	case generated.ListExperimentsParamsStatusStopped:
-		return exp.Status == generated.ExperimentSummaryStatusStopped
-	case generated.ListExperimentsParamsStatusTimeout:
-		return exp.Status == generated.ExperimentSummaryStatusTimeout
-	case generated.ListExperimentsParamsStatusError:
-		return exp.Status == generated.ExperimentSummaryStatusError
-	default:
-		return true
-	}
-}
-
-// StartExperiment starts a new data collection experiment
+// StartExperiment implements starting a new experiment
 func (h *APIHandler) StartExperiment(c *gin.Context) {
-	var req generated.StartExperimentRequest
-	if err := c.ShouldBindJSON(&req); err != nil {
+	var request generated.StartExperimentRequest
+	if err := c.ShouldBindJSON(&request); err != nil {
 		c.JSON(http.StatusBadRequest, generated.ErrorResponse{
 			Error:     "invalid_request",
-			Message:   "Invalid request body: " + err.Error(),
+			Message:   err.Error(),
 			Timestamp: time.Now(),
 		})
 		return
 	}
 
-	// Convert string to string (no conversion needed)
-	experimentID := req.ExperimentId
+	// Convert timeout from seconds to Duration
+	timeout := time.Duration(request.Timeout) * time.Second
 
-	// Set defaults
-	collectionInterval := time.Duration(defaultCollectionInterval) * time.Millisecond
-	if req.CollectionInterval != 0 {
-		collectionInterval = time.Duration(req.CollectionInterval) * time.Millisecond
-	}
-
-	timeout := time.Duration(defaultTimeout) * time.Second
-	if req.Timeout != 0 {
-		timeout = time.Duration(req.Timeout) * time.Second
-	}
-
-	description := ""
-	if req.Description != "" {
-		description = req.Description
-	}
-
-	// Start experiment
-	exp, err := h.experimentManager.StartExperiment(
-		experimentID,
-		description,
-		collectionInterval,
-		timeout,
-	)
+	// Start experiment using the service
+	err := h.service.StartExperiment(request.ExperimentId, timeout)
 	if err != nil {
-		status := http.StatusInternalServerError
-		errorCode := "start_failed"
+		statusCode := http.StatusInternalServerError
+		errorCode := "internal_error"
 
-		// Check for specific error types
-		if err.Error() == "experiment with ID "+experimentID+" already exists" {
-			status = http.StatusConflict
+		if err.Error() == "experiment already started" {
+			statusCode = http.StatusConflict
 			errorCode = "experiment_exists"
 		}
 
-		c.JSON(status, generated.ErrorResponse{
+		c.JSON(statusCode, generated.ErrorResponse{
 			Error:     errorCode,
 			Message:   err.Error(),
 			Timestamp: time.Now(),
@@ -225,31 +86,32 @@ func (h *APIHandler) StartExperiment(c *gin.Context) {
 		return
 	}
 
-	expUUID := exp.ID
-	message := "Experiment started successfully"
-	c.JSON(http.StatusOK, generated.ExperimentResponse{
-		ExperimentId: expUUID,
+	// Return experiment info
+	response := generated.ExperimentResponse{
+		ExperimentId: request.ExperimentId,
 		Status:       generated.ExperimentResponseStatusStarted,
-		Timestamp:    exp.StartTime,
-		Message:      message,
-	})
+		Timestamp:    time.Now(),
+		Message:      "Experiment started successfully",
+	}
+
+	c.JSON(http.StatusOK, response)
 }
 
-// StopExperiment stops an active experiment
+// StopExperiment implements stopping an experiment
 func (h *APIHandler) StopExperiment(c *gin.Context, experimentId string) {
-	experimentID := experimentId
-
-	exp, err := h.experimentManager.StopExperiment(experimentID)
+	// Note: Current Service design doesn't need experimentId for Stop
+	// We just call Stop on the service
+	err := h.service.StopExperiment()
 	if err != nil {
-		status := http.StatusInternalServerError
-		errorCode := "stop_failed"
+		statusCode := http.StatusInternalServerError
+		errorCode := "internal_error"
 
-		if err.Error() == "experiment with ID "+experimentID+" not found" {
-			status = http.StatusNotFound
-			errorCode = "experiment_not_found"
+		if err.Error() == "experiment already stopped" {
+			statusCode = http.StatusConflict
+			errorCode = "experiment_already_stopped"
 		}
 
-		c.JSON(status, generated.ErrorResponse{
+		c.JSON(statusCode, generated.ErrorResponse{
 			Error:     errorCode,
 			Message:   err.Error(),
 			Timestamp: time.Now(),
@@ -257,27 +119,33 @@ func (h *APIHandler) StopExperiment(c *gin.Context, experimentId string) {
 		return
 	}
 
-	message := "Experiment stopped successfully"
-	status := generated.ExperimentResponseStatusStopped
-	if exp.Status == generated.ExperimentStatusStatusTimeout {
-		message = "Experiment stopped due to timeout"
-		status = generated.ExperimentResponseStatusTimeout
+	// Try to get the experiment data for response
+	data, err := h.service.GetExperiment(experimentId)
+	if err != nil {
+		// If we can't get the data, just return basic response
+		response := generated.ExperimentResponse{
+			ExperimentId: experimentId,
+			Status:       generated.ExperimentResponseStatusStopped,
+			Timestamp:    time.Now(),
+			Message:      "Experiment stopped successfully",
+		}
+		c.JSON(http.StatusOK, response)
+		return
 	}
 
-	expUUID := exp.ID
-	c.JSON(http.StatusOK, generated.ExperimentResponse{
-		ExperimentId: expUUID,
-		Status:       status,
-		Timestamp:    time.Now(),
-		Message:      message,
-	})
+	response := generated.ExperimentResponse{
+		ExperimentId: experimentId,
+		Status:       generated.ExperimentResponseStatusStopped,
+		Timestamp:    data.EndTime,
+		Message:      "Experiment stopped successfully",
+	}
+
+	c.JSON(http.StatusOK, response)
 }
 
-// GetExperimentStatus returns the current status of an experiment
+// GetExperimentStatus implements getting experiment status
 func (h *APIHandler) GetExperimentStatus(c *gin.Context, experimentId string) {
-	experimentID := experimentId
-
-	exp, err := h.experimentManager.GetExperiment(experimentID)
+	data, err := h.service.GetExperiment(experimentId)
 	if err != nil {
 		c.JSON(http.StatusNotFound, generated.ErrorResponse{
 			Error:     "experiment_not_found",
@@ -287,35 +155,33 @@ func (h *APIHandler) GetExperimentStatus(c *gin.Context, experimentId string) {
 		return
 	}
 
-	expUUID := exp.ID
-	dataPointsCollected := exp.DataPointsCollected
-
-	// exp.Status is already generated.ExperimentStatusStatus type
+	// Convert MetricsData to ExperimentStatus
 	status := generated.ExperimentStatus{
-		ExperimentId:        expUUID,
-		Status:              exp.Status,
-		StartTime:           exp.StartTime,
-		IsActive:            exp.IsActive,
-		DataPointsCollected: dataPointsCollected,
+		ExperimentId:        experimentId,
+		Status:              convertToStatusEnum(data),
+		StartTime:           data.StartTime,
+		IsActive:            data.EndTime.IsZero(),
+		DataPointsCollected: data.DataPointsCollected,
 	}
 
-	if exp.EndTime != nil {
-		status.EndTime = *exp.EndTime
-		duration := int(exp.EndTime.Sub(exp.StartTime).Seconds())
-		status.Duration = duration
+	if !data.EndTime.IsZero() {
+		status.EndTime = data.EndTime
+		status.Duration = int(data.Duration)
 	}
 
-	if exp.LastMetrics != nil {
+	// Add last metrics if available
+	if len(data.Metrics) > 0 {
+		lastMetric := data.Metrics[len(data.Metrics)-1]
 		status.LastMetrics = generated.SystemMetrics{
-			CpuUsagePercent:          float32(exp.LastMetrics.CPUUsagePercent),
-			MemoryUsageBytes:         exp.LastMetrics.MemoryUsageBytes,
-			MemoryUsagePercent:       float32(exp.LastMetrics.MemoryUsagePercent),
-			CalculatorServiceHealthy: exp.LastMetrics.CalculatorServiceHealthy,
+			CpuUsagePercent:          float32(lastMetric.CPUUsagePercent),
+			MemoryUsageBytes:         lastMetric.MemoryUsageBytes,
+			MemoryUsagePercent:       float32(lastMetric.MemoryUsagePercent),
+			CalculatorServiceHealthy: lastMetric.CalculatorServiceHealthy,
 			NetworkIOBytes: generated.NetworkIO{
-				BytesReceived:   exp.LastMetrics.NetworkIOBytes.BytesReceived,
-				BytesSent:       exp.LastMetrics.NetworkIOBytes.BytesSent,
-				PacketsReceived: exp.LastMetrics.NetworkIOBytes.PacketsReceived,
-				PacketsSent:     exp.LastMetrics.NetworkIOBytes.PacketsSent,
+				BytesReceived:   lastMetric.NetworkIOBytes.BytesReceived,
+				BytesSent:       lastMetric.NetworkIOBytes.BytesSent,
+				PacketsReceived: lastMetric.NetworkIOBytes.PacketsReceived,
+				PacketsSent:     lastMetric.NetworkIOBytes.PacketsSent,
 			},
 		}
 	}
@@ -323,11 +189,9 @@ func (h *APIHandler) GetExperimentStatus(c *gin.Context, experimentId string) {
 	c.JSON(http.StatusOK, status)
 }
 
-// GetExperimentData returns the collected data for an experiment
+// GetExperimentData implements getting experiment data
 func (h *APIHandler) GetExperimentData(c *gin.Context, experimentId string) {
-	experimentID := experimentId
-
-	data, err := h.experimentManager.GetExperimentData(experimentID)
+	data, err := h.service.GetExperiment(experimentId)
 	if err != nil {
 		c.JSON(http.StatusNotFound, generated.ErrorResponse{
 			Error:     "experiment_not_found",
@@ -337,23 +201,17 @@ func (h *APIHandler) GetExperimentData(c *gin.Context, experimentId string) {
 		return
 	}
 
-	// Convert to API format
-	expUUID := data.ExperimentID
-	collectionInterval := data.CollectionInterval
+	// Convert MetricsData to ExperimentData
 	result := generated.ExperimentData{
-		ExperimentId:       expUUID,
+		ExperimentId:       experimentId,
 		StartTime:          data.StartTime,
-		CollectionInterval: collectionInterval,
+		CollectionInterval: h.config.CollectionInterval * 1000, // Convert to milliseconds
 		Metrics:            make([]generated.MetricDataPoint, 0, len(data.Metrics)),
 	}
 
-	if data.Description != "" {
-		result.Description = data.Description
-	}
-
-	if data.EndTime != nil {
-		result.EndTime = *data.EndTime
-		result.Duration = data.Duration
+	if !data.EndTime.IsZero() {
+		result.EndTime = data.EndTime
+		result.Duration = int(data.Duration)
 	}
 
 	// Convert metrics
@@ -361,15 +219,15 @@ func (h *APIHandler) GetExperimentData(c *gin.Context, experimentId string) {
 		dataPoint := generated.MetricDataPoint{
 			Timestamp: metric.Timestamp,
 			SystemMetrics: generated.SystemMetrics{
-				CpuUsagePercent:          float32(metric.SystemMetrics.CPUUsagePercent),
-				MemoryUsageBytes:         metric.SystemMetrics.MemoryUsageBytes,
-				MemoryUsagePercent:       float32(metric.SystemMetrics.MemoryUsagePercent),
-				CalculatorServiceHealthy: metric.SystemMetrics.CalculatorServiceHealthy,
+				CpuUsagePercent:          float32(metric.CPUUsagePercent),
+				MemoryUsageBytes:         metric.MemoryUsageBytes,
+				MemoryUsagePercent:       float32(metric.MemoryUsagePercent),
+				CalculatorServiceHealthy: metric.CalculatorServiceHealthy,
 				NetworkIOBytes: generated.NetworkIO{
-					BytesReceived:   metric.SystemMetrics.NetworkIOBytes.BytesReceived,
-					BytesSent:       metric.SystemMetrics.NetworkIOBytes.BytesSent,
-					PacketsReceived: metric.SystemMetrics.NetworkIOBytes.PacketsReceived,
-					PacketsSent:     metric.SystemMetrics.NetworkIOBytes.PacketsSent,
+					BytesReceived:   metric.NetworkIOBytes.BytesReceived,
+					BytesSent:       metric.NetworkIOBytes.BytesSent,
+					PacketsReceived: metric.NetworkIOBytes.PacketsReceived,
+					PacketsSent:     metric.NetworkIOBytes.PacketsSent,
 				},
 			},
 		}
@@ -379,11 +237,10 @@ func (h *APIHandler) GetExperimentData(c *gin.Context, experimentId string) {
 	c.JSON(http.StatusOK, result)
 }
 
-// HealthCheck returns the health status of the collector service
-func (h *APIHandler) HealthCheck(c *gin.Context) {
-	c.JSON(http.StatusOK, generated.HealthResponse{
-		Status:    "healthy",
-		Timestamp: time.Now(),
-		Uptime:    0, // Could be implemented to track actual uptime
-	})
+// Helper function to convert MetricsData to status enum
+func convertToStatusEnum(data *collector.MetricsData) generated.ExperimentStatusStatus {
+	if data.EndTime.IsZero() {
+		return generated.ExperimentStatusStatusRunning
+	}
+	return generated.ExperimentStatusStatusStopped
 }

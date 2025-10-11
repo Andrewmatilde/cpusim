@@ -4,6 +4,11 @@ info:
   description: |
     HTTP请求发送服务，专门用于向CPU仿真服务发送负载请求
 
+    **服务配置:**
+    - 目标服务器、QPS等配置在服务启动时通过环境变量设置
+    - 所有实验使用相同的全局配置
+    - 环境变量: TARGET_IP, TARGET_PORT, QPS, TIMEOUT
+
     **固定请求配置:**
     - 请求路径: POST /calculate
     - 请求体: {} (空JSON对象)
@@ -75,11 +80,8 @@ paths:
               $ref: '#/components/schemas/StartRequestExperimentRequest'
             example:
               experimentId: "req-exp-001"
-              targetIP: "192.168.1.100"
-              targetPort: 80
               timeout: 300
-              qps: 10
-              description: "CPU负载测试 - 10 QPS"
+              description: "CPU负载测试实验"
       responses:
         '201':
           description: 实验启动成功
@@ -208,6 +210,19 @@ paths:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
 
+  /config:
+    get:
+      summary: 获取服务配置
+      description: 获取当前请求发送服务的全局配置信息（目标服务器、QPS等）
+      operationId: getServiceConfig
+      responses:
+        '200':
+          description: 服务配置信息
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ServiceConfig'
+
   /health:
     get:
       summary: 健康检查
@@ -223,43 +238,43 @@ paths:
 
 components:
   schemas:
-    StartRequestExperimentRequest:
+    ServiceConfig:
       type: object
-      required:
-        - experimentId
-        - targetIP
-        - targetPort
-        - timeout
-        - qps
+      description: 服务全局配置
       properties:
-        experimentId:
-          type: string
-          description: 实验唯一标识符
-          example: "req-exp-001"
         targetIP:
           type: string
           description: 目标CPU仿真服务IP地址
           example: "192.168.1.100"
         targetPort:
           type: integer
-          description: 目标CPU仿真服务端口（通常为80）
-          minimum: 1
-          maximum: 65535
-          default: 80
+          description: 目标CPU仿真服务端口
           example: 80
-        timeout:
-          type: integer
-          description: 实验超时时间（秒）
-          minimum: 1
-          maximum: 3600
-          example: 300
         qps:
           type: integer
           description: 每秒请求数（QPS）
-          minimum: 1
-          maximum: 1000
-          default: 1
           example: 10
+        timeout:
+          type: integer
+          description: 默认超时时间（秒）
+          example: 30
+
+    StartRequestExperimentRequest:
+      type: object
+      required:
+        - experimentId
+        - timeout
+      properties:
+        experimentId:
+          type: string
+          description: 实验唯一标识符
+          example: "req-exp-001"
+        timeout:
+          type: integer
+          description: 实验持续时间（秒）
+          minimum: 1
+          maximum: 3600
+          example: 300
         description:
           type: string
           description: 实验描述

@@ -6,29 +6,58 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"strconv"
 	"syscall"
 	"time"
 
+	"cpusim/pkg/requester"
 	"cpusim/requester/api/generated"
-	"cpusim/requester/pkg/experiment"
 
 	"github.com/gin-gonic/gin"
+	"github.com/rs/zerolog"
 )
 
 const (
-	defaultPort = "80"
+	defaultPort       = "80"
+	defaultTargetIP   = "localhost"
+	defaultTargetPort = "8080"
+	defaultQPS        = "10"
+	defaultTimeout    = "30"
+	defaultStoragePath = "./data/requester"
 )
 
 func main() {
 	// Get configuration from environment variables
 	port := getEnv("PORT", defaultPort)
 
-	// Initialize experiment manager
-	experimentManager := experiment.NewManager()
+	// Setup logger
+	logger := zerolog.New(os.Stdout).With().Timestamp().Logger()
+
+	// Create requester config from environment
+	targetPort, _ := strconv.Atoi(getEnv("TARGET_PORT", defaultTargetPort))
+	qps, _ := strconv.Atoi(getEnv("QPS", defaultQPS))
+	timeout, _ := strconv.Atoi(getEnv("TIMEOUT", defaultTimeout))
+
+	config := requester.Config{
+		TargetIP:   getEnv("TARGET_IP", defaultTargetIP),
+		TargetPort: targetPort,
+		QPS:        qps,
+		Timeout:    timeout,
+	}
+
+	storagePath := getEnv("STORAGE_PATH", defaultStoragePath)
+
+	// Initialize requester service
+	service, err := requester.NewService(storagePath, config, logger)
+	if err != nil {
+		log.Fatalf("Failed to create requester service: %v", err)
+	}
 
 	// Create API handler
 	apiHandler := &APIHandler{
-		experimentManager: experimentManager,
+		service: service,
+		config:  config,
+		logger:  logger,
 	}
 
 	// Set up Gin router
@@ -64,8 +93,10 @@ func main() {
 
 	log.Println("Shutting down server...")
 
-	// Stop all running experiments
-	experimentManager.StopAllExperiments()
+	// Stop current running experiment
+	if err := service.StopExperiment(); err != nil {
+		log.Printf("Error stopping experiment: %v", err)
+	}
 
 	// Give the server 30 seconds to finish the request it is currently handling
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)

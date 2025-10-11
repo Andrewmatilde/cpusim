@@ -178,19 +178,25 @@ type NetworkIO struct {
 	PacketsSent int64 `json:"packetsSent"`
 }
 
+// ServiceConfig 服务全局配置
+type ServiceConfig struct {
+	// CalculatorProcess 要监控的Calculator进程名
+	CalculatorProcess string `json:"calculatorProcess,omitempty"`
+
+	// CollectionInterval 数据采集间隔（秒）
+	CollectionInterval int `json:"collectionInterval,omitempty"`
+}
+
 // StartExperimentRequest defines model for StartExperimentRequest.
 type StartExperimentRequest struct {
-	// CollectionInterval Data collection interval in milliseconds (100-10000, default 1000)
-	CollectionInterval int `json:"collectionInterval,omitempty"`
-
 	// Description Optional description of the experiment
 	Description string `json:"description,omitempty"`
 
 	// ExperimentId Unique identifier for the experiment (kubernetes-style naming)
 	ExperimentId string `json:"experimentId"`
 
-	// Timeout Experiment timeout in seconds (1-3600, default 300)
-	Timeout int `json:"timeout,omitempty"`
+	// Timeout Experiment timeout in seconds (1-3600)
+	Timeout int `json:"timeout"`
 }
 
 // SystemMetrics defines model for SystemMetrics.
@@ -297,6 +303,9 @@ func WithRequestEditorFn(fn RequestEditorFn) ClientOption {
 
 // The interface specification for the client above.
 type ClientInterface interface {
+	// GetServiceConfig request
+	GetServiceConfig(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error)
+
 	// ListExperiments request
 	ListExperiments(ctx context.Context, params *ListExperimentsParams, reqEditors ...RequestEditorFn) (*http.Response, error)
 
@@ -316,6 +325,18 @@ type ClientInterface interface {
 
 	// HealthCheck request
 	HealthCheck(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error)
+}
+
+func (c *Client) GetServiceConfig(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewGetServiceConfigRequest(c.Server)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
 }
 
 func (c *Client) ListExperiments(ctx context.Context, params *ListExperimentsParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
@@ -400,6 +421,33 @@ func (c *Client) HealthCheck(ctx context.Context, reqEditors ...RequestEditorFn)
 		return nil, err
 	}
 	return c.Client.Do(req)
+}
+
+// NewGetServiceConfigRequest generates requests for GetServiceConfig
+func NewGetServiceConfigRequest(server string) (*http.Request, error) {
+	var err error
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/config")
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest("GET", queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
 }
 
 // NewListExperimentsRequest generates requests for ListExperiments
@@ -671,6 +719,9 @@ func WithBaseURL(baseURL string) ClientOption {
 
 // ClientWithResponsesInterface is the interface specification for the client with responses above.
 type ClientWithResponsesInterface interface {
+	// GetServiceConfigWithResponse request
+	GetServiceConfigWithResponse(ctx context.Context, reqEditors ...RequestEditorFn) (*GetServiceConfigResponse, error)
+
 	// ListExperimentsWithResponse request
 	ListExperimentsWithResponse(ctx context.Context, params *ListExperimentsParams, reqEditors ...RequestEditorFn) (*ListExperimentsResponse, error)
 
@@ -690,6 +741,28 @@ type ClientWithResponsesInterface interface {
 
 	// HealthCheckWithResponse request
 	HealthCheckWithResponse(ctx context.Context, reqEditors ...RequestEditorFn) (*HealthCheckResponse, error)
+}
+
+type GetServiceConfigResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	JSON200      *ServiceConfig
+}
+
+// Status returns HTTPResponse.Status
+func (r GetServiceConfigResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r GetServiceConfigResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
 }
 
 type ListExperimentsResponse struct {
@@ -830,6 +903,15 @@ func (r HealthCheckResponse) StatusCode() int {
 	return 0
 }
 
+// GetServiceConfigWithResponse request returning *GetServiceConfigResponse
+func (c *ClientWithResponses) GetServiceConfigWithResponse(ctx context.Context, reqEditors ...RequestEditorFn) (*GetServiceConfigResponse, error) {
+	rsp, err := c.GetServiceConfig(ctx, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseGetServiceConfigResponse(rsp)
+}
+
 // ListExperimentsWithResponse request returning *ListExperimentsResponse
 func (c *ClientWithResponses) ListExperimentsWithResponse(ctx context.Context, params *ListExperimentsParams, reqEditors ...RequestEditorFn) (*ListExperimentsResponse, error) {
 	rsp, err := c.ListExperiments(ctx, params, reqEditors...)
@@ -890,6 +972,32 @@ func (c *ClientWithResponses) HealthCheckWithResponse(ctx context.Context, reqEd
 		return nil, err
 	}
 	return ParseHealthCheckResponse(rsp)
+}
+
+// ParseGetServiceConfigResponse parses an HTTP response from a GetServiceConfigWithResponse call
+func ParseGetServiceConfigResponse(rsp *http.Response) (*GetServiceConfigResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &GetServiceConfigResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest ServiceConfig
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	}
+
+	return response, nil
 }
 
 // ParseListExperimentsResponse parses an HTTP response from a ListExperimentsWithResponse call
@@ -1092,6 +1200,9 @@ func ParseHealthCheckResponse(rsp *http.Response) (*HealthCheckResponse, error) 
 
 // ServerInterface represents all server handlers.
 type ServerInterface interface {
+	// Get service configuration
+	// (GET /config)
+	GetServiceConfig(c *gin.Context)
 	// List experiments
 	// (GET /experiments)
 	ListExperiments(c *gin.Context, params ListExperimentsParams)
@@ -1120,6 +1231,19 @@ type ServerInterfaceWrapper struct {
 }
 
 type MiddlewareFunc func(c *gin.Context)
+
+// GetServiceConfig operation middleware
+func (siw *ServerInterfaceWrapper) GetServiceConfig(c *gin.Context) {
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		middleware(c)
+		if c.IsAborted() {
+			return
+		}
+	}
+
+	siw.Handler.GetServiceConfig(c)
+}
 
 // ListExperiments operation middleware
 func (siw *ServerInterfaceWrapper) ListExperiments(c *gin.Context) {
@@ -1280,6 +1404,7 @@ func RegisterHandlersWithOptions(router gin.IRouter, si ServerInterface, options
 		ErrorHandler:       errorHandler,
 	}
 
+	router.GET(options.BaseURL+"/config", wrapper.GetServiceConfig)
 	router.GET(options.BaseURL+"/experiments", wrapper.ListExperiments)
 	router.POST(options.BaseURL+"/experiments", wrapper.StartExperiment)
 	router.GET(options.BaseURL+"/experiments/:experimentId/data", wrapper.GetExperimentData)
@@ -1291,37 +1416,42 @@ func RegisterHandlersWithOptions(router gin.IRouter, si ServerInterface, options
 // Base64 encoded, gzipped, json marshaled Swagger object
 var swaggerSpec = []string{
 
-	"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",
-	"AAD//y8YREq0JAAA",
+	"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",
 }
 
 // GetSwagger returns the content of the embedded swagger specification file

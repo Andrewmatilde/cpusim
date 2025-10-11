@@ -1,94 +1,73 @@
 openapi: 3.0.3
 info:
   title: CPU Simulation Dashboard API
-  description: 管理面API，用于管理多个CPU仿真主机和全局实验
+  description: Dashboard service for coordinating distributed CPU simulation experiments
   version: 2.0.0
 servers:
   - url: http://localhost:9090
     description: Dashboard server
 security: []
+
 paths:
-  /api/experiments:
+  /config:
     get:
-      summary: 获取实验列表
-      operationId: getExperiments
-      parameters:
-        - name: limit
-          in: query
-          required: false
-          schema:
-            type: integer
-            minimum: 1
-            maximum: 100
-            default: 20
+      summary: Get service configuration
+      operationId: getServiceConfig
       responses:
         '200':
-          description: 全局实验列表
+          description: Service configuration
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ExperimentListResponse'
+                $ref: '#/components/schemas/ServiceConfig'
 
+  /status:
+    get:
+      summary: Get experiment manager status
+      operationId: getStatus
+      responses:
+        '200':
+          description: Current status (Pending or Running)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StatusResponse'
+
+  /experiments:
     post:
-      summary: 创建实验
-      operationId: createGlobalExperiment
+      summary: Start a new dashboard experiment
+      description: Starts collectors on all targets, then starts requester
+      operationId: startExperiment
       requestBody:
         required: true
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/CreateExperimentRequest'
-      responses:
-        '201':
-          description: 实验创建成功
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Experiment'
-
-  /api/experiments/{experimentId}:
-    get:
-      summary: 获取全局实验详情
-      operationId: getGlobalExperiment
-      parameters:
-        - name: experimentId
-          in: path
-          required: true
-          schema:
-            type: string
-            pattern: '^[a-z0-9]([a-z0-9-]*[a-z0-9])?$'
+              $ref: '#/components/schemas/StartExperimentRequest'
       responses:
         '200':
-          description: 实验详情
+          description: Experiment started successfully
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/Experiment'
-
-  /api/experiments/{experimentId}/phases:
-    get:
-      summary: 获取实验各阶段状态
-      operationId: getExperimentPhases
-      parameters:
-        - name: experimentId
-          in: path
-          required: true
-          schema:
-            type: string
-            pattern: '^[a-z0-9]([a-z0-9-]*[a-z0-9])?$'
-      responses:
-        '200':
-          description: 实验阶段状态
+                $ref: '#/components/schemas/ExperimentResponse'
+        '400':
+          description: Bad request
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ExperimentPhases'
+                $ref: '#/components/schemas/ErrorResponse'
+        '409':
+          description: Experiment already running
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
 
-  /api/experiments/{experimentId}/start:
+  /experiments/{experimentId}/stop:
     post:
-      summary: 启动完整实验流程
-      description: 按顺序执行：启动collector → 启动requester
-      operationId: startCompleteExperiment
+      summary: Stop the running experiment and cleanup sub-experiments
+      operationId: stopExperiment
       parameters:
         - name: experimentId
           in: path
@@ -98,35 +77,27 @@ paths:
             pattern: '^[a-z0-9]([a-z0-9-]*[a-z0-9])?$'
       responses:
         '200':
-          description: 实验启动结果
+          description: Experiment stopped successfully
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ExperimentOperationResponse'
-
-  /api/experiments/{experimentId}/stop:
-    post:
-      summary: 停止完整实验流程并收集数据
-      description: 按顺序执行：停止requester → 停止collector → 收集数据
-      operationId: stopCompleteExperiment
-      parameters:
-        - name: experimentId
-          in: path
-          required: true
-          schema:
-            type: string
-            pattern: '^[a-z0-9]([a-z0-9-]*[a-z0-9])?$'
-      responses:
-        '200':
-          description: 实验停止和数据收集结果
+                $ref: '#/components/schemas/ExperimentResponse'
+        '404':
+          description: Experiment not found
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/StopAndCollectResponse'
+                $ref: '#/components/schemas/ErrorResponse'
+        '409':
+          description: No experiment running
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
 
-  /api/experiments/{experimentId}/data:
+  /experiments/{experimentId}:
     get:
-      summary: 获取实验数据
+      summary: Get experiment data
       operationId: getExperimentData
       parameters:
         - name: experimentId
@@ -135,461 +106,213 @@ paths:
           schema:
             type: string
             pattern: '^[a-z0-9]([a-z0-9-]*[a-z0-9])?$'
-        - name: hostName
-          in: query
-          required: false
-          schema:
-            type: string
-          description: 指定主机名，不指定则返回所有主机数据概要
       responses:
         '200':
-          description: 实验数据
+          description: Experiment data
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ExperimentDataResponse'
+                $ref: '#/components/schemas/ExperimentData'
+        '404':
+          description: Experiment not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
 
-  # ===== 主机管理 =====
-  /api/hosts:
+  /health:
     get:
-      summary: 获取所有主机列表
-      operationId: getHosts
+      summary: Health check
+      operationId: healthCheck
       responses:
         '200':
-          description: 主机列表
+          description: Service is healthy
           content:
             application/json:
               schema:
-                type: object
-                properties:
-                  hosts:
-                    type: array
-                    items:
-                      $ref: '#/components/schemas/Host'
-
-  /api/hosts/{name}/health:
-    get:
-      summary: 检查主机健康状态
-      operationId: getHostHealth
-      parameters:
-        - name: name
-          in: path
-          required: true
-          schema:
-            type: string
-      responses:
-        '200':
-          description: 主机健康状态
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/HostHealth'
-
-  /api/hosts/{name}/calculate:
-    post:
-      summary: 测试主机CPU计算
-      operationId: testHostCalculation
-      parameters:
-        - name: name
-          in: path
-          required: true
-          schema:
-            type: string
-      requestBody:
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/CalculationRequest'
-      responses:
-        '200':
-          description: 计算结果
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/CalculationResponse'
-
+                $ref: '#/components/schemas/HealthResponse'
 
 components:
   schemas:
-    CreateExperimentRequest:
+    ServiceConfig:
+      type: object
+      description: Dashboard service configuration (only service URLs)
+      properties:
+        targetHosts:
+          type: array
+          description: List of target hosts to collect metrics from
+          items:
+            $ref: '#/components/schemas/TargetHost'
+        clientHost:
+          $ref: '#/components/schemas/ClientHost'
+
+    TargetHost:
+      type: object
+      properties:
+        name:
+          type: string
+        externalIP:
+          type: string
+        internalIP:
+          type: string
+        cpuServiceURL:
+          type: string
+        collectorServiceURL:
+          type: string
+
+    ClientHost:
+      type: object
+      properties:
+        name:
+          type: string
+        externalIP:
+          type: string
+        internalIP:
+          type: string
+        requesterServiceURL:
+          type: string
+
+    StartExperimentRequest:
       type: object
       required:
         - experimentId
-        - name
-        - targetHosts
-        - clientHost
-        - requestConfig
+        - timeout
       properties:
         experimentId:
           type: string
           pattern: '^[a-z0-9]([a-z0-9-]*[a-z0-9])?$'
           minLength: 1
           maxLength: 63
-          description: 实验唯一标识
-        description:
-          type: string
-          maxLength: 500
-          description: 实验描述
+          description: Unique experiment identifier
         timeout:
           type: integer
-          minimum: 60
+          minimum: 1
           maximum: 3600
-          default: 300
-          description: 超时时间(秒)
-        collectionInterval:
-          type: integer
-          minimum: 100
-          maximum: 10000
-          default: 1000
-          description: 数据收集间隔(毫秒)
-        targetHosts:
-          type: array
-          minItems: 1
-          description: 目标主机列表（运行cpusim-server和collector-server）
-          items:
-            $ref: '#/components/schemas/HostConfig'
-        clientHost:
-          $ref: '#/components/schemas/HostConfig'
-          description: 客户端主机（运行requester-server）
-        requestConfig:
-          $ref: '#/components/schemas/RequestConfig'
-          description: 请求发送配置
+          description: Experiment timeout in seconds
 
-    Experiment:
+    ExperimentResponse:
       type: object
-      required:
-        - experimentId
-        - createdAt
-        - targetHosts
-        - clientHost
-        - requestConfig
-      properties:
-        experimentId:
-          type: string
-          pattern: '^[a-z0-9]([a-z0-9-]*[a-z0-9])?$'
-        description:
-          type: string
-        createdAt:
-          type: string
-          format: date-time
-        timeout:
-          type: integer
-        collectionInterval:
-          type: integer
-        targetHosts:
-          type: array
-          description: 目标主机列表
-          items:
-            $ref: '#/components/schemas/HostConfig'
-        clientHost:
-          $ref: '#/components/schemas/HostConfig'
-          description: 客户端主机
-        requestConfig:
-          $ref: '#/components/schemas/RequestConfig'
-        status:
-          type: string
-          enum: [pending, running, stopping, completed, failed]
-          description: 实验状态
-        phases:
-          $ref: '#/components/schemas/ExperimentPhases'
-          description: 实验各阶段状态
-
-    ExperimentListResponse:
-      type: object
-      required:
-        - experiments
-        - total
-      properties:
-        experiments:
-          type: array
-          items:
-            $ref: '#/components/schemas/Experiment'
-        total:
-          type: integer
-        hasMore:
-          type: boolean
-
-    # ===== 复用collector API的数据结构 =====
-    MetricDataPoint:
-      $ref: './collector.openapi.yaml#/components/schemas/MetricDataPoint'
-
-    StopAndCollectResponse:
-      type: object
-      required:
-        - experimentId
-        - status
-        - timestamp
       properties:
         experimentId:
           type: string
         status:
           type: string
-          enum: [success, partial, failed]
-          description: 停止和收集的总体状态
+          description: Response status
         timestamp:
           type: string
           format: date-time
         message:
           type: string
-        phases:
-          $ref: '#/components/schemas/ExperimentPhases'
-          description: 各阶段执行状态
-        hostsCollected:
-          type: array
-          description: 成功收集数据的主机列表
-          items:
-            type: object
-            properties:
-              name:
-                type: string
-              externalIP:
-                type: string
-              hostType:
-                type: string
-                enum: [target, client]
-        hostsFailed:
-          type: array
-          description: 收集失败的主机列表
-          items:
-            type: object
-            properties:
-              name:
-                type: string
-              externalIP:
-                type: string
-              hostType:
-                type: string
-                enum: [target, client]
-              error:
-                type: string
-                description: 失败原因
 
-    ExperimentOperationResponse:
+    StatusResponse:
       type: object
-      required:
-        - experimentId
-        - status
-        - timestamp
       properties:
-        experimentId:
-          type: string
         status:
           type: string
-          enum: [success, partial, failed]
-          description: 操作总体状态
+          description: Current experiment manager status (Pending or Running)
         timestamp:
           type: string
           format: date-time
-        message:
-          type: string
-        phases:
-          $ref: '#/components/schemas/ExperimentPhases'
-          description: 各阶段执行状态
 
-    ExperimentDataResponse:
+    ExperimentData:
       type: object
-      required:
-        - experimentId
+      description: Complete dashboard experiment result
       properties:
-        experimentId:
-          type: string
-        experiment:
-          $ref: '#/components/schemas/Experiment'
-          description: 实验元信息存储在data目录下experimentId目录下的experiment.json文件中
-        targetHosts:
-          type: array
-          description: 目标主机实验数据
-          items:
-            type: object
-            required:
-              - name
-              - externalIP
-            properties:
-              name:
-                type: string
-                description: 主机名
-              externalIP:
-                type: string
-                description: 主机外网IP
-              internalIP:
-                type: string
-                description: 主机内网IP
-              collectorData:
-                $ref: '#/components/schemas/CollectorExperimentData'
-                description: collector收集的数据（仅在查询特定主机时返回）
-        clientHost:
-          type: object
-          description: 客户端主机实验数据
-          required:
-            - name
-            - externalIP
-          properties:
-            name:
-              type: string
-              description: 主机名
-            externalIP:
-              type: string
-              description: 主机外网IP
-            internalIP:
-              type: string
-              description: 主机内网IP
-            requesterData:
-              type: object
-              description: requester收集的数据（仅在查询特定主机时返回）
-              properties:
-                stats:
-                  $ref: './requester.openapi.yaml#/components/schemas/RequestExperimentStats'
-
-    # 从collector API获取的实验数据结构
-    CollectorExperimentData:
-      $ref: './collector.openapi.yaml#/components/schemas/ExperimentData'
-
-    Host:
-      type: object
-      properties:
-        name:
-          type: string
-        hostType:
-          type: string
-          enum: [target, client]
-          description: 主机类型
-        externalIP:
-          type: string
-          description: 外网IP
-        internalIP:
-          type: string
-          description: 内网IP（可选）
-        cpuServiceUrl:
-          type: string
-        collectorServiceUrl:
-          type: string
-        requesterServiceUrl:
-          type: string
-          description: 仅适用于client类型主机
-
-    HostConfig:
-      type: object
-      required:
-        - name
-        - externalIP
-      properties:
-        name:
-          type: string
-          description: 主机名
-        externalIP:
-          type: string
-          description: 外网IP地址
-        internalIP:
-          type: string
-          description: 内网IP地址（用于内网通信）
-        cpuServicePort:
-          type: integer
-          default: 80
-          description: CPU服务端口
-        collectorServicePort:
-          type: integer
-          default: 8080
-          description: 数据收集服务端口
-        requesterServicePort:
-          type: integer
-          default: 80
-          description: 请求发送服务端口（仅适用于clientHosts）
-
-    RequestConfig:
-      type: object
-      required:
-        - qps
-        - requestTimeout
-        - targetHostName
-      properties:
-        targetHostName:
-          type: string
-          description: 目标主机名（必须是targetHosts中的一个主机名）
-        qps:
-          type: integer
-          minimum: 1
-          maximum: 1000
-          description: 每秒请求数
-        requestTimeout:
-          type: integer
-          minimum: 1
-          maximum: 60
-          default: 10
-          description: 单个请求超时时间（秒）
-        targetEndpoint:
-          type: string
-          default: "/calculate"
-          description: 目标服务端点
-        requestBody:
-          type: object
-          description: 请求体（JSON）
-          example: {"a": 123, "b": 456}
-
-    ExperimentPhases:
-      type: object
-      description: 实验各阶段执行状态
-      properties:
-        collectorStart:
-          $ref: '#/components/schemas/PhaseStatus'
-        requesterStart:
-          $ref: '#/components/schemas/PhaseStatus'
-        requesterStop:
-          $ref: '#/components/schemas/PhaseStatus'
-        collectorStop:
-          $ref: '#/components/schemas/PhaseStatus'
-
-    PhaseStatus:
-      type: object
-      properties:
-        status:
-          type: string
-          enum: [pending, running, completed, failed]
+        config:
+          $ref: '#/components/schemas/ServiceConfig'
         startTime:
           type: string
           format: date-time
         endTime:
           type: string
           format: date-time
-        message:
+        duration:
+          type: number
+          description: Duration in seconds
+        status:
           type: string
-          description: 状态消息或错误信息
+          description: Experiment status
+        collectorResults:
+          type: object
+          description: Results from collector experiments, keyed by host name
+          additionalProperties:
+            $ref: '#/components/schemas/CollectorResult'
+        requesterResult:
+          $ref: '#/components/schemas/RequesterResult'
+        errors:
+          type: array
+          items:
+            $ref: '#/components/schemas/ExperimentError'
 
-    HostHealth:
+    CollectorResult:
       type: object
       properties:
-        name:
+        hostName:
           type: string
-        externalIP:
+        experimentId:
           type: string
-        internalIP:
+        status:
           type: string
-        hostType:
+        dataPointsCollected:
+          type: integer
+        error:
           type: string
-          enum: [target, client]
-        cpuServiceHealthy:
-          type: boolean
-        collectorServiceHealthy:
-          type: boolean
-        requesterServiceHealthy:
-          type: boolean
-          description: 仅适用于client类型主机
+
+    RequesterResult:
+      type: object
+      properties:
+        experimentId:
+          type: string
+        status:
+          type: string
+        totalRequests:
+          type: integer
+          format: int64
+        successful:
+          type: integer
+          format: int64
+        failed:
+          type: integer
+          format: int64
+        avgResponseTime:
+          type: number
+          format: double
+        error:
+          type: string
+
+    ExperimentError:
+      type: object
+      properties:
+        timestamp:
+          type: string
+          format: date-time
+        phase:
+          type: string
+          description: collector_start, requester_start, stop, etc.
+        hostName:
+          type: string
+        message:
+          type: string
+
+    ErrorResponse:
+      type: object
+      properties:
+        error:
+          type: string
+        message:
+          type: string
         timestamp:
           type: string
           format: date-time
 
-    CalculationRequest:
+    HealthResponse:
       type: object
       properties:
-        a:
-          type: integer
-        b:
-          type: integer
-
-    CalculationResponse:
-      type: object
-      properties:
-        gcd:
+        status:
           type: string
-        process_time:
+        timestamp:
           type: string
-
+          format: date-time
+        uptime:
+          type: integer
+          description: Service uptime in seconds

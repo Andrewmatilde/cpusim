@@ -51,3 +51,17 @@ func (f *Manager[T]) Stop() error {
 func (f *Manager[T]) GetExperiment(id string) (T, error) {
 	return f.fs.Load(id)
 }
+
+const Pending = "Pending"
+const Running = "Running"
+
+func (f *Manager[T]) GetStatus() string {
+	if f.currentExperiment == nil {
+		return Pending
+	}
+	if f.currentExperiment.IsDone() {
+		return Pending
+	} else {
+		return Running
+	}
+}

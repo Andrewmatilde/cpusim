@@ -6,51 +6,52 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
-	"path/filepath"
+	"strconv"
 	"syscall"
 	"time"
 
 	"cpusim/collector/api/generated"
-	"cpusim/collector/pkg/experiment"
-	"cpusim/collector/pkg/metrics"
-	"cpusim/collector/pkg/storage"
+	"cpusim/pkg/collector"
 
 	"github.com/gin-gonic/gin"
+	"github.com/rs/zerolog"
 )
 
 const (
-	defaultPort                = "8080"
-	defaultCalculatorProcessName = "cpusim-server"
-	defaultStoragePath         = "./data/experiments"
-	defaultCollectionInterval  = 1000 // milliseconds
-	defaultTimeout            = 300   // seconds
+	defaultPort               = "8080"
+	defaultCollectionInterval = "1"
+	defaultCalculatorProcess  = "cpusim-server"
+	defaultStoragePath        = "./data/collector"
 )
 
 func main() {
 	// Get configuration from environment variables
 	port := getEnv("PORT", defaultPort)
-	calculatorProcessName := getEnv("CALCULATOR_PROCESS_NAME", defaultCalculatorProcessName)
+
+	// Setup logger
+	logger := zerolog.New(os.Stdout).With().Timestamp().Logger()
+
+	// Create collector config from environment
+	collectionInterval, _ := strconv.Atoi(getEnv("COLLECTION_INTERVAL", defaultCollectionInterval))
+
+	config := collector.Config{
+		CollectionInterval: collectionInterval,
+		CalculatorProcess:  getEnv("CALCULATOR_PROCESS", defaultCalculatorProcess),
+	}
+
 	storagePath := getEnv("STORAGE_PATH", defaultStoragePath)
 
-	// Create storage directory
-	absStoragePath, err := filepath.Abs(storagePath)
+	// Initialize collector service
+	service, err := collector.NewService(storagePath, config, logger)
 	if err != nil {
-		log.Fatalf("Failed to get absolute storage path: %v", err)
+		log.Fatalf("Failed to create collector service: %v", err)
 	}
-
-	// Initialize components
-	storage, err := storage.NewFileStorage(absStoragePath)
-	if err != nil {
-		log.Fatalf("Failed to initialize storage: %v", err)
-	}
-
-	metricsCollector := metrics.NewCollector(calculatorProcessName)
-	experimentManager := experiment.NewManager(metricsCollector, storage)
 
 	// Create API handler
 	apiHandler := &APIHandler{
-		experimentManager: experimentManager,
-		storage:          storage,
+		service: service,
+		config:  config,
+		logger:  logger,
 	}
 
 	// Set up Gin router
@@ -73,8 +74,9 @@ func main() {
 	// Start server in a goroutine
 	go func() {
 		log.Printf("Starting collector server on port %s", port)
-		log.Printf("Calculator process name: %s", calculatorProcessName)
-		log.Printf("Storage path: %s", absStoragePath)
+		log.Printf("Collection interval: %d seconds", config.CollectionInterval)
+		log.Printf("Calculator process: %s", config.CalculatorProcess)
+		log.Printf("Storage path: %s", storagePath)
 
 		if err := server.ListenAndServe(); err != nil && err != http.ErrServerClosed {
 			log.Fatalf("Server failed to start: %v", err)
@@ -87,6 +89,11 @@ func main() {
 	<-quit
 
 	log.Println("Shutting down server...")
+
+	// Stop current running experiment
+	if err := service.StopExperiment(); err != nil {
+		log.Printf("Error stopping experiment: %v", err)
+	}
 
 	// Give the server 30 seconds to finish the request it is currently handling
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)

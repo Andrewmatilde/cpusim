@@ -1,4 +1,4 @@
-package metrics
+package collector
 
 import (
 	"context"
@@ -12,72 +12,95 @@ import (
 	"github.com/shirou/gopsutil/v3/process"
 )
 
-// SystemMetrics represents the current system metrics
-type SystemMetrics struct {
-	CPUUsagePercent     float64   `json:"cpuUsagePercent"`
-	MemoryUsageBytes    int64     `json:"memoryUsageBytes"`
-	MemoryUsagePercent  float64   `json:"memoryUsagePercent"`
-	NetworkIOBytes      NetworkIO `json:"networkIOBytes"`
-	CalculatorServiceHealthy bool `json:"calculatorServiceHealthy"`
-	Timestamp           time.Time `json:"timestamp"`
-}
-
-// NetworkIO represents network I/O statistics
-type NetworkIO struct {
-	BytesReceived    int64 `json:"bytesReceived"`
-	BytesSent        int64 `json:"bytesSent"`
-	PacketsReceived  int64 `json:"packetsReceived"`
-	PacketsSent      int64 `json:"packetsSent"`
-}
-
 // Collector handles system metrics collection
 type Collector struct {
-	calculatorProcessName string
-	lastNetStats         []net.IOCountersStat
-	lastCPUStats         []cpu.TimesStat
-	lastCPUTime          time.Time
+	config           Config
+	lastNetStats     []net.IOCountersStat
+	lastCPUStats     []cpu.TimesStat
+	lastCPUTime      time.Time
 }
 
 // NewCollector creates a new metrics collector
-func NewCollector(calculatorProcessName string) *Collector {
+func NewCollector(config Config) *Collector {
 	return &Collector{
-		calculatorProcessName: calculatorProcessName,
+		config: config,
 	}
 }
 
-// GetCurrentMetrics collects and returns current system metrics
-func (c *Collector) GetCurrentMetrics(ctx context.Context) (*SystemMetrics, error) {
-	metrics := &SystemMetrics{
+// Run collects metrics for the duration specified in context
+func (c *Collector) Run(ctx context.Context) (*MetricsData, error) {
+	data := &MetricsData{
+		Config:    c.config,
+		StartTime: time.Now(),
+		Metrics:   make([]MetricDataPoint, 0),
+	}
+
+	// Collection interval
+	interval := time.Duration(c.config.CollectionInterval) * time.Second
+	ticker := time.NewTicker(interval)
+	defer ticker.Stop()
+
+	// Collect metrics immediately at start
+	if metric, err := c.collectSinglePoint(ctx); err == nil {
+		data.Metrics = append(data.Metrics, *metric)
+	}
+
+	// Continue collecting until context is done
+	for {
+		select {
+		case <-ctx.Done():
+			data.EndTime = time.Now()
+			data.Duration = data.EndTime.Sub(data.StartTime).Seconds()
+			data.DataPointsCollected = len(data.Metrics)
+			return data, nil
+
+		case <-ticker.C:
+			metric, err := c.collectSinglePoint(ctx)
+			if err != nil {
+				fmt.Printf("Error collecting metrics: %v\n", err)
+				continue
+			}
+			data.Metrics = append(data.Metrics, *metric)
+		}
+	}
+}
+
+// collectSinglePoint collects a single metric data point
+func (c *Collector) collectSinglePoint(ctx context.Context) (*MetricDataPoint, error) {
+	metric := &MetricDataPoint{
 		Timestamp: time.Now(),
 	}
 
-	// Collect CPU usage
+	// Collect CPU usage (best effort, don't fail on error)
 	cpuPercent, err := c.getCPUUsage(ctx)
 	if err != nil {
-		return nil, fmt.Errorf("failed to get CPU usage: %w", err)
+		fmt.Printf("Warning: failed to get CPU usage: %v\n", err)
+	} else {
+		metric.CPUUsagePercent = cpuPercent
 	}
-	metrics.CPUUsagePercent = cpuPercent
 
 	// Collect memory usage
 	memInfo, err := mem.VirtualMemoryWithContext(ctx)
 	if err != nil {
-		return nil, fmt.Errorf("failed to get memory usage: %w", err)
+		fmt.Printf("Warning: failed to get memory usage: %v\n", err)
+	} else {
+		metric.MemoryUsageBytes = int64(memInfo.Used)
+		metric.MemoryUsagePercent = memInfo.UsedPercent
 	}
-	metrics.MemoryUsageBytes = int64(memInfo.Used)
-	metrics.MemoryUsagePercent = memInfo.UsedPercent
 
-	// Collect network I/O
+	// Collect network I/O (best effort)
 	networkIO, err := c.getNetworkIO(ctx)
 	if err != nil {
-		return nil, fmt.Errorf("failed to get network I/O: %w", err)
+		fmt.Printf("Warning: failed to get network I/O: %v\n", err)
+	} else {
+		metric.NetworkIOBytes = *networkIO
 	}
-	metrics.NetworkIOBytes = *networkIO
 
 	// Check calculator service health by process
 	healthy := c.checkCalculatorProcessHealth(ctx)
-	metrics.CalculatorServiceHealthy = healthy
+	metric.CalculatorServiceHealthy = healthy
 
-	return metrics, nil
+	return metric, nil
 }
 
 // getNetworkIO calculates network I/O rates per second
@@ -115,7 +138,7 @@ func (c *Collector) getNetworkIO(ctx context.Context) (*NetworkIO, error) {
 
 // checkCalculatorProcessHealth checks if the calculator process is running
 func (c *Collector) checkCalculatorProcessHealth(ctx context.Context) bool {
-	if c.calculatorProcessName == "" {
+	if c.config.CalculatorProcess == "" {
 		return false
 	}
 
@@ -131,7 +154,7 @@ func (c *Collector) checkCalculatorProcessHealth(ctx context.Context) bool {
 		}
 
 		// Check if process name contains the calculator process name
-		if strings.Contains(name, c.calculatorProcessName) {
+		if strings.Contains(name, c.config.CalculatorProcess) {
 			// Additional check to ensure the process is running
 			status, err := proc.StatusWithContext(ctx)
 			if err != nil {

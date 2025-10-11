@@ -1,7 +1,13 @@
 openapi: 3.0.3
 info:
   title: Data Collector API
-  description: System metrics data collector for CPU simulation experiments
+  description: |
+    System metrics data collector for CPU simulation experiments
+
+    **服务配置:**
+    - 采集间隔、监控进程等配置在服务启动时通过环境变量设置
+    - 所有实验使用相同的全局配置
+    - 环境变量: COLLECTION_INTERVAL, CALCULATOR_PROCESS
   version: 1.0.0
   contact:
     name: CPU Simulation Project
@@ -165,6 +171,19 @@ paths:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
 
+  /config:
+    get:
+      summary: Get service configuration
+      description: Get the current collector service configuration
+      operationId: getServiceConfig
+      responses:
+        '200':
+          description: Service configuration
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ServiceConfig'
+
   /health:
     get:
       summary: Health check
@@ -180,10 +199,24 @@ paths:
 
 components:
   schemas:
+    ServiceConfig:
+      type: object
+      description: 服务全局配置
+      properties:
+        collectionInterval:
+          type: integer
+          description: 数据采集间隔（秒）
+          example: 1
+        calculatorProcess:
+          type: string
+          description: 要监控的Calculator进程名
+          example: "cpusim-server"
+
     StartExperimentRequest:
       type: object
       required:
         - experimentId
+        - timeout
       properties:
         experimentId:
           type: string
@@ -198,14 +231,7 @@ components:
           type: integer
           minimum: 1
           maximum: 3600
-          default: 300
-          description: Experiment timeout in seconds (1-3600, default 300)
-        collectionInterval:
-          type: integer
-          minimum: 100
-          maximum: 10000
-          default: 1000
-          description: Data collection interval in milliseconds (100-10000, default 1000)
+          description: Experiment timeout in seconds (1-3600)
 
     ExperimentResponse:
       type: object

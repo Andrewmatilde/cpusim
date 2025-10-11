@@ -25,332 +25,124 @@ import (
 	"github.com/oapi-codegen/runtime"
 )
 
-// Defines values for ExperimentStatus.
-const (
-	ExperimentStatusCompleted ExperimentStatus = "completed"
-	ExperimentStatusFailed    ExperimentStatus = "failed"
-	ExperimentStatusPending   ExperimentStatus = "pending"
-	ExperimentStatusRunning   ExperimentStatus = "running"
-	ExperimentStatusStopping  ExperimentStatus = "stopping"
-)
-
-// Defines values for ExperimentOperationResponseStatus.
-const (
-	ExperimentOperationResponseStatusFailed  ExperimentOperationResponseStatus = "failed"
-	ExperimentOperationResponseStatusPartial ExperimentOperationResponseStatus = "partial"
-	ExperimentOperationResponseStatusSuccess ExperimentOperationResponseStatus = "success"
-)
-
-// Defines values for HostHostType.
-const (
-	HostHostTypeClient HostHostType = "client"
-	HostHostTypeTarget HostHostType = "target"
-)
-
-// Defines values for HostHealthHostType.
-const (
-	HostHealthHostTypeClient HostHealthHostType = "client"
-	HostHealthHostTypeTarget HostHealthHostType = "target"
-)
-
-// Defines values for PhaseStatusStatus.
-const (
-	PhaseStatusStatusCompleted PhaseStatusStatus = "completed"
-	PhaseStatusStatusFailed    PhaseStatusStatus = "failed"
-	PhaseStatusStatusPending   PhaseStatusStatus = "pending"
-	PhaseStatusStatusRunning   PhaseStatusStatus = "running"
-)
-
-// Defines values for StopAndCollectResponseHostsCollectedHostType.
-const (
-	StopAndCollectResponseHostsCollectedHostTypeClient StopAndCollectResponseHostsCollectedHostType = "client"
-	StopAndCollectResponseHostsCollectedHostTypeTarget StopAndCollectResponseHostsCollectedHostType = "target"
-)
-
-// Defines values for StopAndCollectResponseHostsFailedHostType.
-const (
-	StopAndCollectResponseHostsFailedHostTypeClient StopAndCollectResponseHostsFailedHostType = "client"
-	StopAndCollectResponseHostsFailedHostTypeTarget StopAndCollectResponseHostsFailedHostType = "target"
-)
-
-// Defines values for StopAndCollectResponseStatus.
-const (
-	StopAndCollectResponseStatusFailed  StopAndCollectResponseStatus = "failed"
-	StopAndCollectResponseStatusPartial StopAndCollectResponseStatus = "partial"
-	StopAndCollectResponseStatusSuccess StopAndCollectResponseStatus = "success"
-)
-
-// CalculationRequest defines model for CalculationRequest.
-type CalculationRequest struct {
-	A int `json:"a,omitempty"`
-	B int `json:"b,omitempty"`
+// ClientHost defines model for ClientHost.
+type ClientHost struct {
+	ExternalIP          string `json:"externalIP,omitempty"`
+	InternalIP          string `json:"internalIP,omitempty"`
+	Name                string `json:"name,omitempty"`
+	RequesterServiceURL string `json:"requesterServiceURL,omitempty"`
 }
 
-// CalculationResponse defines model for CalculationResponse.
-type CalculationResponse struct {
-	Gcd         string `json:"gcd,omitempty"`
-	ProcessTime string `json:"process_time,omitempty"`
+// CollectorResult defines model for CollectorResult.
+type CollectorResult struct {
+	DataPointsCollected int    `json:"dataPointsCollected,omitempty"`
+	Error               string `json:"error,omitempty"`
+	ExperimentId        string `json:"experimentId,omitempty"`
+	HostName            string `json:"hostName,omitempty"`
+	Status              string `json:"status,omitempty"`
 }
 
-// CollectorExperimentData defines model for CollectorExperimentData.
-type CollectorExperimentData = externalRef0.ExperimentData
-
-// CreateExperimentRequest defines model for CreateExperimentRequest.
-type CreateExperimentRequest struct {
-	ClientHost HostConfig `json:"clientHost"`
-
-	// CollectionInterval 数据收集间隔(毫秒)
-	CollectionInterval int `json:"collectionInterval,omitempty"`
-
-	// Description 实验描述
-	Description string `json:"description,omitempty"`
-
-	// ExperimentId 实验唯一标识
-	ExperimentId  string        `json:"experimentId"`
-	RequestConfig RequestConfig `json:"requestConfig"`
-
-	// TargetHosts 目标主机列表（运行cpusim-server和collector-server）
-	TargetHosts []HostConfig `json:"targetHosts"`
-
-	// Timeout 超时时间(秒)
-	Timeout int `json:"timeout,omitempty"`
+// ErrorResponse defines model for ErrorResponse.
+type ErrorResponse struct {
+	Error     string    `json:"error,omitempty"`
+	Message   string    `json:"message,omitempty"`
+	Timestamp time.Time `json:"timestamp,omitempty"`
 }
 
-// Experiment defines model for Experiment.
-type Experiment struct {
-	ClientHost         HostConfig `json:"clientHost"`
-	CollectionInterval int        `json:"collectionInterval,omitempty"`
-	CreatedAt          time.Time  `json:"createdAt"`
-	Description        string     `json:"description,omitempty"`
-	ExperimentId       string     `json:"experimentId"`
+// ExperimentData Complete dashboard experiment result
+type ExperimentData struct {
+	// CollectorResults Results from collector experiments, keyed by host name
+	CollectorResults map[string]CollectorResult `json:"collectorResults,omitempty"`
 
-	// Phases 实验各阶段执行状态
-	Phases        ExperimentPhases `json:"phases,omitempty"`
-	RequestConfig RequestConfig    `json:"requestConfig"`
+	// Config Dashboard service configuration (only service URLs)
+	Config ServiceConfig `json:"config,omitempty"`
 
-	// Status 实验状态
-	Status ExperimentStatus `json:"status,omitempty"`
+	// Duration Duration in seconds
+	Duration        float32           `json:"duration,omitempty"`
+	EndTime         time.Time         `json:"endTime,omitempty"`
+	Errors          []ExperimentError `json:"errors,omitempty"`
+	RequesterResult RequesterResult   `json:"requesterResult,omitempty"`
+	StartTime       time.Time         `json:"startTime,omitempty"`
 
-	// TargetHosts 目标主机列表
-	TargetHosts []HostConfig `json:"targetHosts"`
-	Timeout     int          `json:"timeout,omitempty"`
+	// Status Experiment status
+	Status string `json:"status,omitempty"`
 }
 
-// ExperimentStatus 实验状态
-type ExperimentStatus string
+// ExperimentError defines model for ExperimentError.
+type ExperimentError struct {
+	HostName string `json:"hostName,omitempty"`
+	Message  string `json:"message,omitempty"`
 
-// ExperimentDataResponse defines model for ExperimentDataResponse.
-type ExperimentDataResponse struct {
-	// ClientHost 客户端主机实验数据
-	ClientHost struct {
-		// ExternalIP 主机外网IP
-		ExternalIP string `json:"externalIP"`
-
-		// InternalIP 主机内网IP
-		InternalIP string `json:"internalIP,omitempty"`
-
-		// Name 主机名
-		Name string `json:"name"`
-
-		// RequesterData requester收集的数据（仅在查询特定主机时返回）
-		RequesterData struct {
-			Stats externalRef1.RequestExperimentStats `json:"stats,omitempty"`
-		} `json:"requesterData,omitempty"`
-	} `json:"clientHost,omitempty"`
-	Experiment   Experiment `json:"experiment,omitempty"`
-	ExperimentId string     `json:"experimentId"`
-
-	// TargetHosts 目标主机实验数据
-	TargetHosts []struct {
-		CollectorData CollectorExperimentData `json:"collectorData,omitempty"`
-
-		// ExternalIP 主机外网IP
-		ExternalIP string `json:"externalIP"`
-
-		// InternalIP 主机内网IP
-		InternalIP string `json:"internalIP,omitempty"`
-
-		// Name 主机名
-		Name string `json:"name"`
-	} `json:"targetHosts,omitempty"`
+	// Phase collector_start, requester_start, stop, etc.
+	Phase     string    `json:"phase,omitempty"`
+	Timestamp time.Time `json:"timestamp,omitempty"`
 }
 
-// ExperimentListResponse defines model for ExperimentListResponse.
-type ExperimentListResponse struct {
-	Experiments []Experiment `json:"experiments"`
-	HasMore     bool         `json:"hasMore,omitempty"`
-	Total       int          `json:"total"`
-}
-
-// ExperimentOperationResponse defines model for ExperimentOperationResponse.
-type ExperimentOperationResponse struct {
-	ExperimentId string `json:"experimentId"`
+// ExperimentResponse defines model for ExperimentResponse.
+type ExperimentResponse struct {
+	ExperimentId string `json:"experimentId,omitempty"`
 	Message      string `json:"message,omitempty"`
 
-	// Phases 实验各阶段执行状态
-	Phases ExperimentPhases `json:"phases,omitempty"`
-
-	// Status 操作总体状态
-	Status    ExperimentOperationResponseStatus `json:"status"`
-	Timestamp time.Time                         `json:"timestamp"`
+	// Status Response status
+	Status    string    `json:"status,omitempty"`
+	Timestamp time.Time `json:"timestamp,omitempty"`
 }
 
-// ExperimentOperationResponseStatus 操作总体状态
-type ExperimentOperationResponseStatus string
+// HealthResponse defines model for HealthResponse.
+type HealthResponse struct {
+	Status    string    `json:"status,omitempty"`
+	Timestamp time.Time `json:"timestamp,omitempty"`
 
-// ExperimentPhases 实验各阶段执行状态
-type ExperimentPhases struct {
-	CollectorStart PhaseStatus `json:"collectorStart,omitempty"`
-	CollectorStop  PhaseStatus `json:"collectorStop,omitempty"`
-	RequesterStart PhaseStatus `json:"requesterStart,omitempty"`
-	RequesterStop  PhaseStatus `json:"requesterStop,omitempty"`
+	// Uptime Service uptime in seconds
+	Uptime int `json:"uptime,omitempty"`
 }
 
-// Host defines model for Host.
-type Host struct {
-	CollectorServiceUrl string `json:"collectorServiceUrl,omitempty"`
-	CpuServiceUrl       string `json:"cpuServiceUrl,omitempty"`
-
-	// ExternalIP 外网IP
-	ExternalIP string `json:"externalIP,omitempty"`
-
-	// HostType 主机类型
-	HostType HostHostType `json:"hostType,omitempty"`
-
-	// InternalIP 内网IP（可选）
-	InternalIP string `json:"internalIP,omitempty"`
-	Name       string `json:"name,omitempty"`
-
-	// RequesterServiceUrl 仅适用于client类型主机
-	RequesterServiceUrl string `json:"requesterServiceUrl,omitempty"`
+// RequesterResult defines model for RequesterResult.
+type RequesterResult struct {
+	AvgResponseTime float64 `json:"avgResponseTime,omitempty"`
+	Error           string  `json:"error,omitempty"`
+	ExperimentId    string  `json:"experimentId,omitempty"`
+	Failed          int64   `json:"failed,omitempty"`
+	Status          string  `json:"status,omitempty"`
+	Successful      int64   `json:"successful,omitempty"`
+	TotalRequests   int64   `json:"totalRequests,omitempty"`
 }
 
-// HostHostType 主机类型
-type HostHostType string
+// ServiceConfig Dashboard service configuration (only service URLs)
+type ServiceConfig struct {
+	ClientHost ClientHost `json:"clientHost,omitempty"`
 
-// HostConfig defines model for HostConfig.
-type HostConfig struct {
-	// CollectorServicePort 数据收集服务端口
-	CollectorServicePort int `json:"collectorServicePort,omitempty"`
-
-	// CpuServicePort CPU服务端口
-	CpuServicePort int `json:"cpuServicePort,omitempty"`
-
-	// ExternalIP 外网IP地址
-	ExternalIP string `json:"externalIP"`
-
-	// InternalIP 内网IP地址（用于内网通信）
-	InternalIP string `json:"internalIP,omitempty"`
-
-	// Name 主机名
-	Name string `json:"name"`
-
-	// RequesterServicePort 请求发送服务端口（仅适用于clientHosts）
-	RequesterServicePort int `json:"requesterServicePort,omitempty"`
+	// TargetHosts List of target hosts to collect metrics from
+	TargetHosts []TargetHost `json:"targetHosts,omitempty"`
 }
 
-// HostHealth defines model for HostHealth.
-type HostHealth struct {
-	CollectorServiceHealthy bool               `json:"collectorServiceHealthy,omitempty"`
-	CpuServiceHealthy       bool               `json:"cpuServiceHealthy,omitempty"`
-	ExternalIP              string             `json:"externalIP,omitempty"`
-	HostType                HostHealthHostType `json:"hostType,omitempty"`
-	InternalIP              string             `json:"internalIP,omitempty"`
-	Name                    string             `json:"name,omitempty"`
-
-	// RequesterServiceHealthy 仅适用于client类型主机
-	RequesterServiceHealthy bool      `json:"requesterServiceHealthy,omitempty"`
-	Timestamp               time.Time `json:"timestamp,omitempty"`
-}
-
-// HostHealthHostType defines model for HostHealth.HostType.
-type HostHealthHostType string
-
-// PhaseStatus defines model for PhaseStatus.
-type PhaseStatus struct {
-	EndTime time.Time `json:"endTime,omitempty"`
-
-	// Message 状态消息或错误信息
-	Message   string            `json:"message,omitempty"`
-	StartTime time.Time         `json:"startTime,omitempty"`
-	Status    PhaseStatusStatus `json:"status,omitempty"`
-}
-
-// PhaseStatusStatus defines model for PhaseStatus.Status.
-type PhaseStatusStatus string
-
-// RequestConfig defines model for RequestConfig.
-type RequestConfig struct {
-	// Qps 每秒请求数
-	Qps int `json:"qps"`
-
-	// RequestBody 请求体（JSON）
-	RequestBody map[string]interface{} `json:"requestBody,omitempty"`
-
-	// RequestTimeout 单个请求超时时间（秒）
-	RequestTimeout int `json:"requestTimeout"`
-
-	// TargetEndpoint 目标服务端点
-	TargetEndpoint string `json:"targetEndpoint,omitempty"`
-
-	// TargetHostName 目标主机名（必须是targetHosts中的一个主机名）
-	TargetHostName string `json:"targetHostName"`
-}
-
-// StopAndCollectResponse defines model for StopAndCollectResponse.
-type StopAndCollectResponse struct {
+// StartExperimentRequest defines model for StartExperimentRequest.
+type StartExperimentRequest struct {
+	// ExperimentId Unique experiment identifier
 	ExperimentId string `json:"experimentId"`
 
-	// HostsCollected 成功收集数据的主机列表
-	HostsCollected []struct {
-		ExternalIP string                                       `json:"externalIP,omitempty"`
-		HostType   StopAndCollectResponseHostsCollectedHostType `json:"hostType,omitempty"`
-		Name       string                                       `json:"name,omitempty"`
-	} `json:"hostsCollected,omitempty"`
-
-	// HostsFailed 收集失败的主机列表
-	HostsFailed []struct {
-		// Error 失败原因
-		Error      string                                    `json:"error,omitempty"`
-		ExternalIP string                                    `json:"externalIP,omitempty"`
-		HostType   StopAndCollectResponseHostsFailedHostType `json:"hostType,omitempty"`
-		Name       string                                    `json:"name,omitempty"`
-	} `json:"hostsFailed,omitempty"`
-	Message string `json:"message,omitempty"`
-
-	// Phases 实验各阶段执行状态
-	Phases ExperimentPhases `json:"phases,omitempty"`
-
-	// Status 停止和收集的总体状态
-	Status    StopAndCollectResponseStatus `json:"status"`
-	Timestamp time.Time                    `json:"timestamp"`
+	// Timeout Experiment timeout in seconds
+	Timeout int `json:"timeout"`
 }
 
-// StopAndCollectResponseHostsCollectedHostType defines model for StopAndCollectResponse.HostsCollected.HostType.
-type StopAndCollectResponseHostsCollectedHostType string
-
-// StopAndCollectResponseHostsFailedHostType defines model for StopAndCollectResponse.HostsFailed.HostType.
-type StopAndCollectResponseHostsFailedHostType string
-
-// StopAndCollectResponseStatus 停止和收集的总体状态
-type StopAndCollectResponseStatus string
-
-// GetExperimentsParams defines parameters for GetExperiments.
-type GetExperimentsParams struct {
-	Limit int `form:"limit,omitempty" json:"limit,omitempty"`
+// StatusResponse defines model for StatusResponse.
+type StatusResponse struct {
+	// Status Current experiment manager status (Pending or Running)
+	Status    string    `json:"status,omitempty"`
+	Timestamp time.Time `json:"timestamp,omitempty"`
 }
 
-// GetExperimentDataParams defines parameters for GetExperimentData.
-type GetExperimentDataParams struct {
-	// HostName 指定主机名，不指定则返回所有主机数据概要
-	HostName string `form:"hostName,omitempty" json:"hostName,omitempty"`
+// TargetHost defines model for TargetHost.
+type TargetHost struct {
+	CollectorServiceURL string `json:"collectorServiceURL,omitempty"`
+	CpuServiceURL       string `json:"cpuServiceURL,omitempty"`
+	ExternalIP          string `json:"externalIP,omitempty"`
+	InternalIP          string `json:"internalIP,omitempty"`
+	Name                string `json:"name,omitempty"`
 }
 
-// CreateGlobalExperimentJSONRequestBody defines body for CreateGlobalExperiment for application/json ContentType.
-type CreateGlobalExperimentJSONRequestBody = CreateExperimentRequest
-
-// TestHostCalculationJSONRequestBody defines body for TestHostCalculation for application/json ContentType.
-type TestHostCalculationJSONRequestBody = CalculationRequest
+// StartExperimentJSONRequestBody defines body for StartExperiment for application/json ContentType.
+type StartExperimentJSONRequestBody = StartExperimentRequest
 
 // RequestEditorFn  is the function signature for the RequestEditor callback function
 type RequestEditorFn func(ctx context.Context, req *http.Request) error
@@ -425,43 +217,29 @@ func WithRequestEditorFn(fn RequestEditorFn) ClientOption {
 
 // The interface specification for the client above.
 type ClientInterface interface {
-	// GetExperiments request
-	GetExperiments(ctx context.Context, params *GetExperimentsParams, reqEditors ...RequestEditorFn) (*http.Response, error)
+	// GetServiceConfig request
+	GetServiceConfig(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error)
 
-	// CreateGlobalExperimentWithBody request with any body
-	CreateGlobalExperimentWithBody(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
+	// StartExperimentWithBody request with any body
+	StartExperimentWithBody(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
 
-	CreateGlobalExperiment(ctx context.Context, body CreateGlobalExperimentJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
-
-	// GetGlobalExperiment request
-	GetGlobalExperiment(ctx context.Context, experimentId string, reqEditors ...RequestEditorFn) (*http.Response, error)
+	StartExperiment(ctx context.Context, body StartExperimentJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// GetExperimentData request
-	GetExperimentData(ctx context.Context, experimentId string, params *GetExperimentDataParams, reqEditors ...RequestEditorFn) (*http.Response, error)
+	GetExperimentData(ctx context.Context, experimentId string, reqEditors ...RequestEditorFn) (*http.Response, error)
 
-	// GetExperimentPhases request
-	GetExperimentPhases(ctx context.Context, experimentId string, reqEditors ...RequestEditorFn) (*http.Response, error)
+	// StopExperiment request
+	StopExperiment(ctx context.Context, experimentId string, reqEditors ...RequestEditorFn) (*http.Response, error)
 
-	// StartCompleteExperiment request
-	StartCompleteExperiment(ctx context.Context, experimentId string, reqEditors ...RequestEditorFn) (*http.Response, error)
+	// HealthCheck request
+	HealthCheck(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error)
 
-	// StopCompleteExperiment request
-	StopCompleteExperiment(ctx context.Context, experimentId string, reqEditors ...RequestEditorFn) (*http.Response, error)
-
-	// GetHosts request
-	GetHosts(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error)
-
-	// TestHostCalculationWithBody request with any body
-	TestHostCalculationWithBody(ctx context.Context, name string, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
-
-	TestHostCalculation(ctx context.Context, name string, body TestHostCalculationJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
-
-	// GetHostHealth request
-	GetHostHealth(ctx context.Context, name string, reqEditors ...RequestEditorFn) (*http.Response, error)
+	// GetStatus request
+	GetStatus(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error)
 }
 
-func (c *Client) GetExperiments(ctx context.Context, params *GetExperimentsParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
-	req, err := NewGetExperimentsRequest(c.Server, params)
+func (c *Client) GetServiceConfig(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewGetServiceConfigRequest(c.Server)
 	if err != nil {
 		return nil, err
 	}
@@ -472,8 +250,8 @@ func (c *Client) GetExperiments(ctx context.Context, params *GetExperimentsParam
 	return c.Client.Do(req)
 }
 
-func (c *Client) CreateGlobalExperimentWithBody(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
-	req, err := NewCreateGlobalExperimentRequestWithBody(c.Server, contentType, body)
+func (c *Client) StartExperimentWithBody(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewStartExperimentRequestWithBody(c.Server, contentType, body)
 	if err != nil {
 		return nil, err
 	}
@@ -484,8 +262,8 @@ func (c *Client) CreateGlobalExperimentWithBody(ctx context.Context, contentType
 	return c.Client.Do(req)
 }
 
-func (c *Client) CreateGlobalExperiment(ctx context.Context, body CreateGlobalExperimentJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
-	req, err := NewCreateGlobalExperimentRequest(c.Server, body)
+func (c *Client) StartExperiment(ctx context.Context, body StartExperimentJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewStartExperimentRequest(c.Server, body)
 	if err != nil {
 		return nil, err
 	}
@@ -496,8 +274,8 @@ func (c *Client) CreateGlobalExperiment(ctx context.Context, body CreateGlobalEx
 	return c.Client.Do(req)
 }
 
-func (c *Client) GetGlobalExperiment(ctx context.Context, experimentId string, reqEditors ...RequestEditorFn) (*http.Response, error) {
-	req, err := NewGetGlobalExperimentRequest(c.Server, experimentId)
+func (c *Client) GetExperimentData(ctx context.Context, experimentId string, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewGetExperimentDataRequest(c.Server, experimentId)
 	if err != nil {
 		return nil, err
 	}
@@ -508,8 +286,8 @@ func (c *Client) GetGlobalExperiment(ctx context.Context, experimentId string, r
 	return c.Client.Do(req)
 }
 
-func (c *Client) GetExperimentData(ctx context.Context, experimentId string, params *GetExperimentDataParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
-	req, err := NewGetExperimentDataRequest(c.Server, experimentId, params)
+func (c *Client) StopExperiment(ctx context.Context, experimentId string, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewStopExperimentRequest(c.Server, experimentId)
 	if err != nil {
 		return nil, err
 	}
@@ -520,8 +298,8 @@ func (c *Client) GetExperimentData(ctx context.Context, experimentId string, par
 	return c.Client.Do(req)
 }
 
-func (c *Client) GetExperimentPhases(ctx context.Context, experimentId string, reqEditors ...RequestEditorFn) (*http.Response, error) {
-	req, err := NewGetExperimentPhasesRequest(c.Server, experimentId)
+func (c *Client) HealthCheck(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewHealthCheckRequest(c.Server)
 	if err != nil {
 		return nil, err
 	}
@@ -532,8 +310,8 @@ func (c *Client) GetExperimentPhases(ctx context.Context, experimentId string, r
 	return c.Client.Do(req)
 }
 
-func (c *Client) StartCompleteExperiment(ctx context.Context, experimentId string, reqEditors ...RequestEditorFn) (*http.Response, error) {
-	req, err := NewStartCompleteExperimentRequest(c.Server, experimentId)
+func (c *Client) GetStatus(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewGetStatusRequest(c.Server)
 	if err != nil {
 		return nil, err
 	}
@@ -544,68 +322,8 @@ func (c *Client) StartCompleteExperiment(ctx context.Context, experimentId strin
 	return c.Client.Do(req)
 }
 
-func (c *Client) StopCompleteExperiment(ctx context.Context, experimentId string, reqEditors ...RequestEditorFn) (*http.Response, error) {
-	req, err := NewStopCompleteExperimentRequest(c.Server, experimentId)
-	if err != nil {
-		return nil, err
-	}
-	req = req.WithContext(ctx)
-	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
-		return nil, err
-	}
-	return c.Client.Do(req)
-}
-
-func (c *Client) GetHosts(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error) {
-	req, err := NewGetHostsRequest(c.Server)
-	if err != nil {
-		return nil, err
-	}
-	req = req.WithContext(ctx)
-	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
-		return nil, err
-	}
-	return c.Client.Do(req)
-}
-
-func (c *Client) TestHostCalculationWithBody(ctx context.Context, name string, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
-	req, err := NewTestHostCalculationRequestWithBody(c.Server, name, contentType, body)
-	if err != nil {
-		return nil, err
-	}
-	req = req.WithContext(ctx)
-	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
-		return nil, err
-	}
-	return c.Client.Do(req)
-}
-
-func (c *Client) TestHostCalculation(ctx context.Context, name string, body TestHostCalculationJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
-	req, err := NewTestHostCalculationRequest(c.Server, name, body)
-	if err != nil {
-		return nil, err
-	}
-	req = req.WithContext(ctx)
-	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
-		return nil, err
-	}
-	return c.Client.Do(req)
-}
-
-func (c *Client) GetHostHealth(ctx context.Context, name string, reqEditors ...RequestEditorFn) (*http.Response, error) {
-	req, err := NewGetHostHealthRequest(c.Server, name)
-	if err != nil {
-		return nil, err
-	}
-	req = req.WithContext(ctx)
-	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
-		return nil, err
-	}
-	return c.Client.Do(req)
-}
-
-// NewGetExperimentsRequest generates requests for GetExperiments
-func NewGetExperimentsRequest(server string, params *GetExperimentsParams) (*http.Request, error) {
+// NewGetServiceConfigRequest generates requests for GetServiceConfig
+func NewGetServiceConfigRequest(server string) (*http.Request, error) {
 	var err error
 
 	serverURL, err := url.Parse(server)
@@ -613,7 +331,7 @@ func NewGetExperimentsRequest(server string, params *GetExperimentsParams) (*htt
 		return nil, err
 	}
 
-	operationPath := fmt.Sprintf("/api/experiments")
+	operationPath := fmt.Sprintf("/config")
 	if operationPath[0] == '/' {
 		operationPath = "." + operationPath
 	}
@@ -621,24 +339,6 @@ func NewGetExperimentsRequest(server string, params *GetExperimentsParams) (*htt
 	queryURL, err := serverURL.Parse(operationPath)
 	if err != nil {
 		return nil, err
-	}
-
-	if params != nil {
-		queryValues := queryURL.Query()
-
-		if queryFrag, err := runtime.StyleParamWithLocation("form", true, "limit", runtime.ParamLocationQuery, params.Limit); err != nil {
-			return nil, err
-		} else if parsed, err := url.ParseQuery(queryFrag); err != nil {
-			return nil, err
-		} else {
-			for k, v := range parsed {
-				for _, v2 := range v {
-					queryValues.Add(k, v2)
-				}
-			}
-		}
-
-		queryURL.RawQuery = queryValues.Encode()
 	}
 
 	req, err := http.NewRequest("GET", queryURL.String(), nil)
@@ -649,19 +349,19 @@ func NewGetExperimentsRequest(server string, params *GetExperimentsParams) (*htt
 	return req, nil
 }
 
-// NewCreateGlobalExperimentRequest calls the generic CreateGlobalExperiment builder with application/json body
-func NewCreateGlobalExperimentRequest(server string, body CreateGlobalExperimentJSONRequestBody) (*http.Request, error) {
+// NewStartExperimentRequest calls the generic StartExperiment builder with application/json body
+func NewStartExperimentRequest(server string, body StartExperimentJSONRequestBody) (*http.Request, error) {
 	var bodyReader io.Reader
 	buf, err := json.Marshal(body)
 	if err != nil {
 		return nil, err
 	}
 	bodyReader = bytes.NewReader(buf)
-	return NewCreateGlobalExperimentRequestWithBody(server, "application/json", bodyReader)
+	return NewStartExperimentRequestWithBody(server, "application/json", bodyReader)
 }
 
-// NewCreateGlobalExperimentRequestWithBody generates requests for CreateGlobalExperiment with any type of body
-func NewCreateGlobalExperimentRequestWithBody(server string, contentType string, body io.Reader) (*http.Request, error) {
+// NewStartExperimentRequestWithBody generates requests for StartExperiment with any type of body
+func NewStartExperimentRequestWithBody(server string, contentType string, body io.Reader) (*http.Request, error) {
 	var err error
 
 	serverURL, err := url.Parse(server)
@@ -669,7 +369,7 @@ func NewCreateGlobalExperimentRequestWithBody(server string, contentType string,
 		return nil, err
 	}
 
-	operationPath := fmt.Sprintf("/api/experiments")
+	operationPath := fmt.Sprintf("/experiments")
 	if operationPath[0] == '/' {
 		operationPath = "." + operationPath
 	}
@@ -685,46 +385,12 @@ func NewCreateGlobalExperimentRequestWithBody(server string, contentType string,
 	}
 
 	req.Header.Add("Content-Type", contentType)
-
-	return req, nil
-}
-
-// NewGetGlobalExperimentRequest generates requests for GetGlobalExperiment
-func NewGetGlobalExperimentRequest(server string, experimentId string) (*http.Request, error) {
-	var err error
-
-	var pathParam0 string
-
-	pathParam0, err = runtime.StyleParamWithLocation("simple", false, "experimentId", runtime.ParamLocationPath, experimentId)
-	if err != nil {
-		return nil, err
-	}
-
-	serverURL, err := url.Parse(server)
-	if err != nil {
-		return nil, err
-	}
-
-	operationPath := fmt.Sprintf("/api/experiments/%s", pathParam0)
-	if operationPath[0] == '/' {
-		operationPath = "." + operationPath
-	}
-
-	queryURL, err := serverURL.Parse(operationPath)
-	if err != nil {
-		return nil, err
-	}
-
-	req, err := http.NewRequest("GET", queryURL.String(), nil)
-	if err != nil {
-		return nil, err
-	}
 
 	return req, nil
 }
 
 // NewGetExperimentDataRequest generates requests for GetExperimentData
-func NewGetExperimentDataRequest(server string, experimentId string, params *GetExperimentDataParams) (*http.Request, error) {
+func NewGetExperimentDataRequest(server string, experimentId string) (*http.Request, error) {
 	var err error
 
 	var pathParam0 string
@@ -739,59 +405,7 @@ func NewGetExperimentDataRequest(server string, experimentId string, params *Get
 		return nil, err
 	}
 
-	operationPath := fmt.Sprintf("/api/experiments/%s/data", pathParam0)
-	if operationPath[0] == '/' {
-		operationPath = "." + operationPath
-	}
-
-	queryURL, err := serverURL.Parse(operationPath)
-	if err != nil {
-		return nil, err
-	}
-
-	if params != nil {
-		queryValues := queryURL.Query()
-
-		if queryFrag, err := runtime.StyleParamWithLocation("form", true, "hostName", runtime.ParamLocationQuery, params.HostName); err != nil {
-			return nil, err
-		} else if parsed, err := url.ParseQuery(queryFrag); err != nil {
-			return nil, err
-		} else {
-			for k, v := range parsed {
-				for _, v2 := range v {
-					queryValues.Add(k, v2)
-				}
-			}
-		}
-
-		queryURL.RawQuery = queryValues.Encode()
-	}
-
-	req, err := http.NewRequest("GET", queryURL.String(), nil)
-	if err != nil {
-		return nil, err
-	}
-
-	return req, nil
-}
-
-// NewGetExperimentPhasesRequest generates requests for GetExperimentPhases
-func NewGetExperimentPhasesRequest(server string, experimentId string) (*http.Request, error) {
-	var err error
-
-	var pathParam0 string
-
-	pathParam0, err = runtime.StyleParamWithLocation("simple", false, "experimentId", runtime.ParamLocationPath, experimentId)
-	if err != nil {
-		return nil, err
-	}
-
-	serverURL, err := url.Parse(server)
-	if err != nil {
-		return nil, err
-	}
-
-	operationPath := fmt.Sprintf("/api/experiments/%s/phases", pathParam0)
+	operationPath := fmt.Sprintf("/experiments/%s", pathParam0)
 	if operationPath[0] == '/' {
 		operationPath = "." + operationPath
 	}
@@ -809,8 +423,8 @@ func NewGetExperimentPhasesRequest(server string, experimentId string) (*http.Re
 	return req, nil
 }
 
-// NewStartCompleteExperimentRequest generates requests for StartCompleteExperiment
-func NewStartCompleteExperimentRequest(server string, experimentId string) (*http.Request, error) {
+// NewStopExperimentRequest generates requests for StopExperiment
+func NewStopExperimentRequest(server string, experimentId string) (*http.Request, error) {
 	var err error
 
 	var pathParam0 string
@@ -825,7 +439,7 @@ func NewStartCompleteExperimentRequest(server string, experimentId string) (*htt
 		return nil, err
 	}
 
-	operationPath := fmt.Sprintf("/api/experiments/%s/start", pathParam0)
+	operationPath := fmt.Sprintf("/experiments/%s/stop", pathParam0)
 	if operationPath[0] == '/' {
 		operationPath = "." + operationPath
 	}
@@ -843,42 +457,8 @@ func NewStartCompleteExperimentRequest(server string, experimentId string) (*htt
 	return req, nil
 }
 
-// NewStopCompleteExperimentRequest generates requests for StopCompleteExperiment
-func NewStopCompleteExperimentRequest(server string, experimentId string) (*http.Request, error) {
-	var err error
-
-	var pathParam0 string
-
-	pathParam0, err = runtime.StyleParamWithLocation("simple", false, "experimentId", runtime.ParamLocationPath, experimentId)
-	if err != nil {
-		return nil, err
-	}
-
-	serverURL, err := url.Parse(server)
-	if err != nil {
-		return nil, err
-	}
-
-	operationPath := fmt.Sprintf("/api/experiments/%s/stop", pathParam0)
-	if operationPath[0] == '/' {
-		operationPath = "." + operationPath
-	}
-
-	queryURL, err := serverURL.Parse(operationPath)
-	if err != nil {
-		return nil, err
-	}
-
-	req, err := http.NewRequest("POST", queryURL.String(), nil)
-	if err != nil {
-		return nil, err
-	}
-
-	return req, nil
-}
-
-// NewGetHostsRequest generates requests for GetHosts
-func NewGetHostsRequest(server string) (*http.Request, error) {
+// NewHealthCheckRequest generates requests for HealthCheck
+func NewHealthCheckRequest(server string) (*http.Request, error) {
 	var err error
 
 	serverURL, err := url.Parse(server)
@@ -886,7 +466,7 @@ func NewGetHostsRequest(server string) (*http.Request, error) {
 		return nil, err
 	}
 
-	operationPath := fmt.Sprintf("/api/hosts")
+	operationPath := fmt.Sprintf("/health")
 	if operationPath[0] == '/' {
 		operationPath = "." + operationPath
 	}
@@ -904,70 +484,16 @@ func NewGetHostsRequest(server string) (*http.Request, error) {
 	return req, nil
 }
 
-// NewTestHostCalculationRequest calls the generic TestHostCalculation builder with application/json body
-func NewTestHostCalculationRequest(server string, name string, body TestHostCalculationJSONRequestBody) (*http.Request, error) {
-	var bodyReader io.Reader
-	buf, err := json.Marshal(body)
-	if err != nil {
-		return nil, err
-	}
-	bodyReader = bytes.NewReader(buf)
-	return NewTestHostCalculationRequestWithBody(server, name, "application/json", bodyReader)
-}
-
-// NewTestHostCalculationRequestWithBody generates requests for TestHostCalculation with any type of body
-func NewTestHostCalculationRequestWithBody(server string, name string, contentType string, body io.Reader) (*http.Request, error) {
+// NewGetStatusRequest generates requests for GetStatus
+func NewGetStatusRequest(server string) (*http.Request, error) {
 	var err error
-
-	var pathParam0 string
-
-	pathParam0, err = runtime.StyleParamWithLocation("simple", false, "name", runtime.ParamLocationPath, name)
-	if err != nil {
-		return nil, err
-	}
 
 	serverURL, err := url.Parse(server)
 	if err != nil {
 		return nil, err
 	}
 
-	operationPath := fmt.Sprintf("/api/hosts/%s/calculate", pathParam0)
-	if operationPath[0] == '/' {
-		operationPath = "." + operationPath
-	}
-
-	queryURL, err := serverURL.Parse(operationPath)
-	if err != nil {
-		return nil, err
-	}
-
-	req, err := http.NewRequest("POST", queryURL.String(), body)
-	if err != nil {
-		return nil, err
-	}
-
-	req.Header.Add("Content-Type", contentType)
-
-	return req, nil
-}
-
-// NewGetHostHealthRequest generates requests for GetHostHealth
-func NewGetHostHealthRequest(server string, name string) (*http.Request, error) {
-	var err error
-
-	var pathParam0 string
-
-	pathParam0, err = runtime.StyleParamWithLocation("simple", false, "name", runtime.ParamLocationPath, name)
-	if err != nil {
-		return nil, err
-	}
-
-	serverURL, err := url.Parse(server)
-	if err != nil {
-		return nil, err
-	}
-
-	operationPath := fmt.Sprintf("/api/hosts/%s/health", pathParam0)
+	operationPath := fmt.Sprintf("/status")
 	if operationPath[0] == '/' {
 		operationPath = "." + operationPath
 	}
@@ -1028,49 +554,35 @@ func WithBaseURL(baseURL string) ClientOption {
 
 // ClientWithResponsesInterface is the interface specification for the client with responses above.
 type ClientWithResponsesInterface interface {
-	// GetExperimentsWithResponse request
-	GetExperimentsWithResponse(ctx context.Context, params *GetExperimentsParams, reqEditors ...RequestEditorFn) (*GetExperimentsResponse, error)
+	// GetServiceConfigWithResponse request
+	GetServiceConfigWithResponse(ctx context.Context, reqEditors ...RequestEditorFn) (*GetServiceConfigResponse, error)
 
-	// CreateGlobalExperimentWithBodyWithResponse request with any body
-	CreateGlobalExperimentWithBodyWithResponse(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*CreateGlobalExperimentResponse, error)
+	// StartExperimentWithBodyWithResponse request with any body
+	StartExperimentWithBodyWithResponse(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*StartExperimentResponse, error)
 
-	CreateGlobalExperimentWithResponse(ctx context.Context, body CreateGlobalExperimentJSONRequestBody, reqEditors ...RequestEditorFn) (*CreateGlobalExperimentResponse, error)
-
-	// GetGlobalExperimentWithResponse request
-	GetGlobalExperimentWithResponse(ctx context.Context, experimentId string, reqEditors ...RequestEditorFn) (*GetGlobalExperimentResponse, error)
+	StartExperimentWithResponse(ctx context.Context, body StartExperimentJSONRequestBody, reqEditors ...RequestEditorFn) (*StartExperimentResponse, error)
 
 	// GetExperimentDataWithResponse request
-	GetExperimentDataWithResponse(ctx context.Context, experimentId string, params *GetExperimentDataParams, reqEditors ...RequestEditorFn) (*GetExperimentDataResponse, error)
+	GetExperimentDataWithResponse(ctx context.Context, experimentId string, reqEditors ...RequestEditorFn) (*GetExperimentDataResponse, error)
 
-	// GetExperimentPhasesWithResponse request
-	GetExperimentPhasesWithResponse(ctx context.Context, experimentId string, reqEditors ...RequestEditorFn) (*GetExperimentPhasesResponse, error)
+	// StopExperimentWithResponse request
+	StopExperimentWithResponse(ctx context.Context, experimentId string, reqEditors ...RequestEditorFn) (*StopExperimentResponse, error)
 
-	// StartCompleteExperimentWithResponse request
-	StartCompleteExperimentWithResponse(ctx context.Context, experimentId string, reqEditors ...RequestEditorFn) (*StartCompleteExperimentResponse, error)
+	// HealthCheckWithResponse request
+	HealthCheckWithResponse(ctx context.Context, reqEditors ...RequestEditorFn) (*HealthCheckResponse, error)
 
-	// StopCompleteExperimentWithResponse request
-	StopCompleteExperimentWithResponse(ctx context.Context, experimentId string, reqEditors ...RequestEditorFn) (*StopCompleteExperimentResponse, error)
-
-	// GetHostsWithResponse request
-	GetHostsWithResponse(ctx context.Context, reqEditors ...RequestEditorFn) (*GetHostsResponse, error)
-
-	// TestHostCalculationWithBodyWithResponse request with any body
-	TestHostCalculationWithBodyWithResponse(ctx context.Context, name string, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*TestHostCalculationResponse, error)
-
-	TestHostCalculationWithResponse(ctx context.Context, name string, body TestHostCalculationJSONRequestBody, reqEditors ...RequestEditorFn) (*TestHostCalculationResponse, error)
-
-	// GetHostHealthWithResponse request
-	GetHostHealthWithResponse(ctx context.Context, name string, reqEditors ...RequestEditorFn) (*GetHostHealthResponse, error)
+	// GetStatusWithResponse request
+	GetStatusWithResponse(ctx context.Context, reqEditors ...RequestEditorFn) (*GetStatusResponse, error)
 }
 
-type GetExperimentsResponse struct {
+type GetServiceConfigResponse struct {
 	Body         []byte
 	HTTPResponse *http.Response
-	JSON200      *ExperimentListResponse
+	JSON200      *ServiceConfig
 }
 
 // Status returns HTTPResponse.Status
-func (r GetExperimentsResponse) Status() string {
+func (r GetServiceConfigResponse) Status() string {
 	if r.HTTPResponse != nil {
 		return r.HTTPResponse.Status
 	}
@@ -1078,21 +590,23 @@ func (r GetExperimentsResponse) Status() string {
 }
 
 // StatusCode returns HTTPResponse.StatusCode
-func (r GetExperimentsResponse) StatusCode() int {
+func (r GetServiceConfigResponse) StatusCode() int {
 	if r.HTTPResponse != nil {
 		return r.HTTPResponse.StatusCode
 	}
 	return 0
 }
 
-type CreateGlobalExperimentResponse struct {
+type StartExperimentResponse struct {
 	Body         []byte
 	HTTPResponse *http.Response
-	JSON201      *Experiment
+	JSON200      *ExperimentResponse
+	JSON400      *ErrorResponse
+	JSON409      *ErrorResponse
 }
 
 // Status returns HTTPResponse.Status
-func (r CreateGlobalExperimentResponse) Status() string {
+func (r StartExperimentResponse) Status() string {
 	if r.HTTPResponse != nil {
 		return r.HTTPResponse.Status
 	}
@@ -1100,29 +614,7 @@ func (r CreateGlobalExperimentResponse) Status() string {
 }
 
 // StatusCode returns HTTPResponse.StatusCode
-func (r CreateGlobalExperimentResponse) StatusCode() int {
-	if r.HTTPResponse != nil {
-		return r.HTTPResponse.StatusCode
-	}
-	return 0
-}
-
-type GetGlobalExperimentResponse struct {
-	Body         []byte
-	HTTPResponse *http.Response
-	JSON200      *Experiment
-}
-
-// Status returns HTTPResponse.Status
-func (r GetGlobalExperimentResponse) Status() string {
-	if r.HTTPResponse != nil {
-		return r.HTTPResponse.Status
-	}
-	return http.StatusText(0)
-}
-
-// StatusCode returns HTTPResponse.StatusCode
-func (r GetGlobalExperimentResponse) StatusCode() int {
+func (r StartExperimentResponse) StatusCode() int {
 	if r.HTTPResponse != nil {
 		return r.HTTPResponse.StatusCode
 	}
@@ -1132,7 +624,8 @@ func (r GetGlobalExperimentResponse) StatusCode() int {
 type GetExperimentDataResponse struct {
 	Body         []byte
 	HTTPResponse *http.Response
-	JSON200      *ExperimentDataResponse
+	JSON200      *ExperimentData
+	JSON404      *ErrorResponse
 }
 
 // Status returns HTTPResponse.Status
@@ -1151,14 +644,16 @@ func (r GetExperimentDataResponse) StatusCode() int {
 	return 0
 }
 
-type GetExperimentPhasesResponse struct {
+type StopExperimentResponse struct {
 	Body         []byte
 	HTTPResponse *http.Response
-	JSON200      *ExperimentPhases
+	JSON200      *ExperimentResponse
+	JSON404      *ErrorResponse
+	JSON409      *ErrorResponse
 }
 
 // Status returns HTTPResponse.Status
-func (r GetExperimentPhasesResponse) Status() string {
+func (r StopExperimentResponse) Status() string {
 	if r.HTTPResponse != nil {
 		return r.HTTPResponse.Status
 	}
@@ -1166,21 +661,21 @@ func (r GetExperimentPhasesResponse) Status() string {
 }
 
 // StatusCode returns HTTPResponse.StatusCode
-func (r GetExperimentPhasesResponse) StatusCode() int {
+func (r StopExperimentResponse) StatusCode() int {
 	if r.HTTPResponse != nil {
 		return r.HTTPResponse.StatusCode
 	}
 	return 0
 }
 
-type StartCompleteExperimentResponse struct {
+type HealthCheckResponse struct {
 	Body         []byte
 	HTTPResponse *http.Response
-	JSON200      *ExperimentOperationResponse
+	JSON200      *HealthResponse
 }
 
 // Status returns HTTPResponse.Status
-func (r StartCompleteExperimentResponse) Status() string {
+func (r HealthCheckResponse) Status() string {
 	if r.HTTPResponse != nil {
 		return r.HTTPResponse.Status
 	}
@@ -1188,21 +683,21 @@ func (r StartCompleteExperimentResponse) Status() string {
 }
 
 // StatusCode returns HTTPResponse.StatusCode
-func (r StartCompleteExperimentResponse) StatusCode() int {
+func (r HealthCheckResponse) StatusCode() int {
 	if r.HTTPResponse != nil {
 		return r.HTTPResponse.StatusCode
 	}
 	return 0
 }
 
-type StopCompleteExperimentResponse struct {
+type GetStatusResponse struct {
 	Body         []byte
 	HTTPResponse *http.Response
-	JSON200      *StopAndCollectResponse
+	JSON200      *StatusResponse
 }
 
 // Status returns HTTPResponse.Status
-func (r StopCompleteExperimentResponse) Status() string {
+func (r GetStatusResponse) Status() string {
 	if r.HTTPResponse != nil {
 		return r.HTTPResponse.Status
 	}
@@ -1210,203 +705,91 @@ func (r StopCompleteExperimentResponse) Status() string {
 }
 
 // StatusCode returns HTTPResponse.StatusCode
-func (r StopCompleteExperimentResponse) StatusCode() int {
+func (r GetStatusResponse) StatusCode() int {
 	if r.HTTPResponse != nil {
 		return r.HTTPResponse.StatusCode
 	}
 	return 0
 }
 
-type GetHostsResponse struct {
-	Body         []byte
-	HTTPResponse *http.Response
-	JSON200      *struct {
-		Hosts []Host `json:"hosts,omitempty"`
-	}
-}
-
-// Status returns HTTPResponse.Status
-func (r GetHostsResponse) Status() string {
-	if r.HTTPResponse != nil {
-		return r.HTTPResponse.Status
-	}
-	return http.StatusText(0)
-}
-
-// StatusCode returns HTTPResponse.StatusCode
-func (r GetHostsResponse) StatusCode() int {
-	if r.HTTPResponse != nil {
-		return r.HTTPResponse.StatusCode
-	}
-	return 0
-}
-
-type TestHostCalculationResponse struct {
-	Body         []byte
-	HTTPResponse *http.Response
-	JSON200      *CalculationResponse
-}
-
-// Status returns HTTPResponse.Status
-func (r TestHostCalculationResponse) Status() string {
-	if r.HTTPResponse != nil {
-		return r.HTTPResponse.Status
-	}
-	return http.StatusText(0)
-}
-
-// StatusCode returns HTTPResponse.StatusCode
-func (r TestHostCalculationResponse) StatusCode() int {
-	if r.HTTPResponse != nil {
-		return r.HTTPResponse.StatusCode
-	}
-	return 0
-}
-
-type GetHostHealthResponse struct {
-	Body         []byte
-	HTTPResponse *http.Response
-	JSON200      *HostHealth
-}
-
-// Status returns HTTPResponse.Status
-func (r GetHostHealthResponse) Status() string {
-	if r.HTTPResponse != nil {
-		return r.HTTPResponse.Status
-	}
-	return http.StatusText(0)
-}
-
-// StatusCode returns HTTPResponse.StatusCode
-func (r GetHostHealthResponse) StatusCode() int {
-	if r.HTTPResponse != nil {
-		return r.HTTPResponse.StatusCode
-	}
-	return 0
-}
-
-// GetExperimentsWithResponse request returning *GetExperimentsResponse
-func (c *ClientWithResponses) GetExperimentsWithResponse(ctx context.Context, params *GetExperimentsParams, reqEditors ...RequestEditorFn) (*GetExperimentsResponse, error) {
-	rsp, err := c.GetExperiments(ctx, params, reqEditors...)
+// GetServiceConfigWithResponse request returning *GetServiceConfigResponse
+func (c *ClientWithResponses) GetServiceConfigWithResponse(ctx context.Context, reqEditors ...RequestEditorFn) (*GetServiceConfigResponse, error) {
+	rsp, err := c.GetServiceConfig(ctx, reqEditors...)
 	if err != nil {
 		return nil, err
 	}
-	return ParseGetExperimentsResponse(rsp)
+	return ParseGetServiceConfigResponse(rsp)
 }
 
-// CreateGlobalExperimentWithBodyWithResponse request with arbitrary body returning *CreateGlobalExperimentResponse
-func (c *ClientWithResponses) CreateGlobalExperimentWithBodyWithResponse(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*CreateGlobalExperimentResponse, error) {
-	rsp, err := c.CreateGlobalExperimentWithBody(ctx, contentType, body, reqEditors...)
+// StartExperimentWithBodyWithResponse request with arbitrary body returning *StartExperimentResponse
+func (c *ClientWithResponses) StartExperimentWithBodyWithResponse(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*StartExperimentResponse, error) {
+	rsp, err := c.StartExperimentWithBody(ctx, contentType, body, reqEditors...)
 	if err != nil {
 		return nil, err
 	}
-	return ParseCreateGlobalExperimentResponse(rsp)
+	return ParseStartExperimentResponse(rsp)
 }
 
-func (c *ClientWithResponses) CreateGlobalExperimentWithResponse(ctx context.Context, body CreateGlobalExperimentJSONRequestBody, reqEditors ...RequestEditorFn) (*CreateGlobalExperimentResponse, error) {
-	rsp, err := c.CreateGlobalExperiment(ctx, body, reqEditors...)
+func (c *ClientWithResponses) StartExperimentWithResponse(ctx context.Context, body StartExperimentJSONRequestBody, reqEditors ...RequestEditorFn) (*StartExperimentResponse, error) {
+	rsp, err := c.StartExperiment(ctx, body, reqEditors...)
 	if err != nil {
 		return nil, err
 	}
-	return ParseCreateGlobalExperimentResponse(rsp)
-}
-
-// GetGlobalExperimentWithResponse request returning *GetGlobalExperimentResponse
-func (c *ClientWithResponses) GetGlobalExperimentWithResponse(ctx context.Context, experimentId string, reqEditors ...RequestEditorFn) (*GetGlobalExperimentResponse, error) {
-	rsp, err := c.GetGlobalExperiment(ctx, experimentId, reqEditors...)
-	if err != nil {
-		return nil, err
-	}
-	return ParseGetGlobalExperimentResponse(rsp)
+	return ParseStartExperimentResponse(rsp)
 }
 
 // GetExperimentDataWithResponse request returning *GetExperimentDataResponse
-func (c *ClientWithResponses) GetExperimentDataWithResponse(ctx context.Context, experimentId string, params *GetExperimentDataParams, reqEditors ...RequestEditorFn) (*GetExperimentDataResponse, error) {
-	rsp, err := c.GetExperimentData(ctx, experimentId, params, reqEditors...)
+func (c *ClientWithResponses) GetExperimentDataWithResponse(ctx context.Context, experimentId string, reqEditors ...RequestEditorFn) (*GetExperimentDataResponse, error) {
+	rsp, err := c.GetExperimentData(ctx, experimentId, reqEditors...)
 	if err != nil {
 		return nil, err
 	}
 	return ParseGetExperimentDataResponse(rsp)
 }
 
-// GetExperimentPhasesWithResponse request returning *GetExperimentPhasesResponse
-func (c *ClientWithResponses) GetExperimentPhasesWithResponse(ctx context.Context, experimentId string, reqEditors ...RequestEditorFn) (*GetExperimentPhasesResponse, error) {
-	rsp, err := c.GetExperimentPhases(ctx, experimentId, reqEditors...)
+// StopExperimentWithResponse request returning *StopExperimentResponse
+func (c *ClientWithResponses) StopExperimentWithResponse(ctx context.Context, experimentId string, reqEditors ...RequestEditorFn) (*StopExperimentResponse, error) {
+	rsp, err := c.StopExperiment(ctx, experimentId, reqEditors...)
 	if err != nil {
 		return nil, err
 	}
-	return ParseGetExperimentPhasesResponse(rsp)
+	return ParseStopExperimentResponse(rsp)
 }
 
-// StartCompleteExperimentWithResponse request returning *StartCompleteExperimentResponse
-func (c *ClientWithResponses) StartCompleteExperimentWithResponse(ctx context.Context, experimentId string, reqEditors ...RequestEditorFn) (*StartCompleteExperimentResponse, error) {
-	rsp, err := c.StartCompleteExperiment(ctx, experimentId, reqEditors...)
+// HealthCheckWithResponse request returning *HealthCheckResponse
+func (c *ClientWithResponses) HealthCheckWithResponse(ctx context.Context, reqEditors ...RequestEditorFn) (*HealthCheckResponse, error) {
+	rsp, err := c.HealthCheck(ctx, reqEditors...)
 	if err != nil {
 		return nil, err
 	}
-	return ParseStartCompleteExperimentResponse(rsp)
+	return ParseHealthCheckResponse(rsp)
 }
 
-// StopCompleteExperimentWithResponse request returning *StopCompleteExperimentResponse
-func (c *ClientWithResponses) StopCompleteExperimentWithResponse(ctx context.Context, experimentId string, reqEditors ...RequestEditorFn) (*StopCompleteExperimentResponse, error) {
-	rsp, err := c.StopCompleteExperiment(ctx, experimentId, reqEditors...)
+// GetStatusWithResponse request returning *GetStatusResponse
+func (c *ClientWithResponses) GetStatusWithResponse(ctx context.Context, reqEditors ...RequestEditorFn) (*GetStatusResponse, error) {
+	rsp, err := c.GetStatus(ctx, reqEditors...)
 	if err != nil {
 		return nil, err
 	}
-	return ParseStopCompleteExperimentResponse(rsp)
+	return ParseGetStatusResponse(rsp)
 }
 
-// GetHostsWithResponse request returning *GetHostsResponse
-func (c *ClientWithResponses) GetHostsWithResponse(ctx context.Context, reqEditors ...RequestEditorFn) (*GetHostsResponse, error) {
-	rsp, err := c.GetHosts(ctx, reqEditors...)
-	if err != nil {
-		return nil, err
-	}
-	return ParseGetHostsResponse(rsp)
-}
-
-// TestHostCalculationWithBodyWithResponse request with arbitrary body returning *TestHostCalculationResponse
-func (c *ClientWithResponses) TestHostCalculationWithBodyWithResponse(ctx context.Context, name string, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*TestHostCalculationResponse, error) {
-	rsp, err := c.TestHostCalculationWithBody(ctx, name, contentType, body, reqEditors...)
-	if err != nil {
-		return nil, err
-	}
-	return ParseTestHostCalculationResponse(rsp)
-}
-
-func (c *ClientWithResponses) TestHostCalculationWithResponse(ctx context.Context, name string, body TestHostCalculationJSONRequestBody, reqEditors ...RequestEditorFn) (*TestHostCalculationResponse, error) {
-	rsp, err := c.TestHostCalculation(ctx, name, body, reqEditors...)
-	if err != nil {
-		return nil, err
-	}
-	return ParseTestHostCalculationResponse(rsp)
-}
-
-// GetHostHealthWithResponse request returning *GetHostHealthResponse
-func (c *ClientWithResponses) GetHostHealthWithResponse(ctx context.Context, name string, reqEditors ...RequestEditorFn) (*GetHostHealthResponse, error) {
-	rsp, err := c.GetHostHealth(ctx, name, reqEditors...)
-	if err != nil {
-		return nil, err
-	}
-	return ParseGetHostHealthResponse(rsp)
-}
-
-// ParseGetExperimentsResponse parses an HTTP response from a GetExperimentsWithResponse call
-func ParseGetExperimentsResponse(rsp *http.Response) (*GetExperimentsResponse, error) {
+// ParseGetServiceConfigResponse parses an HTTP response from a GetServiceConfigWithResponse call
+func ParseGetServiceConfigResponse(rsp *http.Response) (*GetServiceConfigResponse, error) {
 	bodyBytes, err := io.ReadAll(rsp.Body)
 	defer func() { _ = rsp.Body.Close() }()
 	if err != nil {
 		return nil, err
 	}
 
-	response := &GetExperimentsResponse{
+	response := &GetServiceConfigResponse{
 		Body:         bodyBytes,
 		HTTPResponse: rsp,
 	}
 
 	switch {
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
-		var dest ExperimentListResponse
+		var dest ServiceConfig
 		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
 			return nil, err
 		}
@@ -1417,52 +800,40 @@ func ParseGetExperimentsResponse(rsp *http.Response) (*GetExperimentsResponse, e
 	return response, nil
 }
 
-// ParseCreateGlobalExperimentResponse parses an HTTP response from a CreateGlobalExperimentWithResponse call
-func ParseCreateGlobalExperimentResponse(rsp *http.Response) (*CreateGlobalExperimentResponse, error) {
+// ParseStartExperimentResponse parses an HTTP response from a StartExperimentWithResponse call
+func ParseStartExperimentResponse(rsp *http.Response) (*StartExperimentResponse, error) {
 	bodyBytes, err := io.ReadAll(rsp.Body)
 	defer func() { _ = rsp.Body.Close() }()
 	if err != nil {
 		return nil, err
 	}
 
-	response := &CreateGlobalExperimentResponse{
-		Body:         bodyBytes,
-		HTTPResponse: rsp,
-	}
-
-	switch {
-	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 201:
-		var dest Experiment
-		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
-			return nil, err
-		}
-		response.JSON201 = &dest
-
-	}
-
-	return response, nil
-}
-
-// ParseGetGlobalExperimentResponse parses an HTTP response from a GetGlobalExperimentWithResponse call
-func ParseGetGlobalExperimentResponse(rsp *http.Response) (*GetGlobalExperimentResponse, error) {
-	bodyBytes, err := io.ReadAll(rsp.Body)
-	defer func() { _ = rsp.Body.Close() }()
-	if err != nil {
-		return nil, err
-	}
-
-	response := &GetGlobalExperimentResponse{
+	response := &StartExperimentResponse{
 		Body:         bodyBytes,
 		HTTPResponse: rsp,
 	}
 
 	switch {
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
-		var dest Experiment
+		var dest ExperimentResponse
 		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
 			return nil, err
 		}
 		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
+		var dest ErrorResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON400 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 409:
+		var dest ErrorResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON409 = &dest
 
 	}
 
@@ -1484,7 +855,80 @@ func ParseGetExperimentDataResponse(rsp *http.Response) (*GetExperimentDataRespo
 
 	switch {
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
-		var dest ExperimentDataResponse
+		var dest ExperimentData
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
+		var dest ErrorResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON404 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseStopExperimentResponse parses an HTTP response from a StopExperimentWithResponse call
+func ParseStopExperimentResponse(rsp *http.Response) (*StopExperimentResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &StopExperimentResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest ExperimentResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
+		var dest ErrorResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON404 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 409:
+		var dest ErrorResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON409 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseHealthCheckResponse parses an HTTP response from a HealthCheckWithResponse call
+func ParseHealthCheckResponse(rsp *http.Response) (*HealthCheckResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &HealthCheckResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest HealthResponse
 		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
 			return nil, err
 		}
@@ -1495,154 +939,22 @@ func ParseGetExperimentDataResponse(rsp *http.Response) (*GetExperimentDataRespo
 	return response, nil
 }
 
-// ParseGetExperimentPhasesResponse parses an HTTP response from a GetExperimentPhasesWithResponse call
-func ParseGetExperimentPhasesResponse(rsp *http.Response) (*GetExperimentPhasesResponse, error) {
+// ParseGetStatusResponse parses an HTTP response from a GetStatusWithResponse call
+func ParseGetStatusResponse(rsp *http.Response) (*GetStatusResponse, error) {
 	bodyBytes, err := io.ReadAll(rsp.Body)
 	defer func() { _ = rsp.Body.Close() }()
 	if err != nil {
 		return nil, err
 	}
 
-	response := &GetExperimentPhasesResponse{
+	response := &GetStatusResponse{
 		Body:         bodyBytes,
 		HTTPResponse: rsp,
 	}
 
 	switch {
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
-		var dest ExperimentPhases
-		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
-			return nil, err
-		}
-		response.JSON200 = &dest
-
-	}
-
-	return response, nil
-}
-
-// ParseStartCompleteExperimentResponse parses an HTTP response from a StartCompleteExperimentWithResponse call
-func ParseStartCompleteExperimentResponse(rsp *http.Response) (*StartCompleteExperimentResponse, error) {
-	bodyBytes, err := io.ReadAll(rsp.Body)
-	defer func() { _ = rsp.Body.Close() }()
-	if err != nil {
-		return nil, err
-	}
-
-	response := &StartCompleteExperimentResponse{
-		Body:         bodyBytes,
-		HTTPResponse: rsp,
-	}
-
-	switch {
-	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
-		var dest ExperimentOperationResponse
-		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
-			return nil, err
-		}
-		response.JSON200 = &dest
-
-	}
-
-	return response, nil
-}
-
-// ParseStopCompleteExperimentResponse parses an HTTP response from a StopCompleteExperimentWithResponse call
-func ParseStopCompleteExperimentResponse(rsp *http.Response) (*StopCompleteExperimentResponse, error) {
-	bodyBytes, err := io.ReadAll(rsp.Body)
-	defer func() { _ = rsp.Body.Close() }()
-	if err != nil {
-		return nil, err
-	}
-
-	response := &StopCompleteExperimentResponse{
-		Body:         bodyBytes,
-		HTTPResponse: rsp,
-	}
-
-	switch {
-	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
-		var dest StopAndCollectResponse
-		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
-			return nil, err
-		}
-		response.JSON200 = &dest
-
-	}
-
-	return response, nil
-}
-
-// ParseGetHostsResponse parses an HTTP response from a GetHostsWithResponse call
-func ParseGetHostsResponse(rsp *http.Response) (*GetHostsResponse, error) {
-	bodyBytes, err := io.ReadAll(rsp.Body)
-	defer func() { _ = rsp.Body.Close() }()
-	if err != nil {
-		return nil, err
-	}
-
-	response := &GetHostsResponse{
-		Body:         bodyBytes,
-		HTTPResponse: rsp,
-	}
-
-	switch {
-	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
-		var dest struct {
-			Hosts []Host `json:"hosts,omitempty"`
-		}
-		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
-			return nil, err
-		}
-		response.JSON200 = &dest
-
-	}
-
-	return response, nil
-}
-
-// ParseTestHostCalculationResponse parses an HTTP response from a TestHostCalculationWithResponse call
-func ParseTestHostCalculationResponse(rsp *http.Response) (*TestHostCalculationResponse, error) {
-	bodyBytes, err := io.ReadAll(rsp.Body)
-	defer func() { _ = rsp.Body.Close() }()
-	if err != nil {
-		return nil, err
-	}
-
-	response := &TestHostCalculationResponse{
-		Body:         bodyBytes,
-		HTTPResponse: rsp,
-	}
-
-	switch {
-	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
-		var dest CalculationResponse
-		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
-			return nil, err
-		}
-		response.JSON200 = &dest
-
-	}
-
-	return response, nil
-}
-
-// ParseGetHostHealthResponse parses an HTTP response from a GetHostHealthWithResponse call
-func ParseGetHostHealthResponse(rsp *http.Response) (*GetHostHealthResponse, error) {
-	bodyBytes, err := io.ReadAll(rsp.Body)
-	defer func() { _ = rsp.Body.Close() }()
-	if err != nil {
-		return nil, err
-	}
-
-	response := &GetHostHealthResponse{
-		Body:         bodyBytes,
-		HTTPResponse: rsp,
-	}
-
-	switch {
-	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
-		var dest HostHealth
+		var dest StatusResponse
 		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
 			return nil, err
 		}
@@ -1655,36 +967,24 @@ func ParseGetHostHealthResponse(rsp *http.Response) (*GetHostHealthResponse, err
 
 // ServerInterface represents all server handlers.
 type ServerInterface interface {
-	// 获取实验列表
-	// (GET /api/experiments)
-	GetExperiments(c *gin.Context, params GetExperimentsParams)
-	// 创建实验
-	// (POST /api/experiments)
-	CreateGlobalExperiment(c *gin.Context)
-	// 获取全局实验详情
-	// (GET /api/experiments/{experimentId})
-	GetGlobalExperiment(c *gin.Context, experimentId string)
-	// 获取实验数据
-	// (GET /api/experiments/{experimentId}/data)
-	GetExperimentData(c *gin.Context, experimentId string, params GetExperimentDataParams)
-	// 获取实验各阶段状态
-	// (GET /api/experiments/{experimentId}/phases)
-	GetExperimentPhases(c *gin.Context, experimentId string)
-	// 启动完整实验流程
-	// (POST /api/experiments/{experimentId}/start)
-	StartCompleteExperiment(c *gin.Context, experimentId string)
-	// 停止完整实验流程并收集数据
-	// (POST /api/experiments/{experimentId}/stop)
-	StopCompleteExperiment(c *gin.Context, experimentId string)
-	// 获取所有主机列表
-	// (GET /api/hosts)
-	GetHosts(c *gin.Context)
-	// 测试主机CPU计算
-	// (POST /api/hosts/{name}/calculate)
-	TestHostCalculation(c *gin.Context, name string)
-	// 检查主机健康状态
-	// (GET /api/hosts/{name}/health)
-	GetHostHealth(c *gin.Context, name string)
+	// Get service configuration
+	// (GET /config)
+	GetServiceConfig(c *gin.Context)
+	// Start a new dashboard experiment
+	// (POST /experiments)
+	StartExperiment(c *gin.Context)
+	// Get experiment data
+	// (GET /experiments/{experimentId})
+	GetExperimentData(c *gin.Context, experimentId string)
+	// Stop the running experiment and cleanup sub-experiments
+	// (POST /experiments/{experimentId}/stop)
+	StopExperiment(c *gin.Context, experimentId string)
+	// Health check
+	// (GET /health)
+	HealthCheck(c *gin.Context)
+	// Get experiment manager status
+	// (GET /status)
+	GetStatus(c *gin.Context)
 }
 
 // ServerInterfaceWrapper converts contexts to parameters.
@@ -1696,21 +996,8 @@ type ServerInterfaceWrapper struct {
 
 type MiddlewareFunc func(c *gin.Context)
 
-// GetExperiments operation middleware
-func (siw *ServerInterfaceWrapper) GetExperiments(c *gin.Context) {
-
-	var err error
-
-	// Parameter object where we will unmarshal all parameters from the context
-	var params GetExperimentsParams
-
-	// ------------- Optional query parameter "limit" -------------
-
-	err = runtime.BindQueryParameter("form", true, false, "limit", c.Request.URL.Query(), &params.Limit)
-	if err != nil {
-		siw.ErrorHandler(c, fmt.Errorf("Invalid format for parameter limit: %w", err), http.StatusBadRequest)
-		return
-	}
+// GetServiceConfig operation middleware
+func (siw *ServerInterfaceWrapper) GetServiceConfig(c *gin.Context) {
 
 	for _, middleware := range siw.HandlerMiddlewares {
 		middleware(c)
@@ -1719,11 +1006,11 @@ func (siw *ServerInterfaceWrapper) GetExperiments(c *gin.Context) {
 		}
 	}
 
-	siw.Handler.GetExperiments(c, params)
+	siw.Handler.GetServiceConfig(c)
 }
 
-// CreateGlobalExperiment operation middleware
-func (siw *ServerInterfaceWrapper) CreateGlobalExperiment(c *gin.Context) {
+// StartExperiment operation middleware
+func (siw *ServerInterfaceWrapper) StartExperiment(c *gin.Context) {
 
 	for _, middleware := range siw.HandlerMiddlewares {
 		middleware(c)
@@ -1732,31 +1019,7 @@ func (siw *ServerInterfaceWrapper) CreateGlobalExperiment(c *gin.Context) {
 		}
 	}
 
-	siw.Handler.CreateGlobalExperiment(c)
-}
-
-// GetGlobalExperiment operation middleware
-func (siw *ServerInterfaceWrapper) GetGlobalExperiment(c *gin.Context) {
-
-	var err error
-
-	// ------------- Path parameter "experimentId" -------------
-	var experimentId string
-
-	err = runtime.BindStyledParameterWithOptions("simple", "experimentId", c.Param("experimentId"), &experimentId, runtime.BindStyledParameterOptions{Explode: false, Required: true})
-	if err != nil {
-		siw.ErrorHandler(c, fmt.Errorf("Invalid format for parameter experimentId: %w", err), http.StatusBadRequest)
-		return
-	}
-
-	for _, middleware := range siw.HandlerMiddlewares {
-		middleware(c)
-		if c.IsAborted() {
-			return
-		}
-	}
-
-	siw.Handler.GetGlobalExperiment(c, experimentId)
+	siw.Handler.StartExperiment(c)
 }
 
 // GetExperimentData operation middleware
@@ -1773,17 +1036,6 @@ func (siw *ServerInterfaceWrapper) GetExperimentData(c *gin.Context) {
 		return
 	}
 
-	// Parameter object where we will unmarshal all parameters from the context
-	var params GetExperimentDataParams
-
-	// ------------- Optional query parameter "hostName" -------------
-
-	err = runtime.BindQueryParameter("form", true, false, "hostName", c.Request.URL.Query(), &params.HostName)
-	if err != nil {
-		siw.ErrorHandler(c, fmt.Errorf("Invalid format for parameter hostName: %w", err), http.StatusBadRequest)
-		return
-	}
-
 	for _, middleware := range siw.HandlerMiddlewares {
 		middleware(c)
 		if c.IsAborted() {
@@ -1791,11 +1043,11 @@ func (siw *ServerInterfaceWrapper) GetExperimentData(c *gin.Context) {
 		}
 	}
 
-	siw.Handler.GetExperimentData(c, experimentId, params)
+	siw.Handler.GetExperimentData(c, experimentId)
 }
 
-// GetExperimentPhases operation middleware
-func (siw *ServerInterfaceWrapper) GetExperimentPhases(c *gin.Context) {
+// StopExperiment operation middleware
+func (siw *ServerInterfaceWrapper) StopExperiment(c *gin.Context) {
 
 	var err error
 
@@ -1815,22 +1067,11 @@ func (siw *ServerInterfaceWrapper) GetExperimentPhases(c *gin.Context) {
 		}
 	}
 
-	siw.Handler.GetExperimentPhases(c, experimentId)
+	siw.Handler.StopExperiment(c, experimentId)
 }
 
-// StartCompleteExperiment operation middleware
-func (siw *ServerInterfaceWrapper) StartCompleteExperiment(c *gin.Context) {
-
-	var err error
-
-	// ------------- Path parameter "experimentId" -------------
-	var experimentId string
-
-	err = runtime.BindStyledParameterWithOptions("simple", "experimentId", c.Param("experimentId"), &experimentId, runtime.BindStyledParameterOptions{Explode: false, Required: true})
-	if err != nil {
-		siw.ErrorHandler(c, fmt.Errorf("Invalid format for parameter experimentId: %w", err), http.StatusBadRequest)
-		return
-	}
+// HealthCheck operation middleware
+func (siw *ServerInterfaceWrapper) HealthCheck(c *gin.Context) {
 
 	for _, middleware := range siw.HandlerMiddlewares {
 		middleware(c)
@@ -1839,22 +1080,11 @@ func (siw *ServerInterfaceWrapper) StartCompleteExperiment(c *gin.Context) {
 		}
 	}
 
-	siw.Handler.StartCompleteExperiment(c, experimentId)
+	siw.Handler.HealthCheck(c)
 }
 
-// StopCompleteExperiment operation middleware
-func (siw *ServerInterfaceWrapper) StopCompleteExperiment(c *gin.Context) {
-
-	var err error
-
-	// ------------- Path parameter "experimentId" -------------
-	var experimentId string
-
-	err = runtime.BindStyledParameterWithOptions("simple", "experimentId", c.Param("experimentId"), &experimentId, runtime.BindStyledParameterOptions{Explode: false, Required: true})
-	if err != nil {
-		siw.ErrorHandler(c, fmt.Errorf("Invalid format for parameter experimentId: %w", err), http.StatusBadRequest)
-		return
-	}
+// GetStatus operation middleware
+func (siw *ServerInterfaceWrapper) GetStatus(c *gin.Context) {
 
 	for _, middleware := range siw.HandlerMiddlewares {
 		middleware(c)
@@ -1863,68 +1093,7 @@ func (siw *ServerInterfaceWrapper) StopCompleteExperiment(c *gin.Context) {
 		}
 	}
 
-	siw.Handler.StopCompleteExperiment(c, experimentId)
-}
-
-// GetHosts operation middleware
-func (siw *ServerInterfaceWrapper) GetHosts(c *gin.Context) {
-
-	for _, middleware := range siw.HandlerMiddlewares {
-		middleware(c)
-		if c.IsAborted() {
-			return
-		}
-	}
-
-	siw.Handler.GetHosts(c)
-}
-
-// TestHostCalculation operation middleware
-func (siw *ServerInterfaceWrapper) TestHostCalculation(c *gin.Context) {
-
-	var err error
-
-	// ------------- Path parameter "name" -------------
-	var name string
-
-	err = runtime.BindStyledParameterWithOptions("simple", "name", c.Param("name"), &name, runtime.BindStyledParameterOptions{Explode: false, Required: true})
-	if err != nil {
-		siw.ErrorHandler(c, fmt.Errorf("Invalid format for parameter name: %w", err), http.StatusBadRequest)
-		return
-	}
-
-	for _, middleware := range siw.HandlerMiddlewares {
-		middleware(c)
-		if c.IsAborted() {
-			return
-		}
-	}
-
-	siw.Handler.TestHostCalculation(c, name)
-}
-
-// GetHostHealth operation middleware
-func (siw *ServerInterfaceWrapper) GetHostHealth(c *gin.Context) {
-
-	var err error
-
-	// ------------- Path parameter "name" -------------
-	var name string
-
-	err = runtime.BindStyledParameterWithOptions("simple", "name", c.Param("name"), &name, runtime.BindStyledParameterOptions{Explode: false, Required: true})
-	if err != nil {
-		siw.ErrorHandler(c, fmt.Errorf("Invalid format for parameter name: %w", err), http.StatusBadRequest)
-		return
-	}
-
-	for _, middleware := range siw.HandlerMiddlewares {
-		middleware(c)
-		if c.IsAborted() {
-			return
-		}
-	}
-
-	siw.Handler.GetHostHealth(c, name)
+	siw.Handler.GetStatus(c)
 }
 
 // GinServerOptions provides options for the Gin server.
@@ -1954,72 +1123,40 @@ func RegisterHandlersWithOptions(router gin.IRouter, si ServerInterface, options
 		ErrorHandler:       errorHandler,
 	}
 
-	router.GET(options.BaseURL+"/api/experiments", wrapper.GetExperiments)
-	router.POST(options.BaseURL+"/api/experiments", wrapper.CreateGlobalExperiment)
-	router.GET(options.BaseURL+"/api/experiments/:experimentId", wrapper.GetGlobalExperiment)
-	router.GET(options.BaseURL+"/api/experiments/:experimentId/data", wrapper.GetExperimentData)
-	router.GET(options.BaseURL+"/api/experiments/:experimentId/phases", wrapper.GetExperimentPhases)
-	router.POST(options.BaseURL+"/api/experiments/:experimentId/start", wrapper.StartCompleteExperiment)
-	router.POST(options.BaseURL+"/api/experiments/:experimentId/stop", wrapper.StopCompleteExperiment)
-	router.GET(options.BaseURL+"/api/hosts", wrapper.GetHosts)
-	router.POST(options.BaseURL+"/api/hosts/:name/calculate", wrapper.TestHostCalculation)
-	router.GET(options.BaseURL+"/api/hosts/:name/health", wrapper.GetHostHealth)
+	router.GET(options.BaseURL+"/config", wrapper.GetServiceConfig)
+	router.POST(options.BaseURL+"/experiments", wrapper.StartExperiment)
+	router.GET(options.BaseURL+"/experiments/:experimentId", wrapper.GetExperimentData)
+	router.POST(options.BaseURL+"/experiments/:experimentId/stop", wrapper.StopExperiment)
+	router.GET(options.BaseURL+"/health", wrapper.HealthCheck)
+	router.GET(options.BaseURL+"/status", wrapper.GetStatus)
 }
 
 // Base64 encoded, gzipped, json marshaled Swagger object
 var swaggerSpec = []string{
 
-	"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",
+	"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",
+	"U7q73v0bAAD//xVsQzyLGAAA",
 }
 
 // GetSwagger returns the content of the embedded swagger specification file
