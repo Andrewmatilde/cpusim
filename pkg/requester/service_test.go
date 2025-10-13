@@ -34,7 +34,7 @@ func TestService_BasicFlow(t *testing.T) {
 	timeout := 3 * time.Second
 
 	t.Logf("Starting experiment: %s", experimentID)
-	err = service.StartExperiment(experimentID, timeout)
+	err = service.StartExperiment(experimentID, timeout, config.QPS)
 	if err != nil {
 		t.Fatalf("Failed to start experiment: %v", err)
 	}
@@ -108,7 +108,7 @@ func TestService_StopExperiment(t *testing.T) {
 	timeout := 10 * time.Second
 
 	// Start experiment
-	err = service.StartExperiment(experimentID, timeout)
+	err = service.StartExperiment(experimentID, timeout, config.QPS)
 	if err != nil {
 		t.Fatalf("Failed to start experiment: %v", err)
 	}
@@ -165,7 +165,7 @@ func TestService_MultipleExperimentsSerial(t *testing.T) {
 
 	// Run first experiment
 	exp1ID := "test-exp-serial-1"
-	err = service.StartExperiment(exp1ID, 2*time.Second)
+	err = service.StartExperiment(exp1ID, 2*time.Second, config.QPS)
 	if err != nil {
 		t.Fatalf("Failed to start experiment 1: %v", err)
 	}
@@ -174,7 +174,7 @@ func TestService_MultipleExperimentsSerial(t *testing.T) {
 
 	// Run second experiment
 	exp2ID := "test-exp-serial-2"
-	err = service.StartExperiment(exp2ID, 2*time.Second)
+	err = service.StartExperiment(exp2ID, 2*time.Second, config.QPS)
 	if err != nil {
 		t.Fatalf("Failed to start experiment 2: %v", err)
 	}
