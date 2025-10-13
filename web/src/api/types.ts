@@ -1,4 +1,4 @@
-// Re-export generated types from Dashboard OpenAPI specification (v0.6.0)
+// Re-export generated types from Dashboard OpenAPI specification (v0.7.0)
 export type {
   // Dashboard configuration
   ServiceConfig,
@@ -9,6 +9,8 @@ export type {
   StartExperimentRequest,
   ExperimentResponse,
   ExperimentData,
+  ExperimentListResponse,
+  ExperimentInfo,
   CollectorResult,
   RequesterResult,
   ExperimentError,
@@ -17,6 +19,9 @@ export type {
   StatusResponse,
   HealthResponse,
   ErrorResponse,
+  HostsStatusResponse,
+  TargetHostStatus,
+  ClientHostStatus,
 } from './generated/models';
 
 // Type aliases for convenience

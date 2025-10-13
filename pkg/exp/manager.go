@@ -78,3 +78,7 @@ func (f *Manager[T]) GetCurrentExperimentID() string {
 	}
 	return f.currentExperimentID
 }
+
+func (f *Manager[T]) ListExperiments() ([]ExperimentInfo, error) {
+	return f.fs.List()
+}

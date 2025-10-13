@@ -79,6 +79,38 @@ func (h *APIHandler) StartExperiment(c *gin.Context) {
 	c.JSON(http.StatusOK, response)
 }
 
+// ListExperiments implements listing all stored experiments
+func (h *APIHandler) ListExperiments(c *gin.Context) {
+	experiments, err := h.service.ListExperiments()
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, generated.ErrorResponse{
+			Error:     "internal_error",
+			Message:   err.Error(),
+			Timestamp: time.Now(),
+		})
+		return
+	}
+
+	// Convert to API types
+	apiExperiments := make([]generated.ExperimentInfo, len(experiments))
+	for i, exp := range experiments {
+		apiExperiments[i] = generated.ExperimentInfo{
+			Id:         exp.ID,
+			CreatedAt:  exp.CreatedAt,
+			ModifiedAt: exp.ModifiedAt,
+			FileSizeKB: exp.FileSizeKB,
+		}
+	}
+
+	response := generated.ExperimentListResponse{
+		Experiments: apiExperiments,
+		Total:       len(apiExperiments),
+		Timestamp:   time.Now(),
+	}
+
+	c.JSON(http.StatusOK, response)
+}
+
 // StopExperiment implements stopping the running experiment
 func (h *APIHandler) StopExperiment(c *gin.Context, experimentId string) {
 	err := h.service.StopExperiment()

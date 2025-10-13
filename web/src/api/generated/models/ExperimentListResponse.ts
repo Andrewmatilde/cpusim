@@ -2,7 +2,7 @@
 /* eslint-disable */
 /**
  * CPU Simulation Dashboard API
- * 管理面API，用于管理多个CPU仿真主机和全局实验
+ * Dashboard service for coordinating distributed CPU simulation experiments
  *
  * The version of the OpenAPI document: 2.0.0
  * 
@@ -13,13 +13,13 @@
  */
 
 import { mapValues } from '../runtime';
-import type { Experiment } from './Experiment';
+import type { ExperimentInfo } from './ExperimentInfo';
 import {
-    ExperimentFromJSON,
-    ExperimentFromJSONTyped,
-    ExperimentToJSON,
-    ExperimentToJSONTyped,
-} from './Experiment';
+    ExperimentInfoFromJSON,
+    ExperimentInfoFromJSONTyped,
+    ExperimentInfoToJSON,
+    ExperimentInfoToJSONTyped,
+} from './ExperimentInfo';
 
 /**
  * 
@@ -28,31 +28,29 @@ import {
  */
 export interface ExperimentListResponse {
     /**
-     * 
-     * @type {Array<Experiment>}
+     * List of stored experiments
+     * @type {Array<ExperimentInfo>}
      * @memberof ExperimentListResponse
      */
-    experiments: Array<Experiment>;
+    experiments?: Array<ExperimentInfo>;
     /**
-     * 
+     * Total number of experiments
      * @type {number}
      * @memberof ExperimentListResponse
      */
-    total: number;
+    total?: number;
     /**
      * 
-     * @type {boolean}
+     * @type {Date}
      * @memberof ExperimentListResponse
      */
-    hasMore?: boolean;
+    timestamp?: Date;
 }
 
 /**
  * Check if a given object implements the ExperimentListResponse interface.
  */
 export function instanceOfExperimentListResponse(value: object): value is ExperimentListResponse {
-    if (!('experiments' in value) || value['experiments'] === undefined) return false;
-    if (!('total' in value) || value['total'] === undefined) return false;
     return true;
 }
 
@@ -66,9 +64,9 @@ export function ExperimentListResponseFromJSONTyped(json: any, ignoreDiscriminat
     }
     return {
         
-        'experiments': ((json['experiments'] as Array<any>).map(ExperimentFromJSON)),
-        'total': json['total'],
-        'hasMore': json['hasMore'] == null ? undefined : json['hasMore'],
+        'experiments': json['experiments'] == null ? undefined : ((json['experiments'] as Array<any>).map(ExperimentInfoFromJSON)),
+        'total': json['total'] == null ? undefined : json['total'],
+        'timestamp': json['timestamp'] == null ? undefined : (new Date(json['timestamp'])),
     };
 }
 
@@ -83,9 +81,9 @@ export function ExperimentListResponseToJSONTyped(value?: ExperimentListResponse
 
     return {
         
-        'experiments': ((value['experiments'] as Array<any>).map(ExperimentToJSON)),
+        'experiments': value['experiments'] == null ? undefined : ((value['experiments'] as Array<any>).map(ExperimentInfoToJSON)),
         'total': value['total'],
-        'hasMore': value['hasMore'],
+        'timestamp': value['timestamp'] == null ? undefined : ((value['timestamp']).toISOString()),
     };
 }
 

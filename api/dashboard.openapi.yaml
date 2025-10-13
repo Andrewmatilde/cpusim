@@ -34,6 +34,17 @@ paths:
                 $ref: '#/components/schemas/StatusResponse'
 
   /experiments:
+    get:
+      summary: List all stored experiments
+      description: Returns a list of all experiments with metadata
+      operationId: listExperiments
+      responses:
+        '200':
+          description: List of experiments
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ExperimentListResponse'
     post:
       summary: Start a new dashboard experiment
       description: Starts collectors on all targets, then starts requester
@@ -272,6 +283,41 @@ components:
         error:
           type: string
           description: Error message if failed to query
+
+    ExperimentListResponse:
+      type: object
+      properties:
+        experiments:
+          type: array
+          description: List of stored experiments
+          items:
+            $ref: '#/components/schemas/ExperimentInfo'
+        total:
+          type: integer
+          description: Total number of experiments
+        timestamp:
+          type: string
+          format: date-time
+
+    ExperimentInfo:
+      type: object
+      description: Metadata about a stored experiment
+      properties:
+        id:
+          type: string
+          description: Experiment ID
+        createdAt:
+          type: string
+          format: date-time
+          description: When the experiment was created
+        modifiedAt:
+          type: string
+          format: date-time
+          description: When the experiment was last modified
+        fileSizeKB:
+          type: integer
+          format: int64
+          description: Size of the experiment data file in KB
 
     ExperimentData:
       type: object

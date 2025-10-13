@@ -178,6 +178,11 @@ func (s *Service) GetExperiment(id string) (*ExperimentData, error) {
 	return s.fs.Load(id)
 }
 
+// ListExperiments lists all stored experiments
+func (s *Service) ListExperiments() ([]exp.ExperimentInfo, error) {
+	return s.Manager.ListExperiments()
+}
+
 // HostStatus represents the status of a host
 type HostStatus struct {
 	Name                string

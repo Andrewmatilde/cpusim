@@ -7,7 +7,9 @@ import type {
   StartExperimentRequest,
   ExperimentResponse,
   ExperimentData,
+  ExperimentListResponse,
   ErrorResponse,
+  HostsStatusResponse,
 } from './types';
 
 export class DashboardAPIClient {
@@ -59,6 +61,10 @@ export class DashboardAPIClient {
   }
 
   // Experiment Management
+  async listExperiments(): Promise<ExperimentListResponse> {
+    return this.request<ExperimentListResponse>('/experiments');
+  }
+
   async startExperiment(data: StartExperimentRequest): Promise<ExperimentResponse> {
     return this.request<ExperimentResponse>('/experiments', {
       method: 'POST',
@@ -77,6 +83,11 @@ export class DashboardAPIClient {
     return this.request<ExperimentData>(
       `/experiments/${encodeURIComponent(experimentId)}`
     );
+  }
+
+  // Hosts Status
+  async getHostsStatus(): Promise<HostsStatusResponse> {
+    return this.request<HostsStatusResponse>('/hosts/status');
   }
 }
 

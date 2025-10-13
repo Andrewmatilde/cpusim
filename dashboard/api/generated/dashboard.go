@@ -93,6 +93,31 @@ type ExperimentError struct {
 	Timestamp time.Time `json:"timestamp,omitempty"`
 }
 
+// ExperimentInfo Metadata about a stored experiment
+type ExperimentInfo struct {
+	// CreatedAt When the experiment was created
+	CreatedAt time.Time `json:"createdAt,omitempty"`
+
+	// FileSizeKB Size of the experiment data file in KB
+	FileSizeKB int64 `json:"fileSizeKB,omitempty"`
+
+	// Id Experiment ID
+	Id string `json:"id,omitempty"`
+
+	// ModifiedAt When the experiment was last modified
+	ModifiedAt time.Time `json:"modifiedAt,omitempty"`
+}
+
+// ExperimentListResponse defines model for ExperimentListResponse.
+type ExperimentListResponse struct {
+	// Experiments List of stored experiments
+	Experiments []ExperimentInfo `json:"experiments,omitempty"`
+	Timestamp   time.Time        `json:"timestamp,omitempty"`
+
+	// Total Total number of experiments
+	Total int `json:"total,omitempty"`
+}
+
 // ExperimentResponse defines model for ExperimentResponse.
 type ExperimentResponse struct {
 	ExperimentId string `json:"experimentId,omitempty"`
@@ -259,6 +284,9 @@ type ClientInterface interface {
 	// GetServiceConfig request
 	GetServiceConfig(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error)
 
+	// ListExperiments request
+	ListExperiments(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error)
+
 	// StartExperimentWithBody request with any body
 	StartExperimentWithBody(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
 
@@ -282,6 +310,18 @@ type ClientInterface interface {
 
 func (c *Client) GetServiceConfig(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error) {
 	req, err := NewGetServiceConfigRequest(c.Server)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) ListExperiments(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewListExperimentsRequest(c.Server)
 	if err != nil {
 		return nil, err
 	}
@@ -386,6 +426,33 @@ func NewGetServiceConfigRequest(server string) (*http.Request, error) {
 	}
 
 	operationPath := fmt.Sprintf("/config")
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest("GET", queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
+// NewListExperimentsRequest generates requests for ListExperiments
+func NewListExperimentsRequest(server string) (*http.Request, error) {
+	var err error
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/experiments")
 	if operationPath[0] == '/' {
 		operationPath = "." + operationPath
 	}
@@ -638,6 +705,9 @@ type ClientWithResponsesInterface interface {
 	// GetServiceConfigWithResponse request
 	GetServiceConfigWithResponse(ctx context.Context, reqEditors ...RequestEditorFn) (*GetServiceConfigResponse, error)
 
+	// ListExperimentsWithResponse request
+	ListExperimentsWithResponse(ctx context.Context, reqEditors ...RequestEditorFn) (*ListExperimentsResponse, error)
+
 	// StartExperimentWithBodyWithResponse request with any body
 	StartExperimentWithBodyWithResponse(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*StartExperimentResponse, error)
 
@@ -675,6 +745,28 @@ func (r GetServiceConfigResponse) Status() string {
 
 // StatusCode returns HTTPResponse.StatusCode
 func (r GetServiceConfigResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+type ListExperimentsResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	JSON200      *ExperimentListResponse
+}
+
+// Status returns HTTPResponse.Status
+func (r ListExperimentsResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r ListExperimentsResponse) StatusCode() int {
 	if r.HTTPResponse != nil {
 		return r.HTTPResponse.StatusCode
 	}
@@ -827,6 +919,15 @@ func (c *ClientWithResponses) GetServiceConfigWithResponse(ctx context.Context, 
 	return ParseGetServiceConfigResponse(rsp)
 }
 
+// ListExperimentsWithResponse request returning *ListExperimentsResponse
+func (c *ClientWithResponses) ListExperimentsWithResponse(ctx context.Context, reqEditors ...RequestEditorFn) (*ListExperimentsResponse, error) {
+	rsp, err := c.ListExperiments(ctx, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseListExperimentsResponse(rsp)
+}
+
 // StartExperimentWithBodyWithResponse request with arbitrary body returning *StartExperimentResponse
 func (c *ClientWithResponses) StartExperimentWithBodyWithResponse(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*StartExperimentResponse, error) {
 	rsp, err := c.StartExperimentWithBody(ctx, contentType, body, reqEditors...)
@@ -905,6 +1006,32 @@ func ParseGetServiceConfigResponse(rsp *http.Response) (*GetServiceConfigRespons
 	switch {
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
 		var dest ServiceConfig
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseListExperimentsResponse parses an HTTP response from a ListExperimentsWithResponse call
+func ParseListExperimentsResponse(rsp *http.Response) (*ListExperimentsResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &ListExperimentsResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest ExperimentListResponse
 		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
 			return nil, err
 		}
@@ -1111,6 +1238,9 @@ type ServerInterface interface {
 	// Get service configuration
 	// (GET /config)
 	GetServiceConfig(c *gin.Context)
+	// List all stored experiments
+	// (GET /experiments)
+	ListExperiments(c *gin.Context)
 	// Start a new dashboard experiment
 	// (POST /experiments)
 	StartExperiment(c *gin.Context)
@@ -1151,6 +1281,19 @@ func (siw *ServerInterfaceWrapper) GetServiceConfig(c *gin.Context) {
 	}
 
 	siw.Handler.GetServiceConfig(c)
+}
+
+// ListExperiments operation middleware
+func (siw *ServerInterfaceWrapper) ListExperiments(c *gin.Context) {
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		middleware(c)
+		if c.IsAborted() {
+			return
+		}
+	}
+
+	siw.Handler.ListExperiments(c)
 }
 
 // StartExperiment operation middleware
@@ -1281,6 +1424,7 @@ func RegisterHandlersWithOptions(router gin.IRouter, si ServerInterface, options
 	}
 
 	router.GET(options.BaseURL+"/config", wrapper.GetServiceConfig)
+	router.GET(options.BaseURL+"/experiments", wrapper.ListExperiments)
 	router.POST(options.BaseURL+"/experiments", wrapper.StartExperiment)
 	router.GET(options.BaseURL+"/experiments/:experimentId", wrapper.GetExperimentData)
 	router.POST(options.BaseURL+"/experiments/:experimentId/stop", wrapper.StopExperiment)
@@ -1292,31 +1436,35 @@ func RegisterHandlersWithOptions(router gin.IRouter, si ServerInterface, options
 // Base64 encoded, gzipped, json marshaled Swagger object
 var swaggerSpec = []string{
 
-	"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",
+	"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",
+	"qQFxcjg+HNPVzeqfAAAA//+Bl4+97yEAAA==",
 }
 
 // GetSwagger returns the content of the embedded swagger specification file

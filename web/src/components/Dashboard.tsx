@@ -10,15 +10,19 @@ import type {
   ServiceConfig,
   StatusResponse,
   ExperimentData,
-  StartExperimentRequest
+  ExperimentListResponse,
+  StartExperimentRequest,
+  HostsStatusResponse
 } from '@/api/types';
-import { RefreshCw, Server, AlertCircle, Play, Square, Download, Loader2, Activity, Laptop } from 'lucide-react';
+import { RefreshCw, Server, AlertCircle, Play, Square, Download, Loader2, Activity, Laptop, History, FileText } from 'lucide-react';
 import { Toaster } from '@/components/ui/sonner';
 import { toast } from 'sonner';
 
 export function Dashboard() {
   const [config, setConfig] = useState<ServiceConfig | null>(null);
   const [status, setStatus] = useState<StatusResponse | null>(null);
+  const [hostsStatus, setHostsStatus] = useState<HostsStatusResponse | null>(null);
+  const [experimentsList, setExperimentsList] = useState<ExperimentListResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [experimentId, setExperimentId] = useState(`exp-${Date.now()}`);
@@ -31,12 +35,16 @@ export function Dashboard() {
     try {
       setLoading(true);
       setError(null);
-      const [configData, statusData] = await Promise.all([
+      const [configData, statusData, hostsStatusData, experimentsData] = await Promise.all([
         apiClient.getConfig(),
-        apiClient.getStatus()
+        apiClient.getStatus(),
+        apiClient.getHostsStatus(),
+        apiClient.listExperiments()
       ]);
       setConfig(configData);
       setStatus(statusData);
+      setHostsStatus(hostsStatusData);
+      setExperimentsList(experimentsData);
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : 'Failed to fetch data';
       setError(errorMessage);
@@ -86,11 +94,12 @@ export function Dashboard() {
     }
   };
 
-  const handleViewData = async () => {
-    if (!experimentId) return;
+  const handleViewData = async (expId?: string) => {
+    const idToLoad = expId || experimentId;
+    if (!idToLoad) return;
 
     try {
-      const data = await apiClient.getExperimentData(experimentId);
+      const data = await apiClient.getExperimentData(idToLoad);
       setExperimentData(data);
       toast.success('Experiment data loaded');
     } catch (error) {
@@ -111,7 +120,7 @@ export function Dashboard() {
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2">
               <Activity className="h-6 w-6" />
-              <h1 className="text-2xl font-bold">CPU Simulation Dashboard v0.6.0</h1>
+              <h1 className="text-2xl font-bold">CPU Simulation Dashboard v0.7.0</h1>
             </div>
             <Button onClick={fetchData} variant="outline" size="sm" disabled={loading}>
               <RefreshCw className={`h-4 w-4 mr-2 ${loading ? 'animate-spin' : ''}`} />
@@ -170,25 +179,45 @@ export function Dashboard() {
               </CardHeader>
               <CardContent>
                 <div className="space-y-3">
-                  {config.targetHosts?.map((host) => (
-                    <div key={host.name} className="border rounded-lg p-3 space-y-1">
-                      <div className="font-medium">{host.name}</div>
-                      <div className="text-sm text-muted-foreground">
-                        External IP: {host.externalIP}
-                      </div>
-                      {host.internalIP && (
-                        <div className="text-sm text-muted-foreground">
-                          Internal IP: {host.internalIP}
+                  {config.targetHosts?.map((host) => {
+                    const hostStatus = hostsStatus?.targetHostsStatus?.find(h => h.name === host.name);
+                    return (
+                      <div key={host.name} className="border rounded-lg p-3 space-y-1">
+                        <div className="flex items-center justify-between">
+                          <div className="font-medium">{host.name}</div>
+                          {hostStatus && (
+                            <Badge variant={hostStatus.status === 'Running' ? 'default' : 'secondary'}>
+                              {hostStatus.status}
+                            </Badge>
+                          )}
                         </div>
-                      )}
-                      <div className="text-xs text-muted-foreground pt-1">
-                        CPU: {host.cpuServiceURL}
+                        <div className="text-sm text-muted-foreground">
+                          External IP: {host.externalIP}
+                        </div>
+                        {host.internalIP && (
+                          <div className="text-sm text-muted-foreground">
+                            Internal IP: {host.internalIP}
+                          </div>
+                        )}
+                        {hostStatus?.currentExperimentId && (
+                          <div className="text-xs font-medium text-blue-600 pt-1">
+                            Experiment: {hostStatus.currentExperimentId}
+                          </div>
+                        )}
+                        {hostStatus?.error && (
+                          <div className="text-xs text-red-500 pt-1">
+                            Error: {hostStatus.error}
+                          </div>
+                        )}
+                        <div className="text-xs text-muted-foreground pt-1">
+                          CPU: {host.cpuServiceURL}
+                        </div>
+                        <div className="text-xs text-muted-foreground">
+                          Collector: {host.collectorServiceURL}
+                        </div>
                       </div>
-                      <div className="text-xs text-muted-foreground">
-                        Collector: {host.collectorServiceURL}
-                      </div>
-                    </div>
-                  ))}
+                    );
+                  })}
                 </div>
               </CardContent>
             </Card>
@@ -207,13 +236,30 @@ export function Dashboard() {
               <CardContent>
                 {config.clientHost && (
                   <div className="border rounded-lg p-3 space-y-1">
-                    <div className="font-medium">{config.clientHost.name}</div>
+                    <div className="flex items-center justify-between">
+                      <div className="font-medium">{config.clientHost.name}</div>
+                      {hostsStatus?.clientHostStatus && (
+                        <Badge variant={hostsStatus.clientHostStatus.status === 'Running' ? 'default' : 'secondary'}>
+                          {hostsStatus.clientHostStatus.status}
+                        </Badge>
+                      )}
+                    </div>
                     <div className="text-sm text-muted-foreground">
                       External IP: {config.clientHost.externalIP}
                     </div>
                     {config.clientHost.internalIP && (
                       <div className="text-sm text-muted-foreground">
                         Internal IP: {config.clientHost.internalIP}
+                      </div>
+                    )}
+                    {hostsStatus?.clientHostStatus?.currentExperimentId && (
+                      <div className="text-xs font-medium text-blue-600 pt-1">
+                        Experiment: {hostsStatus.clientHostStatus.currentExperimentId}
+                      </div>
+                    )}
+                    {hostsStatus?.clientHostStatus?.error && (
+                      <div className="text-xs text-red-500 pt-1">
+                        Error: {hostsStatus.clientHostStatus.error}
                       </div>
                     )}
                     <div className="text-xs text-muted-foreground pt-1">
@@ -317,65 +363,85 @@ export function Dashboard() {
           </CardContent>
         </Card>
 
+        {/* Stored Experiments List */}
+        {experimentsList && experimentsList.experiments && experimentsList.experiments.length > 0 && (
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <History className="h-5 w-5" />
+                Stored Experiments ({experimentsList.total})
+              </CardTitle>
+              <CardDescription>
+                Past experiment results stored on disk
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="space-y-2">
+                {experimentsList.experiments
+                  .sort((a, b) => new Date(b.modifiedAt || 0).getTime() - new Date(a.modifiedAt || 0).getTime())
+                  .map((exp) => (
+                    <div
+                      key={exp.id}
+                      className="border rounded-lg p-3 hover:bg-accent cursor-pointer transition-colors"
+                      onClick={() => {
+                        handleViewData(exp.id || '');
+                      }}
+                    >
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-2">
+                          <FileText className="h-4 w-4 text-muted-foreground" />
+                          <span className="font-medium">{exp.id}</span>
+                        </div>
+                        <div className="text-xs text-muted-foreground">
+                          {exp.fileSizeKB} KB
+                        </div>
+                      </div>
+                      <div className="text-xs text-muted-foreground mt-1">
+                        Modified: {exp.modifiedAt ? new Date(exp.modifiedAt).toLocaleString() : 'Unknown'}
+                      </div>
+                    </div>
+                  ))}
+              </div>
+            </CardContent>
+          </Card>
+        )}
+
         {/* Experiment Data Display */}
         {experimentData && (
           <Card>
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
                 <Download className="h-5 w-5" />
-                Experiment Data
+                Experiment Summary
               </CardTitle>
             </CardHeader>
             <CardContent>
               <div className="space-y-4">
-                {/* Status */}
-                <div>
-                  <div className="text-sm">
-                    Status: <Badge>{experimentData.status}</Badge>
+                {/* Basic Info */}
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <div className="text-sm text-muted-foreground">Status</div>
+                    <Badge className="mt-1">{experimentData.status}</Badge>
                   </div>
                   {experimentData.duration && (
-                    <div className="text-sm text-muted-foreground mt-1">
-                      Duration: {experimentData.duration}s
+                    <div>
+                      <div className="text-sm text-muted-foreground">Duration</div>
+                      <div className="text-lg font-medium">{experimentData.duration.toFixed(2)}s</div>
                     </div>
                   )}
                 </div>
 
-                {/* Collector Results */}
-                {experimentData.collectorResults && Object.keys(experimentData.collectorResults).length > 0 && (
+                {experimentData.startTime && (
                   <div>
-                    <h3 className="font-semibold mb-2">Collector Results</h3>
-                    <div className="space-y-2">
-                      {Object.entries(experimentData.collectorResults).map(([targetName, result]) => (
-                        <div key={targetName} className="border rounded p-3">
-                          <div className="font-medium">{targetName}</div>
-                          <div className="text-sm text-muted-foreground">
-                            Status: <Badge>{result.status}</Badge>
-                          </div>
-                          {result.error && (
-                            <div className="text-xs text-red-500 mt-1">
-                              Error: {result.error}
-                            </div>
-                          )}
-                        </div>
-                      ))}
-                    </div>
+                    <div className="text-sm text-muted-foreground">Start Time</div>
+                    <div className="text-sm">{new Date(experimentData.startTime).toLocaleString()}</div>
                   </div>
                 )}
 
-                {/* Requester Result */}
-                {experimentData.requesterResult && (
+                {experimentData.endTime && (
                   <div>
-                    <h3 className="font-semibold mb-2">Requester Result</h3>
-                    <div className="border rounded p-3">
-                      <div className="text-sm">
-                        Status: <Badge>{experimentData.requesterResult.status}</Badge>
-                      </div>
-                      {experimentData.requesterResult.error && (
-                        <div className="text-xs text-red-500 mt-1">
-                          Error: {experimentData.requesterResult.error}
-                        </div>
-                      )}
-                    </div>
+                    <div className="text-sm text-muted-foreground">End Time</div>
+                    <div className="text-sm">{new Date(experimentData.endTime).toLocaleString()}</div>
                   </div>
                 )}
 
@@ -394,6 +460,10 @@ export function Dashboard() {
                     </div>
                   </div>
                 )}
+
+                <div className="text-sm text-muted-foreground pt-2 border-t">
+                  Note: Detailed metrics are stored on individual collector and requester hosts.
+                </div>
               </div>
             </CardContent>
           </Card>

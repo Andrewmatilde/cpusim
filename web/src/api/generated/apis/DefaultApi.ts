@@ -17,8 +17,10 @@ import * as runtime from '../runtime';
 import type {
   ErrorResponse,
   ExperimentData,
+  ExperimentListResponse,
   ExperimentResponse,
   HealthResponse,
+  HostsStatusResponse,
   ServiceConfig,
   StartExperimentRequest,
   StatusResponse,
@@ -28,10 +30,14 @@ import {
     ErrorResponseToJSON,
     ExperimentDataFromJSON,
     ExperimentDataToJSON,
+    ExperimentListResponseFromJSON,
+    ExperimentListResponseToJSON,
     ExperimentResponseFromJSON,
     ExperimentResponseToJSON,
     HealthResponseFromJSON,
     HealthResponseToJSON,
+    HostsStatusResponseFromJSON,
+    HostsStatusResponseToJSON,
     ServiceConfigFromJSON,
     ServiceConfigToJSON,
     StartExperimentRequestFromJSON,
@@ -91,6 +97,37 @@ export class DefaultApi extends runtime.BaseAPI {
      */
     async getExperimentData(requestParameters: GetExperimentDataRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<ExperimentData> {
         const response = await this.getExperimentDataRaw(requestParameters, initOverrides);
+        return await response.value();
+    }
+
+    /**
+     * Query status of all target and client hosts
+     * Get status of all hosts
+     */
+    async getHostsStatusRaw(initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<runtime.ApiResponse<HostsStatusResponse>> {
+        const queryParameters: any = {};
+
+        const headerParameters: runtime.HTTPHeaders = {};
+
+
+        let urlPath = `/hosts/status`;
+
+        const response = await this.request({
+            path: urlPath,
+            method: 'GET',
+            headers: headerParameters,
+            query: queryParameters,
+        }, initOverrides);
+
+        return new runtime.JSONApiResponse(response, (jsonValue) => HostsStatusResponseFromJSON(jsonValue));
+    }
+
+    /**
+     * Query status of all target and client hosts
+     * Get status of all hosts
+     */
+    async getHostsStatus(initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<HostsStatusResponse> {
+        const response = await this.getHostsStatusRaw(initOverrides);
         return await response.value();
     }
 
@@ -178,6 +215,37 @@ export class DefaultApi extends runtime.BaseAPI {
      */
     async healthCheck(initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<HealthResponse> {
         const response = await this.healthCheckRaw(initOverrides);
+        return await response.value();
+    }
+
+    /**
+     * Returns a list of all experiments with metadata
+     * List all stored experiments
+     */
+    async listExperimentsRaw(initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<runtime.ApiResponse<ExperimentListResponse>> {
+        const queryParameters: any = {};
+
+        const headerParameters: runtime.HTTPHeaders = {};
+
+
+        let urlPath = `/experiments`;
+
+        const response = await this.request({
+            path: urlPath,
+            method: 'GET',
+            headers: headerParameters,
+            query: queryParameters,
+        }, initOverrides);
+
+        return new runtime.JSONApiResponse(response, (jsonValue) => ExperimentListResponseFromJSON(jsonValue));
+    }
+
+    /**
+     * Returns a list of all experiments with metadata
+     * List all stored experiments
+     */
+    async listExperiments(initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<ExperimentListResponse> {
+        const response = await this.listExperimentsRaw(initOverrides);
         return await response.value();
     }
 
