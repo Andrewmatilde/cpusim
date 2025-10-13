@@ -25,6 +25,7 @@ type Experiment[T Data] struct {
 	fs FileStorage[T]
 
 	cancel context.CancelFunc
+	done   chan struct{}
 }
 
 func NewExperiment[T Data](fs FileStorage[T], logger zerolog.Logger) *Experiment[T] {
@@ -52,8 +53,10 @@ func (s *Experiment[T]) Start(id string, timeout time.Duration) error {
 	ctx, cancel := context.WithTimeout(context.Background(), timeout)
 	s.ctx = ctx
 	s.cancel = cancel
+	s.done = make(chan struct{})
 
 	go func() {
+		defer close(s.done)
 		data, err := s.CollectData(ctx)
 		if err != nil {
 			s.logger.Error().Err(err).Msg("failed to collect data")
@@ -75,12 +78,12 @@ func (s *Experiment[T]) Stop() error {
 
 	s.cancel()
 
-	// Wait for context to be done with a timeout
+	// Wait for the goroutine to finish (data collection and save)
 	select {
-	case <-s.ctx.Done():
+	case <-s.done:
 		return nil
 	case <-time.After(15 * time.Second):
-		return fmt.Errorf("stop timeout: experiment did not finish within 5 seconds")
+		return fmt.Errorf("stop timeout: experiment did not finish within 15 seconds")
 	}
 }
 
