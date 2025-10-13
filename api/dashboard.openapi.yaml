@@ -120,6 +120,19 @@ paths:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
 
+  /hosts/status:
+    get:
+      summary: Get status of all hosts
+      description: Query status of all target and client hosts
+      operationId: getHostsStatus
+      responses:
+        '200':
+          description: Status of all hosts
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HostsStatusResponse'
+
   /health:
     get:
       summary: Health check
@@ -213,6 +226,52 @@ components:
         timestamp:
           type: string
           format: date-time
+
+    HostsStatusResponse:
+      type: object
+      properties:
+        targetHostsStatus:
+          type: array
+          description: Status of target hosts (collectors)
+          items:
+            $ref: '#/components/schemas/TargetHostStatus'
+        clientHostStatus:
+          $ref: '#/components/schemas/ClientHostStatus'
+        timestamp:
+          type: string
+          format: date-time
+
+    TargetHostStatus:
+      type: object
+      properties:
+        name:
+          type: string
+          description: Host name
+        status:
+          type: string
+          description: Service status (Pending, Running, or Error)
+        currentExperimentId:
+          type: string
+          description: Current experiment ID if running
+        error:
+          type: string
+          description: Error message if failed to query
+
+    ClientHostStatus:
+      type: object
+      properties:
+        name:
+          type: string
+          description: Host name
+        status:
+          type: string
+          description: Service status (Pending, Running, or Error)
+        currentExperimentId:
+          type: string
+          description: Current experiment ID if running
+        error:
+          type: string
+          description: Error message if failed to query
 
     ExperimentData:
       type: object

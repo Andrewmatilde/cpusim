@@ -150,6 +150,45 @@ func (h *APIHandler) GetExperimentData(c *gin.Context, experimentId string) {
 	c.JSON(http.StatusOK, response)
 }
 
+// GetHostsStatus implements querying status of all hosts
+func (h *APIHandler) GetHostsStatus(c *gin.Context) {
+	targetHostsStatus, clientHostStatus, err := h.service.GetHostsStatus(c.Request.Context())
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, generated.ErrorResponse{
+			Error:     "internal_error",
+			Message:   err.Error(),
+			Timestamp: time.Now(),
+		})
+		return
+	}
+
+	// Convert to API types
+	apiTargetHosts := make([]generated.TargetHostStatus, len(targetHostsStatus))
+	for i, status := range targetHostsStatus {
+		apiTargetHosts[i] = generated.TargetHostStatus{
+			Name:                status.Name,
+			Status:              status.Status,
+			CurrentExperimentId: status.CurrentExperimentID,
+			Error:               status.Error,
+		}
+	}
+
+	apiClientHost := generated.ClientHostStatus{
+		Name:                clientHostStatus.Name,
+		Status:              clientHostStatus.Status,
+		CurrentExperimentId: clientHostStatus.CurrentExperimentID,
+		Error:               clientHostStatus.Error,
+	}
+
+	response := generated.HostsStatusResponse{
+		TargetHostsStatus: apiTargetHosts,
+		ClientHostStatus:  apiClientHost,
+		Timestamp:         time.Now(),
+	}
+
+	c.JSON(http.StatusOK, response)
+}
+
 // HealthCheck implements the health check endpoint
 func (h *APIHandler) HealthCheck(c *gin.Context) {
 	response := generated.HealthResponse{

@@ -29,6 +29,18 @@ func (h *APIHandler) GetServiceConfig(c *gin.Context) {
 	c.JSON(http.StatusOK, response)
 }
 
+// GetStatus implements getting the service status
+func (h *APIHandler) GetStatus(c *gin.Context) {
+	status := h.service.GetStatus()
+	currentExpID := h.service.GetCurrentExperimentID()
+
+	response := generated.StatusResponse{
+		Status:              generated.StatusResponseStatus(status),
+		CurrentExperimentId: currentExpID,
+	}
+	c.JSON(http.StatusOK, response)
+}
+
 // HealthCheck implements the health check endpoint
 func (h *APIHandler) HealthCheck(c *gin.Context) {
 	now := time.Now()
@@ -103,40 +115,6 @@ func (h *APIHandler) StartRequestExperiment(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusCreated, experiment)
-}
-
-// GetRequestExperimentStatus implements getting experiment status
-func (h *APIHandler) GetRequestExperimentStatus(c *gin.Context, experimentId string) {
-	data, err := h.service.GetExperiment(experimentId)
-	if err != nil {
-		c.JSON(http.StatusNotFound, generated.ErrorResponse{
-			Error:        "experiment_not_found",
-			Message:      err.Error(),
-			Timestamp:    time.Now(),
-			ExperimentId: experimentId,
-		})
-		return
-	}
-
-	// Convert RequestData to RequestExperiment
-	status := generated.RequestExperimentStatusCompleted
-	if data.EndTime.IsZero() {
-		status = generated.RequestExperimentStatusRunning
-	}
-	if data.Failed > 0 && data.Successful == 0 {
-		status = generated.RequestExperimentStatusError
-	}
-
-	experiment := generated.RequestExperiment{
-		ExperimentId: experimentId,
-		Status:       status,
-		StartTime:    data.StartTime,
-		EndTime:      data.EndTime,
-		Duration:     int(data.Duration),
-		CreatedAt:    data.StartTime,
-	}
-
-	c.JSON(http.StatusOK, experiment)
 }
 
 // StopRequestExperiment implements stopping an experiment

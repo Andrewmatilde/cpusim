@@ -2,7 +2,7 @@
 /* eslint-disable */
 /**
  * CPU Simulation Dashboard API
- * 管理面API，用于管理多个CPU仿真主机和全局实验
+ * Dashboard service for coordinating distributed CPU simulation experiments
  *
  * The version of the OpenAPI document: 2.0.0
  * 
@@ -13,38 +13,53 @@
  */
 
 import { mapValues } from '../runtime';
-import type { MetricDataPoint } from './MetricDataPoint';
+import type { RequesterResult } from './RequesterResult';
 import {
-    MetricDataPointFromJSON,
-    MetricDataPointFromJSONTyped,
-    MetricDataPointToJSON,
-    MetricDataPointToJSONTyped,
-} from './MetricDataPoint';
+    RequesterResultFromJSON,
+    RequesterResultFromJSONTyped,
+    RequesterResultToJSON,
+    RequesterResultToJSONTyped,
+} from './RequesterResult';
+import type { CollectorResult } from './CollectorResult';
+import {
+    CollectorResultFromJSON,
+    CollectorResultFromJSONTyped,
+    CollectorResultToJSON,
+    CollectorResultToJSONTyped,
+} from './CollectorResult';
+import type { ServiceConfig } from './ServiceConfig';
+import {
+    ServiceConfigFromJSON,
+    ServiceConfigFromJSONTyped,
+    ServiceConfigToJSON,
+    ServiceConfigToJSONTyped,
+} from './ServiceConfig';
+import type { ExperimentError } from './ExperimentError';
+import {
+    ExperimentErrorFromJSON,
+    ExperimentErrorFromJSONTyped,
+    ExperimentErrorToJSON,
+    ExperimentErrorToJSONTyped,
+} from './ExperimentError';
 
 /**
- * 
+ * Complete dashboard experiment result
  * @export
  * @interface ExperimentData
  */
 export interface ExperimentData {
     /**
      * 
-     * @type {string}
+     * @type {ServiceConfig}
      * @memberof ExperimentData
      */
-    experimentId: string;
-    /**
-     * 
-     * @type {string}
-     * @memberof ExperimentData
-     */
-    description?: string;
+    config?: ServiceConfig;
     /**
      * 
      * @type {Date}
      * @memberof ExperimentData
      */
-    startTime: Date;
+    startTime?: Date;
     /**
      * 
      * @type {Date}
@@ -58,26 +73,35 @@ export interface ExperimentData {
      */
     duration?: number;
     /**
-     * Collection interval in milliseconds
-     * @type {number}
+     * Experiment status
+     * @type {string}
      * @memberof ExperimentData
      */
-    collectionInterval?: number;
+    status?: string;
+    /**
+     * Results from collector experiments, keyed by host name
+     * @type {{ [key: string]: CollectorResult; }}
+     * @memberof ExperimentData
+     */
+    collectorResults?: { [key: string]: CollectorResult; };
     /**
      * 
-     * @type {Array<MetricDataPoint>}
+     * @type {RequesterResult}
      * @memberof ExperimentData
      */
-    metrics: Array<MetricDataPoint>;
+    requesterResult?: RequesterResult;
+    /**
+     * 
+     * @type {Array<ExperimentError>}
+     * @memberof ExperimentData
+     */
+    errors?: Array<ExperimentError>;
 }
 
 /**
  * Check if a given object implements the ExperimentData interface.
  */
 export function instanceOfExperimentData(value: object): value is ExperimentData {
-    if (!('experimentId' in value) || value['experimentId'] === undefined) return false;
-    if (!('startTime' in value) || value['startTime'] === undefined) return false;
-    if (!('metrics' in value) || value['metrics'] === undefined) return false;
     return true;
 }
 
@@ -91,13 +115,14 @@ export function ExperimentDataFromJSONTyped(json: any, ignoreDiscriminator: bool
     }
     return {
         
-        'experimentId': json['experimentId'],
-        'description': json['description'] == null ? undefined : json['description'],
-        'startTime': (new Date(json['startTime'])),
+        'config': json['config'] == null ? undefined : ServiceConfigFromJSON(json['config']),
+        'startTime': json['startTime'] == null ? undefined : (new Date(json['startTime'])),
         'endTime': json['endTime'] == null ? undefined : (new Date(json['endTime'])),
         'duration': json['duration'] == null ? undefined : json['duration'],
-        'collectionInterval': json['collectionInterval'] == null ? undefined : json['collectionInterval'],
-        'metrics': ((json['metrics'] as Array<any>).map(MetricDataPointFromJSON)),
+        'status': json['status'] == null ? undefined : json['status'],
+        'collectorResults': json['collectorResults'] == null ? undefined : (mapValues(json['collectorResults'], CollectorResultFromJSON)),
+        'requesterResult': json['requesterResult'] == null ? undefined : RequesterResultFromJSON(json['requesterResult']),
+        'errors': json['errors'] == null ? undefined : ((json['errors'] as Array<any>).map(ExperimentErrorFromJSON)),
     };
 }
 
@@ -112,13 +137,14 @@ export function ExperimentDataToJSONTyped(value?: ExperimentData | null, ignoreD
 
     return {
         
-        'experimentId': value['experimentId'],
-        'description': value['description'],
-        'startTime': ((value['startTime']).toISOString()),
+        'config': ServiceConfigToJSON(value['config']),
+        'startTime': value['startTime'] == null ? undefined : ((value['startTime']).toISOString()),
         'endTime': value['endTime'] == null ? undefined : ((value['endTime']).toISOString()),
         'duration': value['duration'],
-        'collectionInterval': value['collectionInterval'],
-        'metrics': ((value['metrics'] as Array<any>).map(MetricDataPointToJSON)),
+        'status': value['status'],
+        'collectorResults': value['collectorResults'] == null ? undefined : (mapValues(value['collectorResults'], CollectorResultToJSON)),
+        'requesterResult': RequesterResultToJSON(value['requesterResult']),
+        'errors': value['errors'] == null ? undefined : ((value['errors'] as Array<any>).map(ExperimentErrorToJSON)),
     };
 }
 

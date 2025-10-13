@@ -13,7 +13,8 @@ type Manager[T Data] struct {
 
 	fs FileStorage[T]
 
-	currentExperiment *Experiment[T]
+	currentExperiment   *Experiment[T]
+	currentExperimentID string
 }
 
 func NewManager[T Data](fs FileStorage[T], collector CollectFunc[T], logger zerolog.Logger) *Manager[T] {
@@ -37,6 +38,7 @@ func (f *Manager[T]) Start(id string, timeout time.Duration) error {
 		return err
 	}
 	f.currentExperiment = exp
+	f.currentExperimentID = id
 	return nil
 }
 
@@ -44,7 +46,11 @@ func (f *Manager[T]) Stop() error {
 	if f.currentExperiment == nil {
 		return fmt.Errorf("experiment already stopped")
 	}
-	f.currentExperiment.Stop()
+	err := f.currentExperiment.Stop()
+	if err != nil {
+		return err
+	}
+	f.currentExperimentID = ""
 	return nil
 }
 
@@ -64,4 +70,11 @@ func (f *Manager[T]) GetStatus() string {
 	} else {
 		return Running
 	}
+}
+
+func (f *Manager[T]) GetCurrentExperimentID() string {
+	if f.currentExperiment == nil || f.currentExperiment.IsDone() {
+		return ""
+	}
+	return f.currentExperimentID
 }

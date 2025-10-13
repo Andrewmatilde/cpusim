@@ -108,38 +108,6 @@ paths:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
 
-  /experiments/{experimentId}:
-    get:
-      summary: 获取实验状态
-      description: 获取指定实验的详细状态信息
-      operationId: getRequestExperimentStatus
-      parameters:
-        - name: experimentId
-          in: path
-          required: true
-          schema:
-            type: string
-          description: 实验唯一标识符
-      responses:
-        '200':
-          description: 实验状态信息
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/RequestExperiment'
-        '404':
-          description: 实验不存在
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorResponse'
-        '500':
-          description: 服务器错误
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorResponse'
-
   /experiments/{experimentId}/stop:
     post:
       summary: 停止请求发送实验
@@ -222,6 +190,19 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ServiceConfig'
+
+  /status:
+    get:
+      summary: 获取服务状态
+      description: 获取请求发送服务的当前状态和运行中的实验信息
+      operationId: getStatus
+      responses:
+        '200':
+          description: 服务状态
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StatusResponse'
 
   /health:
     get:
@@ -421,6 +402,19 @@ components:
           description: 运行时长（秒）
         finalStats:
           $ref: '#/components/schemas/RequestExperimentStats'
+
+    StatusResponse:
+      type: object
+      required:
+        - status
+      properties:
+        status:
+          type: string
+          enum: [Pending, Running]
+          description: 当前服务状态
+        currentExperimentId:
+          type: string
+          description: 当前运行中的实验ID（如果没有实验在运行则为空）
 
     HealthResponse:
       type: object

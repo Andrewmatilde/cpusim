@@ -20,6 +20,9 @@ type Service struct {
 	// HTTP clients for sub-experiments
 	collectorClients map[string]CollectorClient // key: host name
 	requesterClient  RequesterClient
+
+	// Current experiment ID
+	currentExperimentID string
 }
 
 // CollectorClient interface for communicating with collector services
@@ -27,6 +30,7 @@ type CollectorClient interface {
 	StartExperiment(ctx context.Context, experimentID string, timeout time.Duration) error
 	StopExperiment(ctx context.Context, experimentID string) error
 	GetExperiment(ctx context.Context, experimentID string) (*CollectorExperimentData, error)
+	GetStatus(ctx context.Context) (string, string, error) // returns status, currentExperimentID, error
 }
 
 // RequesterClient interface for communicating with requester services
@@ -34,6 +38,7 @@ type RequesterClient interface {
 	StartExperiment(ctx context.Context, experimentID string, timeout time.Duration) error
 	StopExperiment(ctx context.Context, experimentID string) error
 	GetExperiment(ctx context.Context, experimentID string) (*RequesterExperimentData, error)
+	GetStatus(ctx context.Context) (string, string, error) // returns status, currentExperimentID, error
 }
 
 // CollectorExperimentData represents collector experiment data
@@ -97,6 +102,9 @@ func (s *Service) StartExperiment(id string, timeout time.Duration) error {
 		Int("num_targets", len(s.config.TargetHosts)).
 		Msg("Starting dashboard experiment")
 
+	// Store the experiment ID so runExperiment can use it
+	s.currentExperimentID = id
+
 	return s.Manager.Start(id, timeout)
 }
 
@@ -111,16 +119,20 @@ func (s *Service) StopExperiment() error {
 }
 
 // StopAll stops all sub-experiments and cleans up state
-func (s *Service) StopAll(ctx context.Context, experimentID string) error {
+func (s *Service) StopAll(experimentID string) error {
 	s.logger.Warn().
 		Str("experiment_id", experimentID).
 		Msg("Stopping all sub-experiments (cleanup)")
+
+	// Use a fresh context for cleanup operations since the experiment context may be cancelled
+	cleanupCtx, cleanupCancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cleanupCancel()
 
 	var errors []ExperimentError
 
 	// Stop requester first
 	if s.requesterClient != nil {
-		if err := s.requesterClient.StopExperiment(ctx, experimentID); err != nil {
+		if err := s.requesterClient.StopExperiment(cleanupCtx, experimentID); err != nil {
 			s.logger.Error().Err(err).Msg("Failed to stop requester")
 			errors = append(errors, ExperimentError{
 				Timestamp: time.Now(),
@@ -132,7 +144,7 @@ func (s *Service) StopAll(ctx context.Context, experimentID string) error {
 
 	// Stop all collectors
 	for hostName, client := range s.collectorClients {
-		if err := client.StopExperiment(ctx, experimentID); err != nil {
+		if err := client.StopExperiment(cleanupCtx, experimentID); err != nil {
 			s.logger.Error().
 				Err(err).
 				Str("host", hostName).
@@ -166,6 +178,74 @@ func (s *Service) GetExperiment(id string) (*ExperimentData, error) {
 	return s.fs.Load(id)
 }
 
+// HostStatus represents the status of a host
+type HostStatus struct {
+	Name                string
+	Status              string
+	CurrentExperimentID string
+	Error               string
+}
+
+// GetHostsStatus queries the status of all target and client hosts
+func (s *Service) GetHostsStatus(ctx context.Context) ([]HostStatus, *HostStatus, error) {
+	targetHostsStatus := make([]HostStatus, 0, len(s.config.TargetHosts))
+
+	// Query all target hosts (collectors)
+	for _, target := range s.config.TargetHosts {
+		client, ok := s.collectorClients[target.Name]
+		if !ok {
+			targetHostsStatus = append(targetHostsStatus, HostStatus{
+				Name:   target.Name,
+				Status: "Error",
+				Error:  "collector client not configured",
+			})
+			continue
+		}
+
+		status, expID, err := client.GetStatus(ctx)
+		if err != nil {
+			targetHostsStatus = append(targetHostsStatus, HostStatus{
+				Name:   target.Name,
+				Status: "Error",
+				Error:  err.Error(),
+			})
+		} else {
+			targetHostsStatus = append(targetHostsStatus, HostStatus{
+				Name:                target.Name,
+				Status:              status,
+				CurrentExperimentID: expID,
+			})
+		}
+	}
+
+	// Query client host (requester)
+	var clientHostStatus *HostStatus
+	if s.requesterClient == nil {
+		clientHostStatus = &HostStatus{
+			Name:   s.config.ClientHost.Name,
+			Status: "Error",
+			Error:  "requester client not configured",
+		}
+	} else {
+		status, expID, err := s.requesterClient.GetStatus(ctx)
+		if err != nil {
+			clientHostStatus = &HostStatus{
+				Name:   s.config.ClientHost.Name,
+				Status: "Error",
+				Error:  err.Error(),
+			}
+		} else {
+			clientHostStatus = &HostStatus{
+				Name:                s.config.ClientHost.Name,
+				Status:              status,
+				CurrentExperimentID: expID,
+			}
+		}
+	}
+
+	return targetHostsStatus, clientHostStatus, nil
+}
+
 // runExperiment executes the complete dashboard experiment
 func (s *Service) runExperiment(ctx context.Context) (*ExperimentData, error) {
 	data := &ExperimentData{
@@ -195,7 +275,7 @@ func (s *Service) runExperiment(ctx context.Context) (*ExperimentData, error) {
 				Error:    err.Error(),
 			}
 			// Rollback: stop all
-			s.StopAll(ctx, "rollback")
+			s.StopAll(s.currentExperimentID)
 			return data, err
 		}
 
@@ -205,7 +285,7 @@ func (s *Service) runExperiment(ctx context.Context) (*ExperimentData, error) {
 		if deadline, ok := ctx.Deadline(); ok {
 			timeout = time.Until(deadline)
 		}
-		if err := client.StartExperiment(ctx, "exp", timeout); err != nil {
+		if err := client.StartExperiment(ctx, s.currentExperimentID, timeout); err != nil {
 			s.logger.Error().
 				Err(err).
 				Str("host", target.Name).
@@ -222,7 +302,7 @@ func (s *Service) runExperiment(ctx context.Context) (*ExperimentData, error) {
 				Error:    err.Error(),
 			}
 			// Rollback: stop all
-			s.StopAll(ctx, "rollback")
+			s.StopAll(s.currentExperimentID)
 			return data, err
 		}
 
@@ -248,7 +328,7 @@ func (s *Service) runExperiment(ctx context.Context) (*ExperimentData, error) {
 			Error:  err.Error(),
 		}
 		// Rollback: stop all
-		s.StopAll(ctx, "rollback")
+		s.StopAll(s.currentExperimentID)
 		return data, err
 	}
 
@@ -257,7 +337,7 @@ func (s *Service) runExperiment(ctx context.Context) (*ExperimentData, error) {
 	if deadline, ok := ctx.Deadline(); ok {
 		timeout = time.Until(deadline)
 	}
-	if err := s.requesterClient.StartExperiment(ctx, "exp", timeout); err != nil {
+	if err := s.requesterClient.StartExperiment(ctx, s.currentExperimentID, timeout); err != nil {
 		s.logger.Error().Err(err).Msg("Failed to start requester")
 		data.Errors = append(data.Errors, ExperimentError{
 			Timestamp: time.Now(),
@@ -269,7 +349,7 @@ func (s *Service) runExperiment(ctx context.Context) (*ExperimentData, error) {
 			Error:  err.Error(),
 		}
 		// Rollback: stop all
-		s.StopAll(ctx, "rollback")
+		s.StopAll(s.currentExperimentID)
 		return data, err
 	}
 
@@ -282,6 +362,11 @@ func (s *Service) runExperiment(ctx context.Context) (*ExperimentData, error) {
 	<-ctx.Done()
 
 	// Phase 3: Collect results
+	// Use a fresh context for collection since the experiment context is cancelled
+	collectCtx := context.Background()
+	collectCtx, collectCancel := context.WithTimeout(collectCtx, 10*time.Second)
+	defer collectCancel()
+
 	s.logger.Info().Msg("Phase 3: Collecting results from sub-experiments")
 	data.EndTime = time.Now()
 	data.Duration = data.EndTime.Sub(data.StartTime).Seconds()
@@ -289,7 +374,7 @@ func (s *Service) runExperiment(ctx context.Context) (*ExperimentData, error) {
 	// Collect collector results
 	for hostName := range data.CollectorResults {
 		client := s.collectorClients[hostName]
-		if collectorData, err := client.GetExperiment(ctx, "exp"); err == nil {
+		if collectorData, err := client.GetExperiment(collectCtx, s.currentExperimentID); err == nil {
 			data.CollectorResults[hostName] = CollectorResult{
 				HostName:            hostName,
 				Status:              "completed",
@@ -305,7 +390,7 @@ func (s *Service) runExperiment(ctx context.Context) (*ExperimentData, error) {
 	}
 
 	// Collect requester results
-	if requesterData, err := s.requesterClient.GetExperiment(ctx, "exp"); err == nil {
+	if requesterData, err := s.requesterClient.GetExperiment(collectCtx, s.currentExperimentID); err == nil {
 		data.RequesterResult = &RequesterResult{
 			Status:          "completed",
 			TotalRequests:   requesterData.TotalRequests,

@@ -1,36 +1,105 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { Skeleton } from '@/components/ui/skeleton';
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { useHosts } from '@/hooks/useHosts';
-import { ExperimentForm } from './ExperimentForm';
-import { ExperimentList } from './ExperimentList';
-import type { Host } from '@/api/types';
-import { RefreshCw, Server, AlertCircle, Wifi, WifiOff, FlaskConical } from 'lucide-react';
-import { Toaster } from '@/components/ui/sonner';
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
 import { apiClient } from '@/api/client';
+import type {
+  ServiceConfig,
+  StatusResponse,
+  ExperimentData,
+  StartExperimentRequest
+} from '@/api/types';
+import { RefreshCw, Server, AlertCircle, Play, Square, Download, Loader2, Activity, Laptop } from 'lucide-react';
+import { Toaster } from '@/components/ui/sonner';
 import { toast } from 'sonner';
 
 export function Dashboard() {
-  const { hosts, loading, error, healthStatus, refetch } = useHosts();
-  const [experimentRefreshTrigger, setExperimentRefreshTrigger] = useState(0);
+  const [config, setConfig] = useState<ServiceConfig | null>(null);
+  const [status, setStatus] = useState<StatusResponse | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [experimentId, setExperimentId] = useState(`exp-${Date.now()}`);
+  const [timeout, setTimeout] = useState(60);
+  const [starting, setStarting] = useState(false);
+  const [stopping, setStopping] = useState(false);
+  const [experimentData, setExperimentData] = useState<ExperimentData | null>(null);
 
-  const handleRunTest = async (host: Host) => {
+  const fetchData = async () => {
     try {
-      const result = await apiClient.testHostCalculation(host.name || '');
-      toast.success(`Test completed! GCD: ${result.gcd}, Time: ${result.processTime}`);
-    } catch (error) {
-      toast.error('Test failed');
-      console.error('Test error:', error);
+      setLoading(true);
+      setError(null);
+      const [configData, statusData] = await Promise.all([
+        apiClient.getConfig(),
+        apiClient.getStatus()
+      ]);
+      setConfig(configData);
+      setStatus(statusData);
+    } catch (err) {
+      const errorMessage = err instanceof Error ? err.message : 'Failed to fetch data';
+      setError(errorMessage);
+    } finally {
+      setLoading(false);
     }
   };
 
-  const handleExperimentCreated = () => {
-    setExperimentRefreshTrigger(prev => prev + 1);
+  useEffect(() => {
+    fetchData();
+    const interval = setInterval(fetchData, 5000); // Refresh every 5s
+    return () => clearInterval(interval);
+  }, []);
+
+  const handleStartExperiment = async () => {
+    try {
+      setStarting(true);
+      const request: StartExperimentRequest = {
+        experimentId,
+        timeout
+      };
+      await apiClient.startExperiment(request);
+      toast.success('Experiment started successfully');
+      setExperimentId(`exp-${Date.now()}`); // Generate new ID for next experiment
+      fetchData();
+    } catch (error) {
+      toast.error('Failed to start experiment');
+      console.error('Start experiment error:', error);
+    } finally {
+      setStarting(false);
+    }
   };
+
+  const handleStopExperiment = async () => {
+    if (!experimentId) return;
+
+    try {
+      setStopping(true);
+      await apiClient.stopExperiment(experimentId);
+      toast.success('Experiment stopped successfully');
+      fetchData();
+    } catch (error) {
+      toast.error('Failed to stop experiment');
+      console.error('Stop experiment error:', error);
+    } finally {
+      setStopping(false);
+    }
+  };
+
+  const handleViewData = async () => {
+    if (!experimentId) return;
+
+    try {
+      const data = await apiClient.getExperimentData(experimentId);
+      setExperimentData(data);
+      toast.success('Experiment data loaded');
+    } catch (error) {
+      toast.error('Failed to load experiment data');
+      console.error('Load data error:', error);
+    }
+  };
+
+  const isRunning = status?.status === 'Running';
 
   return (
     <div className="min-h-screen bg-background">
@@ -41,11 +110,11 @@ export function Dashboard() {
         <div className="container mx-auto px-4 py-4">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2">
-              <Server className="h-6 w-6" />
-              <h1 className="text-2xl font-bold">CPU Simulation Dashboard</h1>
+              <Activity className="h-6 w-6" />
+              <h1 className="text-2xl font-bold">CPU Simulation Dashboard v0.6.0</h1>
             </div>
-            <Button onClick={refetch} variant="outline" size="sm">
-              <RefreshCw className="h-4 w-4 mr-2" />
+            <Button onClick={fetchData} variant="outline" size="sm" disabled={loading}>
+              <RefreshCw className={`h-4 w-4 mr-2 ${loading ? 'animate-spin' : ''}`} />
               Refresh
             </Button>
           </div>
@@ -53,14 +122,7 @@ export function Dashboard() {
       </header>
 
       {/* Main Content */}
-      <main className="container mx-auto px-4 py-8 space-y-8">
-        {loading && (
-          <div className="space-y-4">
-            <Skeleton className="h-64" />
-            <Skeleton className="h-48" />
-          </div>
-        )}
-
+      <main className="container mx-auto px-4 py-8 space-y-6">
         {error && (
           <Alert variant="destructive">
             <AlertCircle className="h-4 w-4" />
@@ -68,107 +130,273 @@ export function Dashboard() {
           </Alert>
         )}
 
-        {!loading && !error && (
-          <>
-            {/* Global Experiment Management */}
-            <div className="grid lg:grid-cols-2 gap-8">
-              <ExperimentForm
-                hosts={hosts || []}
-                onExperimentCreated={handleExperimentCreated}
-              />
-              <div>
-                <ExperimentList refreshTrigger={experimentRefreshTrigger} />
+        {/* Service Status Banner */}
+        {status && (
+          <Card>
+            <CardHeader>
+              <div className="flex items-center justify-between">
+                <div>
+                  <CardTitle className="flex items-center gap-2">
+                    <Activity className="h-5 w-5" />
+                    Dashboard Status
+                  </CardTitle>
+                  {isRunning && experimentId && (
+                    <CardDescription className="mt-1">
+                      Current Experiment: {experimentId}
+                    </CardDescription>
+                  )}
+                </div>
+                <Badge variant={isRunning ? "default" : "secondary"} className="text-lg px-4 py-1">
+                  {status.status}
+                </Badge>
+              </div>
+            </CardHeader>
+          </Card>
+        )}
+
+        {/* Configuration Display */}
+        {config && (
+          <div className="grid lg:grid-cols-2 gap-6">
+            {/* Target Hosts */}
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <Server className="h-5 w-5" />
+                  Target Hosts ({config.targetHosts?.length || 0})
+                </CardTitle>
+                <CardDescription>
+                  Running cpusim-server + collector-server
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                <div className="space-y-3">
+                  {config.targetHosts?.map((host) => (
+                    <div key={host.name} className="border rounded-lg p-3 space-y-1">
+                      <div className="font-medium">{host.name}</div>
+                      <div className="text-sm text-muted-foreground">
+                        External IP: {host.externalIP}
+                      </div>
+                      {host.internalIP && (
+                        <div className="text-sm text-muted-foreground">
+                          Internal IP: {host.internalIP}
+                        </div>
+                      )}
+                      <div className="text-xs text-muted-foreground pt-1">
+                        CPU: {host.cpuServiceURL}
+                      </div>
+                      <div className="text-xs text-muted-foreground">
+                        Collector: {host.collectorServiceURL}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </CardContent>
+            </Card>
+
+            {/* Client Host */}
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <Laptop className="h-5 w-5" />
+                  Client Host
+                </CardTitle>
+                <CardDescription>
+                  Running requester-server
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                {config.clientHost && (
+                  <div className="border rounded-lg p-3 space-y-1">
+                    <div className="font-medium">{config.clientHost.name}</div>
+                    <div className="text-sm text-muted-foreground">
+                      External IP: {config.clientHost.externalIP}
+                    </div>
+                    {config.clientHost.internalIP && (
+                      <div className="text-sm text-muted-foreground">
+                        Internal IP: {config.clientHost.internalIP}
+                      </div>
+                    )}
+                    <div className="text-xs text-muted-foreground pt-1">
+                      Requester: {config.clientHost.requesterServiceURL}
+                    </div>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          </div>
+        )}
+
+        {/* Experiment Control */}
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <Play className="h-5 w-5" />
+              Experiment Control
+            </CardTitle>
+            <CardDescription>
+              Start or stop distributed experiments
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-4">
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <Label htmlFor="experimentId">Experiment ID</Label>
+                  <Input
+                    id="experimentId"
+                    value={experimentId}
+                    onChange={(e) => setExperimentId(e.target.value)}
+                    placeholder="exp-001"
+                    disabled={isRunning}
+                  />
+                </div>
+                <div>
+                  <Label htmlFor="timeout">Timeout (seconds)</Label>
+                  <Input
+                    id="timeout"
+                    type="number"
+                    value={timeout}
+                    onChange={(e) => setTimeout(Number(e.target.value))}
+                    min={10}
+                    max={600}
+                    disabled={isRunning}
+                  />
+                </div>
+              </div>
+
+              <div className="flex gap-2">
+                {!isRunning ? (
+                  <Button
+                    onClick={handleStartExperiment}
+                    disabled={starting || !experimentId}
+                    className="flex-1"
+                  >
+                    {starting ? (
+                      <>
+                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                        Starting...
+                      </>
+                    ) : (
+                      <>
+                        <Play className="mr-2 h-4 w-4" />
+                        Start Experiment
+                      </>
+                    )}
+                  </Button>
+                ) : (
+                  <>
+                    <Button
+                      onClick={handleStopExperiment}
+                      disabled={stopping}
+                      variant="destructive"
+                      className="flex-1"
+                    >
+                      {stopping ? (
+                        <>
+                          <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                          Stopping...
+                        </>
+                      ) : (
+                        <>
+                          <Square className="mr-2 h-4 w-4" />
+                          Stop Experiment
+                        </>
+                      )}
+                    </Button>
+                    <Button
+                      onClick={handleViewData}
+                      variant="outline"
+                    >
+                      <Download className="mr-2 h-4 w-4" />
+                      View Data
+                    </Button>
+                  </>
+                )}
               </div>
             </div>
+          </CardContent>
+        </Card>
 
-            {/* Host Management */}
-            {hosts.length === 0 ? (
-              <Alert>
-                <AlertDescription>
-                  No hosts found. Make sure your dashboard backend is running on port 9090.
-                </AlertDescription>
-              </Alert>
-            ) : (
-              <Card>
-                <CardHeader className="flex flex-row items-center justify-between">
-                  <CardTitle className="flex items-center gap-2">
-                    <Server className="h-5 w-5" />
-                    Managed Hosts ({hosts.length})
-                  </CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <Table>
-                    <TableHeader>
-                      <TableRow>
-                        <TableHead>Name</TableHead>
-                        <TableHead>IP Address</TableHead>
-                        <TableHead>CPU Service</TableHead>
-                        <TableHead>Collector Service</TableHead>
-                        <TableHead>Overall Status</TableHead>
-                        <TableHead>Last Updated</TableHead>
-                        <TableHead className="text-right">Actions</TableHead>
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {hosts.map((host) => {
-                        const health = healthStatus[host.name || ''];
-                        const isHealthy = health?.cpuServiceHealthy && health?.collectorServiceHealthy;
+        {/* Experiment Data Display */}
+        {experimentData && (
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Download className="h-5 w-5" />
+                Experiment Data
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="space-y-4">
+                {/* Status */}
+                <div>
+                  <div className="text-sm">
+                    Status: <Badge>{experimentData.status}</Badge>
+                  </div>
+                  {experimentData.duration && (
+                    <div className="text-sm text-muted-foreground mt-1">
+                      Duration: {experimentData.duration}s
+                    </div>
+                  )}
+                </div>
 
-                        return (
-                          <TableRow key={host.name}>
-                            <TableCell className="font-medium">{host.name}</TableCell>
-                            <TableCell>{host.externalIP}</TableCell>
-                            <TableCell>
-                              <Badge variant={health?.cpuServiceHealthy ? "success" : "destructive"}>
-                                {health?.cpuServiceHealthy ? "Healthy" : "Unhealthy"}
-                              </Badge>
-                            </TableCell>
-                            <TableCell>
-                              <Badge variant={health?.collectorServiceHealthy ? "success" : "destructive"}>
-                                {health?.collectorServiceHealthy ? "Healthy" : "Unhealthy"}
-                              </Badge>
-                            </TableCell>
-                            <TableCell>
-                              <Badge variant={isHealthy ? "default" : health ? "destructive" : "secondary"}>
-                                {isHealthy ? (
-                                  <>
-                                    <Wifi className="h-3 w-3 mr-1" />
-                                    Online
-                                  </>
-                                ) : health ? (
-                                  <>
-                                    <WifiOff className="h-3 w-3 mr-1" />
-                                    Offline
-                                  </>
-                                ) : (
-                                  "Unknown"
-                                )}
-                              </Badge>
-                            </TableCell>
-                            <TableCell className="text-sm text-muted-foreground">
-                              {health?.timestamp
-                                ? new Date(health.timestamp).toLocaleTimeString()
-                                : "-"}
-                            </TableCell>
-                            <TableCell className="text-right">
-                              <Button
-                                onClick={() => handleRunTest(host)}
-                                size="sm"
-                                disabled={!health?.cpuServiceHealthy}
-                              >
-                                <FlaskConical className="h-4 w-4 mr-1" />
-                                Test
-                              </Button>
-                            </TableCell>
-                          </TableRow>
-                        );
-                      })}
-                    </TableBody>
-                  </Table>
-                </CardContent>
-              </Card>
-            )}
-          </>
+                {/* Collector Results */}
+                {experimentData.collectorResults && Object.keys(experimentData.collectorResults).length > 0 && (
+                  <div>
+                    <h3 className="font-semibold mb-2">Collector Results</h3>
+                    <div className="space-y-2">
+                      {Object.entries(experimentData.collectorResults).map(([targetName, result]) => (
+                        <div key={targetName} className="border rounded p-3">
+                          <div className="font-medium">{targetName}</div>
+                          <div className="text-sm text-muted-foreground">
+                            Status: <Badge>{result.status}</Badge>
+                          </div>
+                          {result.error && (
+                            <div className="text-xs text-red-500 mt-1">
+                              Error: {result.error}
+                            </div>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* Requester Result */}
+                {experimentData.requesterResult && (
+                  <div>
+                    <h3 className="font-semibold mb-2">Requester Result</h3>
+                    <div className="border rounded p-3">
+                      <div className="text-sm">
+                        Status: <Badge>{experimentData.requesterResult.status}</Badge>
+                      </div>
+                      {experimentData.requesterResult.error && (
+                        <div className="text-xs text-red-500 mt-1">
+                          Error: {experimentData.requesterResult.error}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                )}
+
+                {/* Errors */}
+                {experimentData.errors && experimentData.errors.length > 0 && (
+                  <div>
+                    <h3 className="font-semibold mb-2 text-red-500">Errors</h3>
+                    <div className="space-y-1">
+                      {experimentData.errors.map((error, idx) => (
+                        <Alert key={idx} variant="destructive">
+                          <AlertDescription>
+                            [{error.phase}] {error.message}
+                          </AlertDescription>
+                        </Alert>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+            </CardContent>
+          </Card>
         )}
       </main>
     </div>

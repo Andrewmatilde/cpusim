@@ -16,7 +16,19 @@ export default defineConfig({
   },
   server: {
     proxy: {
-      '/api': {
+      '/config': {
+        target: 'http://localhost:9090',
+        changeOrigin: true,
+      },
+      '/status': {
+        target: 'http://localhost:9090',
+        changeOrigin: true,
+      },
+      '/health': {
+        target: 'http://localhost:9090',
+        changeOrigin: true,
+      },
+      '/experiments': {
         target: 'http://localhost:9090',
         changeOrigin: true,
       },

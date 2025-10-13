@@ -27,6 +27,18 @@ func (h *APIHandler) GetServiceConfig(c *gin.Context) {
 	c.JSON(http.StatusOK, response)
 }
 
+// GetStatus implements getting the service status
+func (h *APIHandler) GetStatus(c *gin.Context) {
+	status := h.service.GetStatus()
+	currentExpID := h.service.GetCurrentExperimentID()
+
+	response := generated.StatusResponse{
+		Status:              generated.StatusResponseStatus(status),
+		CurrentExperimentId: currentExpID,
+	}
+	c.JSON(http.StatusOK, response)
+}
+
 // HealthCheck implements the health check endpoint
 func (h *APIHandler) HealthCheck(c *gin.Context) {
 	response := generated.HealthResponse{
@@ -143,52 +155,6 @@ func (h *APIHandler) StopExperiment(c *gin.Context, experimentId string) {
 	c.JSON(http.StatusOK, response)
 }
 
-// GetExperimentStatus implements getting experiment status
-func (h *APIHandler) GetExperimentStatus(c *gin.Context, experimentId string) {
-	data, err := h.service.GetExperiment(experimentId)
-	if err != nil {
-		c.JSON(http.StatusNotFound, generated.ErrorResponse{
-			Error:     "experiment_not_found",
-			Message:   err.Error(),
-			Timestamp: time.Now(),
-		})
-		return
-	}
-
-	// Convert MetricsData to ExperimentStatus
-	status := generated.ExperimentStatus{
-		ExperimentId:        experimentId,
-		Status:              convertToStatusEnum(data),
-		StartTime:           data.StartTime,
-		IsActive:            data.EndTime.IsZero(),
-		DataPointsCollected: data.DataPointsCollected,
-	}
-
-	if !data.EndTime.IsZero() {
-		status.EndTime = data.EndTime
-		status.Duration = int(data.Duration)
-	}
-
-	// Add last metrics if available
-	if len(data.Metrics) > 0 {
-		lastMetric := data.Metrics[len(data.Metrics)-1]
-		status.LastMetrics = generated.SystemMetrics{
-			CpuUsagePercent:          float32(lastMetric.CPUUsagePercent),
-			MemoryUsageBytes:         lastMetric.MemoryUsageBytes,
-			MemoryUsagePercent:       float32(lastMetric.MemoryUsagePercent),
-			CalculatorServiceHealthy: lastMetric.CalculatorServiceHealthy,
-			NetworkIOBytes: generated.NetworkIO{
-				BytesReceived:   lastMetric.NetworkIOBytes.BytesReceived,
-				BytesSent:       lastMetric.NetworkIOBytes.BytesSent,
-				PacketsReceived: lastMetric.NetworkIOBytes.PacketsReceived,
-				PacketsSent:     lastMetric.NetworkIOBytes.PacketsSent,
-			},
-		}
-	}
-
-	c.JSON(http.StatusOK, status)
-}
-
 // GetExperimentData implements getting experiment data
 func (h *APIHandler) GetExperimentData(c *gin.Context, experimentId string) {
 	data, err := h.service.GetExperiment(experimentId)
@@ -235,12 +201,4 @@ func (h *APIHandler) GetExperimentData(c *gin.Context, experimentId string) {
 	}
 
 	c.JSON(http.StatusOK, result)
-}
-
-// Helper function to convert MetricsData to status enum
-func convertToStatusEnum(data *collector.MetricsData) generated.ExperimentStatusStatus {
-	if data.EndTime.IsZero() {
-		return generated.ExperimentStatusStatusRunning
-	}
-	return generated.ExperimentStatusStatusStopped
 }

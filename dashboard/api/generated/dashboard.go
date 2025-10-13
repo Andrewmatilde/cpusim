@@ -33,6 +33,21 @@ type ClientHost struct {
 	RequesterServiceURL string `json:"requesterServiceURL,omitempty"`
 }
 
+// ClientHostStatus defines model for ClientHostStatus.
+type ClientHostStatus struct {
+	// CurrentExperimentId Current experiment ID if running
+	CurrentExperimentId string `json:"currentExperimentId,omitempty"`
+
+	// Error Error message if failed to query
+	Error string `json:"error,omitempty"`
+
+	// Name Host name
+	Name string `json:"name,omitempty"`
+
+	// Status Service status (Pending, Running, or Error)
+	Status string `json:"status,omitempty"`
+}
+
 // CollectorResult defines model for CollectorResult.
 type CollectorResult struct {
 	DataPointsCollected int    `json:"dataPointsCollected,omitempty"`
@@ -97,6 +112,15 @@ type HealthResponse struct {
 	Uptime int `json:"uptime,omitempty"`
 }
 
+// HostsStatusResponse defines model for HostsStatusResponse.
+type HostsStatusResponse struct {
+	ClientHostStatus ClientHostStatus `json:"clientHostStatus,omitempty"`
+
+	// TargetHostsStatus Status of target hosts (collectors)
+	TargetHostsStatus []TargetHostStatus `json:"targetHostsStatus,omitempty"`
+	Timestamp         time.Time          `json:"timestamp,omitempty"`
+}
+
 // RequesterResult defines model for RequesterResult.
 type RequesterResult struct {
 	AvgResponseTime float64 `json:"avgResponseTime,omitempty"`
@@ -139,6 +163,21 @@ type TargetHost struct {
 	ExternalIP          string `json:"externalIP,omitempty"`
 	InternalIP          string `json:"internalIP,omitempty"`
 	Name                string `json:"name,omitempty"`
+}
+
+// TargetHostStatus defines model for TargetHostStatus.
+type TargetHostStatus struct {
+	// CurrentExperimentId Current experiment ID if running
+	CurrentExperimentId string `json:"currentExperimentId,omitempty"`
+
+	// Error Error message if failed to query
+	Error string `json:"error,omitempty"`
+
+	// Name Host name
+	Name string `json:"name,omitempty"`
+
+	// Status Service status (Pending, Running, or Error)
+	Status string `json:"status,omitempty"`
 }
 
 // StartExperimentJSONRequestBody defines body for StartExperiment for application/json ContentType.
@@ -234,6 +273,9 @@ type ClientInterface interface {
 	// HealthCheck request
 	HealthCheck(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error)
 
+	// GetHostsStatus request
+	GetHostsStatus(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error)
+
 	// GetStatus request
 	GetStatus(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error)
 }
@@ -300,6 +342,18 @@ func (c *Client) StopExperiment(ctx context.Context, experimentId string, reqEdi
 
 func (c *Client) HealthCheck(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error) {
 	req, err := NewHealthCheckRequest(c.Server)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) GetHostsStatus(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewGetHostsStatusRequest(c.Server)
 	if err != nil {
 		return nil, err
 	}
@@ -484,6 +538,33 @@ func NewHealthCheckRequest(server string) (*http.Request, error) {
 	return req, nil
 }
 
+// NewGetHostsStatusRequest generates requests for GetHostsStatus
+func NewGetHostsStatusRequest(server string) (*http.Request, error) {
+	var err error
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/hosts/status")
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest("GET", queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
 // NewGetStatusRequest generates requests for GetStatus
 func NewGetStatusRequest(server string) (*http.Request, error) {
 	var err error
@@ -570,6 +651,9 @@ type ClientWithResponsesInterface interface {
 
 	// HealthCheckWithResponse request
 	HealthCheckWithResponse(ctx context.Context, reqEditors ...RequestEditorFn) (*HealthCheckResponse, error)
+
+	// GetHostsStatusWithResponse request
+	GetHostsStatusWithResponse(ctx context.Context, reqEditors ...RequestEditorFn) (*GetHostsStatusResponse, error)
 
 	// GetStatusWithResponse request
 	GetStatusWithResponse(ctx context.Context, reqEditors ...RequestEditorFn) (*GetStatusResponse, error)
@@ -690,6 +774,28 @@ func (r HealthCheckResponse) StatusCode() int {
 	return 0
 }
 
+type GetHostsStatusResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	JSON200      *HostsStatusResponse
+}
+
+// Status returns HTTPResponse.Status
+func (r GetHostsStatusResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r GetHostsStatusResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
 type GetStatusResponse struct {
 	Body         []byte
 	HTTPResponse *http.Response
@@ -763,6 +869,15 @@ func (c *ClientWithResponses) HealthCheckWithResponse(ctx context.Context, reqEd
 		return nil, err
 	}
 	return ParseHealthCheckResponse(rsp)
+}
+
+// GetHostsStatusWithResponse request returning *GetHostsStatusResponse
+func (c *ClientWithResponses) GetHostsStatusWithResponse(ctx context.Context, reqEditors ...RequestEditorFn) (*GetHostsStatusResponse, error) {
+	rsp, err := c.GetHostsStatus(ctx, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseGetHostsStatusResponse(rsp)
 }
 
 // GetStatusWithResponse request returning *GetStatusResponse
@@ -939,6 +1054,32 @@ func ParseHealthCheckResponse(rsp *http.Response) (*HealthCheckResponse, error) 
 	return response, nil
 }
 
+// ParseGetHostsStatusResponse parses an HTTP response from a GetHostsStatusWithResponse call
+func ParseGetHostsStatusResponse(rsp *http.Response) (*GetHostsStatusResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &GetHostsStatusResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest HostsStatusResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	}
+
+	return response, nil
+}
+
 // ParseGetStatusResponse parses an HTTP response from a GetStatusWithResponse call
 func ParseGetStatusResponse(rsp *http.Response) (*GetStatusResponse, error) {
 	bodyBytes, err := io.ReadAll(rsp.Body)
@@ -982,6 +1123,9 @@ type ServerInterface interface {
 	// Health check
 	// (GET /health)
 	HealthCheck(c *gin.Context)
+	// Get status of all hosts
+	// (GET /hosts/status)
+	GetHostsStatus(c *gin.Context)
 	// Get experiment manager status
 	// (GET /status)
 	GetStatus(c *gin.Context)
@@ -1083,6 +1227,19 @@ func (siw *ServerInterfaceWrapper) HealthCheck(c *gin.Context) {
 	siw.Handler.HealthCheck(c)
 }
 
+// GetHostsStatus operation middleware
+func (siw *ServerInterfaceWrapper) GetHostsStatus(c *gin.Context) {
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		middleware(c)
+		if c.IsAborted() {
+			return
+		}
+	}
+
+	siw.Handler.GetHostsStatus(c)
+}
+
 // GetStatus operation middleware
 func (siw *ServerInterfaceWrapper) GetStatus(c *gin.Context) {
 
@@ -1128,35 +1285,38 @@ func RegisterHandlersWithOptions(router gin.IRouter, si ServerInterface, options
 	router.GET(options.BaseURL+"/experiments/:experimentId", wrapper.GetExperimentData)
 	router.POST(options.BaseURL+"/experiments/:experimentId/stop", wrapper.StopExperiment)
 	router.GET(options.BaseURL+"/health", wrapper.HealthCheck)
+	router.GET(options.BaseURL+"/hosts/status", wrapper.GetHostsStatus)
 	router.GET(options.BaseURL+"/status", wrapper.GetStatus)
 }
 
 // Base64 encoded, gzipped, json marshaled Swagger object
 var swaggerSpec = []string{
 
-	"H4sIAAAAAAAC/+RYX28TORD/KpaPBzhtm0ARUvNyOgo6kCoUBfqEeidnd5IYvLaxx1xzVb77yfb+j7MN",
-	"XAsP95Zdz3r+/eY3M7mluSq1kiDR0tkttfkGShZ+XggOEt8oi/5JG6XBIIdwBjcIRjLxdu6fcKuBzqhF",
-	"w+Wa7jLK5eixZCUkDwx8cWARzHswX3kOV4vLhNwuq9+o5SfI0X95oYSAHJVZgHUiYXHBkM0Vl2grUSg6",
-	"V3uD12D8TWCMMknr4EaD4SVIfFskBTbK4rtDvllk6OyR7rz2RizAaiUtJMJ/0MYSrGXrtAXIS7DISu1P",
-	"V8qUDOnMBwZO/BHNjrKsCcIrhixEFmxuuEauJJ3RC1VqAQikYHazVMwUpI0bMTE72cCfvJ+98I4VBfd3",
-	"MjHvyT4ysKIz+sukBe6kQu1kiIJdNrCuup+sjCpJo7Vjoc3IZ9hCQZZb4tNJAlYTcciVXPH1XQZVOL6I",
-	"wt4cZ1i0ZRi4V9UJ4ZJYyJUsbKtXunJZwVMWH3iE2DEprPAcIscRyjtD2OY3YJC2GGDGsG2vSttaG7tx",
-	"MRCPtWDw29xoy6cfttZeUol8I4xf17XUh+RoLY9Vmd6wWLJ9Oxuw/RWcz0gTxfqFRaUzApifpvy/5+Id",
-	"4Za7WG7M+UNZqtUdzNE9OfgGmMDNYecOkvB36M+o01hhuO9tVfUknicLumk4KS8W+wXWd4N9Xdc+7leR",
-	"cksBSer4/s62YlzEhtno4RJfPE84lI0F2bo8B2tXThx5FypkooqHPeqbVED7NLxPvU2rslXmIrvXjPxY",
-	"SbFtzq4Wl/bJfgvrTUujTaqV9LYys4bwlCibS26RqBWJQqEhWYKq7lykBDQ8j+2MZscR/IdG4T63J2Pn",
-	"2alLHCEXd/NG35Mryb846I4CvACJfMXB0IyW7OYS5Bo3dPbiLKMll/Xj04xqhn6cpDP650d28s/05Pz6",
-	"cfXj5PrX+tWT3x4dohXlcLRxVDL9Qi3ZDS9dSWdnL6bTYFJ8fJqEnGdzbnyJfOxHorXgOh1cdPYYvhpM",
-	"Wc4Yb3knniWTbA2mYljyeA6y4HJNlCELJyWX6ycPRrsdTO250DS+0Zk+o7l2d0g8yNKx784u3LVSx/DE",
-	"ShmSK2UKLhn6aBfcX7x0CAW5mF8Ry0snIot0hsyAChReqxd63wq1Kn6fv6UZ/QrGRuXPTqenU++I0iCZ",
-	"5nRGz06np2c0FMgmxHrSTqVrCLnwmQg3+6KkfwD2qdADN2IvfP9sOo0pkwgyfM+0FjwPN0w+2Ti3Rib5",
-	"xtF3tzeLv09xbUiIdWXJzDYanObkIDfphtQDrwLgQI8nMNtO+5YoSZgQFavajOAGJLFRrBnLaDYI3oAI",
-	"aTMIv1TF9v7ClqbbXZ9k0DjYPWDyEoNiIoP92dt4zLcNXoRd4fl9GtVbihP2vGRFnb+o+/zH6e7EggkD",
-	"rNgSE2l3AOmQYMKIhL+TO/Iesie33YayGyvuwXLumcGwEhD8AvjxlnJvqWcLWvPhsFn1IZZ1ovMfuvDu",
-	"+odANfg8npoiiHhoPP8p0JAKyUo5WSR4DoZmjuNg4vfFLusN2UrpHln9r6BwNGsprZOs9dPh8YPp653q",
-	"/U13gLmU9r2yPu5+wWRBcgFMOk2sW550O3MA8iZs5gfJKy7uFxvIPz/kUDL4f2BkKuGWRJO3gyjEK0ge",
-	"TA2utUP6waGr/tfj4aat/iKRcKxeGcb2g1FS6i8YUYWfzWpGGZuVwzjljKAzukHUs8lEqJwJv9DOzqfn",
-	"U7q73v0bAAD//xVsQzyLGAAA",
+	"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",
 }
 
 // GetSwagger returns the content of the embedded swagger specification file

@@ -1,27 +1,24 @@
-// Re-export generated types from OpenAPI specification
+// Re-export generated types from Dashboard OpenAPI specification (v0.6.0)
 export type {
-  Host,
-  HostConfig,
-  HostHealth,
-  CalculationRequest,
-  CalculationResponse,
-  RequestConfig,
-  PhaseStatus,
-  ExperimentPhases,
-  CreateExperimentRequest,
-  Experiment,
-  ExperimentListResponse,
-  CollectorExperimentData,
-  ExperimentDataResponse,
-  MetricDataPoint,
-  SystemMetrics,
-  NetworkIO,
-  StopAndCollectResponse,
-  ExperimentOperationResponse,
-  RequestExperimentStats,
-  GetHosts200Response,
+  // Dashboard configuration
+  ServiceConfig,
+  TargetHost,
+  ClientHost,
+
+  // Experiment management
+  StartExperimentRequest,
+  ExperimentResponse,
+  ExperimentData,
+  CollectorResult,
+  RequesterResult,
+  ExperimentError,
+
+  // Status and health
+  StatusResponse,
+  HealthResponse,
+  ErrorResponse,
 } from './generated/models';
 
-// Legacy type aliases for backward compatibility
-export type { RequestExperimentStats as RequesterData } from './generated/models';
-export type { GetHosts200Response as HostsResponse } from './generated/models';
+// Type aliases for convenience
+export type DashboardStatus = 'Pending' | 'Running';
+export type ExperimentStatus = 'running' | 'completed' | 'failed' | 'partial';

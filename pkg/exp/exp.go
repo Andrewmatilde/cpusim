@@ -48,8 +48,11 @@ func (s *Experiment[T]) Start(id string, timeout time.Duration) error {
 		return fmt.Errorf("no collect data found")
 	}
 
-	ctx, cancel := context.WithTimeout(s.ctx, timeout)
+	// Create new context with timeout and update s.ctx
+	ctx, cancel := context.WithTimeout(context.Background(), timeout)
+	s.ctx = ctx
 	s.cancel = cancel
+
 	go func() {
 		data, err := s.CollectData(ctx)
 		if err != nil {
@@ -65,10 +68,20 @@ func (s *Experiment[T]) Start(id string, timeout time.Duration) error {
 	return nil
 }
 
-func (s *Experiment[T]) Stop() {
+func (s *Experiment[T]) Stop() error {
+	if s.cancel == nil {
+		return fmt.Errorf("experiment not started")
+	}
+
 	s.cancel()
-	<-s.ctx.Done()
-	return
+
+	// Wait for context to be done with a timeout
+	select {
+	case <-s.ctx.Done():
+		return nil
+	case <-time.After(15 * time.Second):
+		return fmt.Errorf("stop timeout: experiment did not finish within 5 seconds")
+	}
 }
 
 func (s *Experiment[T]) IsDone() bool {

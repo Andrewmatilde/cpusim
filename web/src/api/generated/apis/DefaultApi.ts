@@ -2,7 +2,7 @@
 /* eslint-disable */
 /**
  * CPU Simulation Dashboard API
- * 管理面API，用于管理多个CPU仿真主机和全局实验
+ * Dashboard service for coordinating distributed CPU simulation experiments
  *
  * The version of the OpenAPI document: 2.0.0
  * 
@@ -15,79 +15,41 @@
 
 import * as runtime from '../runtime';
 import type {
-  CalculationRequest,
-  CalculationResponse,
-  CreateExperimentRequest,
-  Experiment,
-  ExperimentDataResponse,
-  ExperimentListResponse,
-  ExperimentOperationResponse,
-  ExperimentPhases,
-  GetHosts200Response,
-  HostHealth,
-  StopAndCollectResponse,
+  ErrorResponse,
+  ExperimentData,
+  ExperimentResponse,
+  HealthResponse,
+  ServiceConfig,
+  StartExperimentRequest,
+  StatusResponse,
 } from '../models/index';
 import {
-    CalculationRequestFromJSON,
-    CalculationRequestToJSON,
-    CalculationResponseFromJSON,
-    CalculationResponseToJSON,
-    CreateExperimentRequestFromJSON,
-    CreateExperimentRequestToJSON,
-    ExperimentFromJSON,
-    ExperimentToJSON,
-    ExperimentDataResponseFromJSON,
-    ExperimentDataResponseToJSON,
-    ExperimentListResponseFromJSON,
-    ExperimentListResponseToJSON,
-    ExperimentOperationResponseFromJSON,
-    ExperimentOperationResponseToJSON,
-    ExperimentPhasesFromJSON,
-    ExperimentPhasesToJSON,
-    GetHosts200ResponseFromJSON,
-    GetHosts200ResponseToJSON,
-    HostHealthFromJSON,
-    HostHealthToJSON,
-    StopAndCollectResponseFromJSON,
-    StopAndCollectResponseToJSON,
+    ErrorResponseFromJSON,
+    ErrorResponseToJSON,
+    ExperimentDataFromJSON,
+    ExperimentDataToJSON,
+    ExperimentResponseFromJSON,
+    ExperimentResponseToJSON,
+    HealthResponseFromJSON,
+    HealthResponseToJSON,
+    ServiceConfigFromJSON,
+    ServiceConfigToJSON,
+    StartExperimentRequestFromJSON,
+    StartExperimentRequestToJSON,
+    StatusResponseFromJSON,
+    StatusResponseToJSON,
 } from '../models/index';
-
-export interface CreateGlobalExperimentRequest {
-    createExperimentRequest: CreateExperimentRequest;
-}
 
 export interface GetExperimentDataRequest {
     experimentId: string;
-    hostName?: string;
 }
 
-export interface GetExperimentPhasesRequest {
+export interface StartExperimentOperationRequest {
+    startExperimentRequest: StartExperimentRequest;
+}
+
+export interface StopExperimentRequest {
     experimentId: string;
-}
-
-export interface GetExperimentsRequest {
-    limit?: number;
-}
-
-export interface GetGlobalExperimentRequest {
-    experimentId: string;
-}
-
-export interface GetHostHealthRequest {
-    name: string;
-}
-
-export interface StartCompleteExperimentRequest {
-    experimentId: string;
-}
-
-export interface StopCompleteExperimentRequest {
-    experimentId: string;
-}
-
-export interface TestHostCalculationRequest {
-    name: string;
-    calculationRequest?: CalculationRequest;
 }
 
 /**
@@ -96,48 +58,9 @@ export interface TestHostCalculationRequest {
 export class DefaultApi extends runtime.BaseAPI {
 
     /**
-     * 创建实验
+     * Get experiment data
      */
-    async createGlobalExperimentRaw(requestParameters: CreateGlobalExperimentRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<runtime.ApiResponse<Experiment>> {
-        if (requestParameters['createExperimentRequest'] == null) {
-            throw new runtime.RequiredError(
-                'createExperimentRequest',
-                'Required parameter "createExperimentRequest" was null or undefined when calling createGlobalExperiment().'
-            );
-        }
-
-        const queryParameters: any = {};
-
-        const headerParameters: runtime.HTTPHeaders = {};
-
-        headerParameters['Content-Type'] = 'application/json';
-
-
-        let urlPath = `/api/experiments`;
-
-        const response = await this.request({
-            path: urlPath,
-            method: 'POST',
-            headers: headerParameters,
-            query: queryParameters,
-            body: CreateExperimentRequestToJSON(requestParameters['createExperimentRequest']),
-        }, initOverrides);
-
-        return new runtime.JSONApiResponse(response, (jsonValue) => ExperimentFromJSON(jsonValue));
-    }
-
-    /**
-     * 创建实验
-     */
-    async createGlobalExperiment(requestParameters: CreateGlobalExperimentRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<Experiment> {
-        const response = await this.createGlobalExperimentRaw(requestParameters, initOverrides);
-        return await response.value();
-    }
-
-    /**
-     * 获取实验数据
-     */
-    async getExperimentDataRaw(requestParameters: GetExperimentDataRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<runtime.ApiResponse<ExperimentDataResponse>> {
+    async getExperimentDataRaw(requestParameters: GetExperimentDataRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<runtime.ApiResponse<ExperimentData>> {
         if (requestParameters['experimentId'] == null) {
             throw new runtime.RequiredError(
                 'experimentId',
@@ -147,14 +70,10 @@ export class DefaultApi extends runtime.BaseAPI {
 
         const queryParameters: any = {};
 
-        if (requestParameters['hostName'] != null) {
-            queryParameters['hostName'] = requestParameters['hostName'];
-        }
-
         const headerParameters: runtime.HTTPHeaders = {};
 
 
-        let urlPath = `/api/experiments/{experimentId}/data`;
+        let urlPath = `/experiments/{experimentId}`;
         urlPath = urlPath.replace(`{${"experimentId"}}`, encodeURIComponent(String(requestParameters['experimentId'])));
 
         const response = await this.request({
@@ -164,35 +83,27 @@ export class DefaultApi extends runtime.BaseAPI {
             query: queryParameters,
         }, initOverrides);
 
-        return new runtime.JSONApiResponse(response, (jsonValue) => ExperimentDataResponseFromJSON(jsonValue));
+        return new runtime.JSONApiResponse(response, (jsonValue) => ExperimentDataFromJSON(jsonValue));
     }
 
     /**
-     * 获取实验数据
+     * Get experiment data
      */
-    async getExperimentData(requestParameters: GetExperimentDataRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<ExperimentDataResponse> {
+    async getExperimentData(requestParameters: GetExperimentDataRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<ExperimentData> {
         const response = await this.getExperimentDataRaw(requestParameters, initOverrides);
         return await response.value();
     }
 
     /**
-     * 获取实验各阶段状态
+     * Get service configuration
      */
-    async getExperimentPhasesRaw(requestParameters: GetExperimentPhasesRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<runtime.ApiResponse<ExperimentPhases>> {
-        if (requestParameters['experimentId'] == null) {
-            throw new runtime.RequiredError(
-                'experimentId',
-                'Required parameter "experimentId" was null or undefined when calling getExperimentPhases().'
-            );
-        }
-
+    async getServiceConfigRaw(initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<runtime.ApiResponse<ServiceConfig>> {
         const queryParameters: any = {};
 
         const headerParameters: runtime.HTTPHeaders = {};
 
 
-        let urlPath = `/api/experiments/{experimentId}/phases`;
-        urlPath = urlPath.replace(`{${"experimentId"}}`, encodeURIComponent(String(requestParameters['experimentId'])));
+        let urlPath = `/config`;
 
         const response = await this.request({
             path: urlPath,
@@ -201,31 +112,27 @@ export class DefaultApi extends runtime.BaseAPI {
             query: queryParameters,
         }, initOverrides);
 
-        return new runtime.JSONApiResponse(response, (jsonValue) => ExperimentPhasesFromJSON(jsonValue));
+        return new runtime.JSONApiResponse(response, (jsonValue) => ServiceConfigFromJSON(jsonValue));
     }
 
     /**
-     * 获取实验各阶段状态
+     * Get service configuration
      */
-    async getExperimentPhases(requestParameters: GetExperimentPhasesRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<ExperimentPhases> {
-        const response = await this.getExperimentPhasesRaw(requestParameters, initOverrides);
+    async getServiceConfig(initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<ServiceConfig> {
+        const response = await this.getServiceConfigRaw(initOverrides);
         return await response.value();
     }
 
     /**
-     * 获取实验列表
+     * Get experiment manager status
      */
-    async getExperimentsRaw(requestParameters: GetExperimentsRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<runtime.ApiResponse<ExperimentListResponse>> {
+    async getStatusRaw(initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<runtime.ApiResponse<StatusResponse>> {
         const queryParameters: any = {};
-
-        if (requestParameters['limit'] != null) {
-            queryParameters['limit'] = requestParameters['limit'];
-        }
 
         const headerParameters: runtime.HTTPHeaders = {};
 
 
-        let urlPath = `/api/experiments`;
+        let urlPath = `/status`;
 
         const response = await this.request({
             path: urlPath,
@@ -234,35 +141,27 @@ export class DefaultApi extends runtime.BaseAPI {
             query: queryParameters,
         }, initOverrides);
 
-        return new runtime.JSONApiResponse(response, (jsonValue) => ExperimentListResponseFromJSON(jsonValue));
+        return new runtime.JSONApiResponse(response, (jsonValue) => StatusResponseFromJSON(jsonValue));
     }
 
     /**
-     * 获取实验列表
+     * Get experiment manager status
      */
-    async getExperiments(requestParameters: GetExperimentsRequest = {}, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<ExperimentListResponse> {
-        const response = await this.getExperimentsRaw(requestParameters, initOverrides);
+    async getStatus(initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<StatusResponse> {
+        const response = await this.getStatusRaw(initOverrides);
         return await response.value();
     }
 
     /**
-     * 获取全局实验详情
+     * Health check
      */
-    async getGlobalExperimentRaw(requestParameters: GetGlobalExperimentRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<runtime.ApiResponse<Experiment>> {
-        if (requestParameters['experimentId'] == null) {
-            throw new runtime.RequiredError(
-                'experimentId',
-                'Required parameter "experimentId" was null or undefined when calling getGlobalExperiment().'
-            );
-        }
-
+    async healthCheckRaw(initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<runtime.ApiResponse<HealthResponse>> {
         const queryParameters: any = {};
 
         const headerParameters: runtime.HTTPHeaders = {};
 
 
-        let urlPath = `/api/experiments/{experimentId}`;
-        urlPath = urlPath.replace(`{${"experimentId"}}`, encodeURIComponent(String(requestParameters['experimentId'])));
+        let urlPath = `/health`;
 
         const response = await this.request({
             path: urlPath,
@@ -271,169 +170,26 @@ export class DefaultApi extends runtime.BaseAPI {
             query: queryParameters,
         }, initOverrides);
 
-        return new runtime.JSONApiResponse(response, (jsonValue) => ExperimentFromJSON(jsonValue));
+        return new runtime.JSONApiResponse(response, (jsonValue) => HealthResponseFromJSON(jsonValue));
     }
 
     /**
-     * 获取全局实验详情
+     * Health check
      */
-    async getGlobalExperiment(requestParameters: GetGlobalExperimentRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<Experiment> {
-        const response = await this.getGlobalExperimentRaw(requestParameters, initOverrides);
+    async healthCheck(initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<HealthResponse> {
+        const response = await this.healthCheckRaw(initOverrides);
         return await response.value();
     }
 
     /**
-     * 检查主机健康状态
+     * Starts collectors on all targets, then starts requester
+     * Start a new dashboard experiment
      */
-    async getHostHealthRaw(requestParameters: GetHostHealthRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<runtime.ApiResponse<HostHealth>> {
-        if (requestParameters['name'] == null) {
+    async startExperimentRaw(requestParameters: StartExperimentOperationRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<runtime.ApiResponse<ExperimentResponse>> {
+        if (requestParameters['startExperimentRequest'] == null) {
             throw new runtime.RequiredError(
-                'name',
-                'Required parameter "name" was null or undefined when calling getHostHealth().'
-            );
-        }
-
-        const queryParameters: any = {};
-
-        const headerParameters: runtime.HTTPHeaders = {};
-
-
-        let urlPath = `/api/hosts/{name}/health`;
-        urlPath = urlPath.replace(`{${"name"}}`, encodeURIComponent(String(requestParameters['name'])));
-
-        const response = await this.request({
-            path: urlPath,
-            method: 'GET',
-            headers: headerParameters,
-            query: queryParameters,
-        }, initOverrides);
-
-        return new runtime.JSONApiResponse(response, (jsonValue) => HostHealthFromJSON(jsonValue));
-    }
-
-    /**
-     * 检查主机健康状态
-     */
-    async getHostHealth(requestParameters: GetHostHealthRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<HostHealth> {
-        const response = await this.getHostHealthRaw(requestParameters, initOverrides);
-        return await response.value();
-    }
-
-    /**
-     * 获取所有主机列表
-     */
-    async getHostsRaw(initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<runtime.ApiResponse<GetHosts200Response>> {
-        const queryParameters: any = {};
-
-        const headerParameters: runtime.HTTPHeaders = {};
-
-
-        let urlPath = `/api/hosts`;
-
-        const response = await this.request({
-            path: urlPath,
-            method: 'GET',
-            headers: headerParameters,
-            query: queryParameters,
-        }, initOverrides);
-
-        return new runtime.JSONApiResponse(response, (jsonValue) => GetHosts200ResponseFromJSON(jsonValue));
-    }
-
-    /**
-     * 获取所有主机列表
-     */
-    async getHosts(initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<GetHosts200Response> {
-        const response = await this.getHostsRaw(initOverrides);
-        return await response.value();
-    }
-
-    /**
-     * 按顺序执行：启动collector → 启动requester
-     * 启动完整实验流程
-     */
-    async startCompleteExperimentRaw(requestParameters: StartCompleteExperimentRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<runtime.ApiResponse<ExperimentOperationResponse>> {
-        if (requestParameters['experimentId'] == null) {
-            throw new runtime.RequiredError(
-                'experimentId',
-                'Required parameter "experimentId" was null or undefined when calling startCompleteExperiment().'
-            );
-        }
-
-        const queryParameters: any = {};
-
-        const headerParameters: runtime.HTTPHeaders = {};
-
-
-        let urlPath = `/api/experiments/{experimentId}/start`;
-        urlPath = urlPath.replace(`{${"experimentId"}}`, encodeURIComponent(String(requestParameters['experimentId'])));
-
-        const response = await this.request({
-            path: urlPath,
-            method: 'POST',
-            headers: headerParameters,
-            query: queryParameters,
-        }, initOverrides);
-
-        return new runtime.JSONApiResponse(response, (jsonValue) => ExperimentOperationResponseFromJSON(jsonValue));
-    }
-
-    /**
-     * 按顺序执行：启动collector → 启动requester
-     * 启动完整实验流程
-     */
-    async startCompleteExperiment(requestParameters: StartCompleteExperimentRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<ExperimentOperationResponse> {
-        const response = await this.startCompleteExperimentRaw(requestParameters, initOverrides);
-        return await response.value();
-    }
-
-    /**
-     * 按顺序执行：停止requester → 停止collector → 收集数据
-     * 停止完整实验流程并收集数据
-     */
-    async stopCompleteExperimentRaw(requestParameters: StopCompleteExperimentRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<runtime.ApiResponse<StopAndCollectResponse>> {
-        if (requestParameters['experimentId'] == null) {
-            throw new runtime.RequiredError(
-                'experimentId',
-                'Required parameter "experimentId" was null or undefined when calling stopCompleteExperiment().'
-            );
-        }
-
-        const queryParameters: any = {};
-
-        const headerParameters: runtime.HTTPHeaders = {};
-
-
-        let urlPath = `/api/experiments/{experimentId}/stop`;
-        urlPath = urlPath.replace(`{${"experimentId"}}`, encodeURIComponent(String(requestParameters['experimentId'])));
-
-        const response = await this.request({
-            path: urlPath,
-            method: 'POST',
-            headers: headerParameters,
-            query: queryParameters,
-        }, initOverrides);
-
-        return new runtime.JSONApiResponse(response, (jsonValue) => StopAndCollectResponseFromJSON(jsonValue));
-    }
-
-    /**
-     * 按顺序执行：停止requester → 停止collector → 收集数据
-     * 停止完整实验流程并收集数据
-     */
-    async stopCompleteExperiment(requestParameters: StopCompleteExperimentRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<StopAndCollectResponse> {
-        const response = await this.stopCompleteExperimentRaw(requestParameters, initOverrides);
-        return await response.value();
-    }
-
-    /**
-     * 测试主机CPU计算
-     */
-    async testHostCalculationRaw(requestParameters: TestHostCalculationRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<runtime.ApiResponse<CalculationResponse>> {
-        if (requestParameters['name'] == null) {
-            throw new runtime.RequiredError(
-                'name',
-                'Required parameter "name" was null or undefined when calling testHostCalculation().'
+                'startExperimentRequest',
+                'Required parameter "startExperimentRequest" was null or undefined when calling startExperiment().'
             );
         }
 
@@ -444,25 +200,62 @@ export class DefaultApi extends runtime.BaseAPI {
         headerParameters['Content-Type'] = 'application/json';
 
 
-        let urlPath = `/api/hosts/{name}/calculate`;
-        urlPath = urlPath.replace(`{${"name"}}`, encodeURIComponent(String(requestParameters['name'])));
+        let urlPath = `/experiments`;
 
         const response = await this.request({
             path: urlPath,
             method: 'POST',
             headers: headerParameters,
             query: queryParameters,
-            body: CalculationRequestToJSON(requestParameters['calculationRequest']),
+            body: StartExperimentRequestToJSON(requestParameters['startExperimentRequest']),
         }, initOverrides);
 
-        return new runtime.JSONApiResponse(response, (jsonValue) => CalculationResponseFromJSON(jsonValue));
+        return new runtime.JSONApiResponse(response, (jsonValue) => ExperimentResponseFromJSON(jsonValue));
     }
 
     /**
-     * 测试主机CPU计算
+     * Starts collectors on all targets, then starts requester
+     * Start a new dashboard experiment
      */
-    async testHostCalculation(requestParameters: TestHostCalculationRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<CalculationResponse> {
-        const response = await this.testHostCalculationRaw(requestParameters, initOverrides);
+    async startExperiment(requestParameters: StartExperimentOperationRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<ExperimentResponse> {
+        const response = await this.startExperimentRaw(requestParameters, initOverrides);
+        return await response.value();
+    }
+
+    /**
+     * Stop the running experiment and cleanup sub-experiments
+     */
+    async stopExperimentRaw(requestParameters: StopExperimentRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<runtime.ApiResponse<ExperimentResponse>> {
+        if (requestParameters['experimentId'] == null) {
+            throw new runtime.RequiredError(
+                'experimentId',
+                'Required parameter "experimentId" was null or undefined when calling stopExperiment().'
+            );
+        }
+
+        const queryParameters: any = {};
+
+        const headerParameters: runtime.HTTPHeaders = {};
+
+
+        let urlPath = `/experiments/{experimentId}/stop`;
+        urlPath = urlPath.replace(`{${"experimentId"}}`, encodeURIComponent(String(requestParameters['experimentId'])));
+
+        const response = await this.request({
+            path: urlPath,
+            method: 'POST',
+            headers: headerParameters,
+            query: queryParameters,
+        }, initOverrides);
+
+        return new runtime.JSONApiResponse(response, (jsonValue) => ExperimentResponseFromJSON(jsonValue));
+    }
+
+    /**
+     * Stop the running experiment and cleanup sub-experiments
+     */
+    async stopExperiment(requestParameters: StopExperimentRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<ExperimentResponse> {
+        const response = await this.stopExperimentRaw(requestParameters, initOverrides);
         return await response.value();
     }
 

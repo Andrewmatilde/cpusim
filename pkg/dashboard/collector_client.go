@@ -93,3 +93,24 @@ func (c *HTTPCollectorClient) GetExperiment(ctx context.Context, experimentID st
 
 	return data, nil
 }
+
+// GetStatus retrieves the collector service status
+func (c *HTTPCollectorClient) GetStatus(ctx context.Context) (string, string, error) {
+	resp, err := c.client.GetStatusWithResponse(ctx)
+	if err != nil {
+		return "", "", fmt.Errorf("failed to get collector status: %w", err)
+	}
+
+	if resp.StatusCode() != 200 {
+		return "", "", fmt.Errorf("get collector status failed with status %d", resp.StatusCode())
+	}
+
+	if resp.JSON200 == nil {
+		return "", "", fmt.Errorf("no status returned from collector")
+	}
+
+	status := string(resp.JSON200.Status)
+	experimentID := resp.JSON200.CurrentExperimentId
+
+	return status, experimentID, nil
+}

@@ -110,3 +110,24 @@ func (c *HTTPRequesterClient) GetExperiment(ctx context.Context, experimentID st
 
 	return data, nil
 }
+
+// GetStatus retrieves the requester service status
+func (c *HTTPRequesterClient) GetStatus(ctx context.Context) (string, string, error) {
+	resp, err := c.client.GetStatusWithResponse(ctx)
+	if err != nil {
+		return "", "", fmt.Errorf("failed to get requester status: %w", err)
+	}
+
+	if resp.StatusCode() != 200 {
+		return "", "", fmt.Errorf("get requester status failed with status %d", resp.StatusCode())
+	}
+
+	if resp.JSON200 == nil {
+		return "", "", fmt.Errorf("no status returned from requester")
+	}
+
+	status := string(resp.JSON200.Status)
+	experimentID := resp.JSON200.CurrentExperimentId
+
+	return status, experimentID, nil
+}

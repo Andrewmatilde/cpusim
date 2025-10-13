@@ -1,4 +1,4 @@
-openapi: 3.0.3
+zaiopenapi: 3.0.3
 info:
   title: Data Collector API
   description: |
@@ -113,35 +113,6 @@ paths:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
 
-  /experiments/{experimentId}/status:
-    get:
-      summary: Get experiment status
-      description: Get current status and metrics for an experiment
-      operationId: getExperimentStatus
-      parameters:
-        - name: experimentId
-          in: path
-          required: true
-          schema:
-            type: string
-            pattern: '^[a-z0-9]([a-z0-9-]*[a-z0-9])?$'
-            minLength: 1
-            maxLength: 63
-          description: The experiment name
-      responses:
-        '200':
-          description: Experiment status
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ExperimentStatus'
-        '404':
-          description: Experiment not found
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorResponse'
-
   /experiments/{experimentId}/data:
     get:
       summary: Get experiment data
@@ -183,6 +154,19 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ServiceConfig'
+
+  /status:
+    get:
+      summary: Get service status
+      description: Get the current status of the collector service and any running experiment
+      operationId: getStatus
+      responses:
+        '200':
+          description: Service status
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StatusResponse'
 
   /health:
     get:
@@ -304,39 +288,6 @@ components:
           type: integer
           description: Number of metric data points collected
 
-    ExperimentStatus:
-      type: object
-      required:
-        - experimentId
-        - status
-        - startTime
-        - isActive
-      properties:
-        experimentId:
-          type: string
-          pattern: '^[a-z0-9]([a-z0-9-]*[a-z0-9])?$'
-          minLength: 1
-          maxLength: 63
-        status:
-          type: string
-          enum: [running, stopped, timeout, error]
-        startTime:
-          type: string
-          format: date-time
-        endTime:
-          type: string
-          format: date-time
-        isActive:
-          type: boolean
-        duration:
-          type: integer
-          description: Duration in seconds
-        dataPointsCollected:
-          type: integer
-          description: Number of metric data points collected
-        lastMetrics:
-          $ref: '#/components/schemas/SystemMetrics'
-
     ExperimentData:
       type: object
       required:
@@ -440,6 +391,19 @@ components:
           format: int64
           minimum: 0
           description: Packets sent per second
+
+    StatusResponse:
+      type: object
+      required:
+        - status
+      properties:
+        status:
+          type: string
+          enum: [Pending, Running]
+          description: Current service status
+        currentExperimentId:
+          type: string
+          description: ID of the currently running experiment (empty if no experiment is running)
 
     HealthResponse:
       type: object

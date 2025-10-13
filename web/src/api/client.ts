@@ -1,23 +1,19 @@
-// API Client for CPU Simulation Dashboard
+// API Client for CPU Simulation Dashboard v0.6.0
 
 import type {
-  HostHealth,
-  CalculationRequest,
-  CalculationResponse,
-  CreateExperimentRequest,
-  Experiment,
-  ExperimentListResponse,
-  ExperimentDataResponse,
-  StopAndCollectResponse,
-  ExperimentOperationResponse,
-  ExperimentPhases,
-  HostsResponse
+  ServiceConfig,
+  StatusResponse,
+  HealthResponse,
+  StartExperimentRequest,
+  ExperimentResponse,
+  ExperimentData,
+  ErrorResponse,
 } from './types';
 
 export class DashboardAPIClient {
   private baseUrl: string;
 
-  constructor(baseUrl: string = '/api') {
+  constructor(baseUrl: string = '') {
     this.baseUrl = baseUrl;
   }
 
@@ -34,89 +30,52 @@ export class DashboardAPIClient {
     });
 
     if (!response.ok) {
-      const error = await response.text();
-      throw new Error(`API Error: ${response.status} - ${error}`);
+      let errorMessage: string;
+      try {
+        const errorData: ErrorResponse = await response.json();
+        errorMessage = errorData.message || `HTTP ${response.status}`;
+      } catch {
+        errorMessage = await response.text() || `HTTP ${response.status}`;
+      }
+      throw new Error(`API Error: ${errorMessage}`);
     }
 
     return response.json();
   }
 
-  // Global Experiment operations
-  async getExperiments(limit?: number): Promise<ExperimentListResponse> {
-    const params = new URLSearchParams();
-    if (limit) {
-      params.append('limit', limit.toString());
-    }
-    const query = params.toString() ? `?${params.toString()}` : '';
-    return this.request<ExperimentListResponse>(`/experiments${query}`);
+  // Configuration
+  async getConfig(): Promise<ServiceConfig> {
+    return this.request<ServiceConfig>('/config');
   }
 
-  async createGlobalExperiment(data: CreateExperimentRequest): Promise<Experiment> {
-    return this.request<Experiment>('/experiments', {
+  // Status
+  async getStatus(): Promise<StatusResponse> {
+    return this.request<StatusResponse>('/status');
+  }
+
+  // Health
+  async getHealth(): Promise<HealthResponse> {
+    return this.request<HealthResponse>('/health');
+  }
+
+  // Experiment Management
+  async startExperiment(data: StartExperimentRequest): Promise<ExperimentResponse> {
+    return this.request<ExperimentResponse>('/experiments', {
       method: 'POST',
       body: JSON.stringify(data),
     });
   }
 
-  async getGlobalExperiment(experimentId: string): Promise<Experiment> {
-    return this.request<Experiment>(`/experiments/${encodeURIComponent(experimentId)}`);
-  }
-
-  async getExperimentData(experimentId: string, hostName?: string): Promise<ExperimentDataResponse> {
-    const params = new URLSearchParams();
-    if (hostName) {
-      params.append('hostName', hostName);
-    }
-    const query = params.toString() ? `?${params.toString()}` : '';
-    return this.request<ExperimentDataResponse>(`/experiments/${encodeURIComponent(experimentId)}/data${query}`);
-  }
-
-  // New experiment phase management
-  async getExperimentPhases(experimentId: string): Promise<ExperimentPhases> {
-    return this.request<ExperimentPhases>(`/experiments/${encodeURIComponent(experimentId)}/phases`);
-  }
-
-  async startCompleteExperiment(experimentId: string): Promise<ExperimentOperationResponse> {
-    return this.request<ExperimentOperationResponse>(
-      `/experiments/${encodeURIComponent(experimentId)}/start`,
-      { method: 'POST' }
-    );
-  }
-
-  async stopCompleteExperiment(experimentId: string): Promise<ExperimentOperationResponse> {
-    return this.request<ExperimentOperationResponse>(
+  async stopExperiment(experimentId: string): Promise<ExperimentResponse> {
+    return this.request<ExperimentResponse>(
       `/experiments/${encodeURIComponent(experimentId)}/stop`,
       { method: 'POST' }
     );
   }
 
-  // Legacy stop method (kept for backward compatibility)
-  async stopGlobalExperiment(experimentId: string): Promise<StopAndCollectResponse> {
-    return this.request<StopAndCollectResponse>(
-      `/experiments/${encodeURIComponent(experimentId)}/stop`,
-      { method: 'POST' }
-    );
-  }
-
-  // Host operations
-  async getHosts(): Promise<HostsResponse> {
-    return this.request<HostsResponse>('/hosts');
-  }
-
-  async getHostHealth(name: string): Promise<HostHealth> {
-    return this.request<HostHealth>(`/hosts/${encodeURIComponent(name)}/health`);
-  }
-
-  async testHostCalculation(
-    name: string,
-    data: CalculationRequest = { a: 12345678, b: 87654321 }
-  ): Promise<CalculationResponse> {
-    return this.request<CalculationResponse>(
-      `/hosts/${encodeURIComponent(name)}/calculate`,
-      {
-        method: 'POST',
-        body: JSON.stringify(data),
-      }
+  async getExperimentData(experimentId: string): Promise<ExperimentData> {
+    return this.request<ExperimentData>(
+      `/experiments/${encodeURIComponent(experimentId)}`
     );
   }
 }
