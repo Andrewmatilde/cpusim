@@ -2,6 +2,7 @@ package exp
 
 import (
 	"fmt"
+	"github.com/gin-gonic/gin"
 	"github.com/rs/zerolog"
 	"time"
 )
@@ -25,7 +26,7 @@ func NewManager[T Data](fs FileStorage[T], collector CollectFunc[T], logger zero
 	}
 }
 
-func (f *Manager[T]) Start(id string, timeout time.Duration) error {
+func (f *Manager[T]) Start(id string, timeout time.Duration, params gin.Params) error {
 	if f.currentExperiment != nil && !f.currentExperiment.IsDone() {
 		return fmt.Errorf("experiment already started")
 	}
@@ -33,7 +34,7 @@ func (f *Manager[T]) Start(id string, timeout time.Duration) error {
 	exp := NewExperiment(f.fs, f.logger)
 	exp.SetDataCollector(f.collector)
 
-	err := exp.Start(id, timeout)
+	err := exp.Start(id, timeout, params)
 	if err != nil {
 		return err
 	}

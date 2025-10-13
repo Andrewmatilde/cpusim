@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"github.com/gin-gonic/gin"
 	"github.com/rs/zerolog"
 	"time"
 )
@@ -13,7 +14,7 @@ type Data interface {
 	json.Unmarshaler
 }
 
-type CollectFunc[T Data] func(context.Context) (T, error)
+type CollectFunc[T Data] func(context.Context, gin.Params) (T, error)
 
 type Experiment[T Data] struct {
 	ctx context.Context
@@ -40,7 +41,7 @@ func (s *Experiment[T]) SetDataCollector(f CollectFunc[T]) {
 	s.CollectData = f
 }
 
-func (s *Experiment[T]) Start(id string, timeout time.Duration) error {
+func (s *Experiment[T]) Start(id string, timeout time.Duration, params gin.Params) error {
 	if id == "" {
 		return fmt.Errorf("id must not be empty")
 	}
@@ -57,7 +58,7 @@ func (s *Experiment[T]) Start(id string, timeout time.Duration) error {
 
 	go func() {
 		defer close(s.done)
-		data, err := s.CollectData(ctx)
+		data, err := s.CollectData(ctx, params)
 		if err != nil {
 			s.logger.Error().Err(err).Msg("failed to collect data")
 			return

@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"cpusim/pkg/exp"
+	"github.com/gin-gonic/gin"
 	"github.com/rs/zerolog"
 )
 
@@ -60,7 +61,7 @@ func NewService(storagePath string, config Config, logger zerolog.Logger) (*Serv
 	}
 
 	// Create collector function
-	collectFunc := func(ctx context.Context) (*ExperimentData, error) {
+	collectFunc := func(ctx context.Context, params gin.Params) (*ExperimentData, error) {
 		return s.runExperiment(ctx)
 	}
 
@@ -98,7 +99,10 @@ func (s *Service) StartExperiment(id string, timeout time.Duration, qps int) err
 	s.currentExperimentID = id
 	s.currentQPS = qps
 
-	return s.Manager.Start(id, timeout)
+	params := gin.Params{
+		{Key: "qps", Value: fmt.Sprintf("%d", qps)},
+	}
+	return s.Manager.Start(id, timeout, params)
 }
 
 // StopExperiment stops the current running experiment

@@ -85,8 +85,8 @@ func (h *APIHandler) StartRequestExperiment(c *gin.Context) {
 	// Convert timeout from seconds to Duration
 	timeout := time.Duration(request.Timeout) * time.Second
 
-	// Start experiment using the service
-	err := h.service.StartExperiment(request.ExperimentId, timeout)
+	// Start experiment using the service with QPS from request
+	err := h.service.StartExperiment(request.ExperimentId, timeout, request.Qps)
 	if err != nil {
 		statusCode := http.StatusInternalServerError
 		errorType := "internal_error"
@@ -104,6 +104,12 @@ func (h *APIHandler) StartRequestExperiment(c *gin.Context) {
 		})
 		return
 	}
+
+	h.logger.Info().
+		Str("experiment_id", request.ExperimentId).
+		Int("qps", request.Qps).
+		Int("timeout", request.Timeout).
+		Msg("Started request experiment with QPS")
 
 	// Return experiment info
 	experiment := generated.RequestExperiment{

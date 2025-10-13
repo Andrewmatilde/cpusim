@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"cpusim/pkg/exp"
+	"github.com/gin-gonic/gin"
 	"github.com/rs/zerolog"
 )
 
@@ -32,13 +33,27 @@ func NewService(storagePath string, config Config, logger zerolog.Logger) (*Serv
 	}
 
 	// Create collector function with the service config
-	collectFunc := func(ctx context.Context) (*RequestData, error) {
+	collectFunc := func(ctx context.Context, params gin.Params) (*RequestData, error) {
+		// Use QPS from params if provided, otherwise use config default
+		qps := s.config.QPS
+		if qpsParam := params.ByName("qps"); qpsParam != "" {
+			// Parse the string to int
+			var qpsInt int
+			if _, err := fmt.Sscanf(qpsParam, "%d", &qpsInt); err == nil {
+				qps = qpsInt
+			}
+		}
+
 		s.logger.Info().
 			Str("target", fmt.Sprintf("%s:%d", s.config.TargetIP, s.config.TargetPort)).
-			Int("qps", s.config.QPS).
+			Int("qps", qps).
 			Msg("Starting request experiment")
 
-		collector := NewCollector(s.config)
+		// Create a new config with the runtime QPS
+		runtimeConfig := s.config
+		runtimeConfig.QPS = qps
+
+		collector := NewCollector(runtimeConfig)
 		data, err := collector.Run(ctx)
 		if err != nil {
 			return nil, err
@@ -61,8 +76,11 @@ func NewService(storagePath string, config Config, logger zerolog.Logger) (*Serv
 }
 
 // StartExperiment starts a new request sending experiment
-func (s *Service) StartExperiment(id string, timeout time.Duration) error {
-	return s.Manager.Start(id, timeout)
+func (s *Service) StartExperiment(id string, timeout time.Duration, qps int) error {
+	params := gin.Params{
+		{Key: "qps", Value: fmt.Sprintf("%d", qps)},
+	}
+	return s.Manager.Start(id, timeout, params)
 }
 
 // StopExperiment stops the current running experiment
