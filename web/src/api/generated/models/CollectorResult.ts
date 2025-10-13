@@ -13,6 +13,14 @@
  */
 
 import { mapValues } from '../runtime';
+import type { ExperimentData1 } from './ExperimentData1';
+import {
+    ExperimentData1FromJSON,
+    ExperimentData1FromJSONTyped,
+    ExperimentData1ToJSON,
+    ExperimentData1ToJSONTyped,
+} from './ExperimentData1';
+
 /**
  * 
  * @export
@@ -26,29 +34,23 @@ export interface CollectorResult {
      */
     hostName?: string;
     /**
-     * 
-     * @type {string}
-     * @memberof CollectorResult
-     */
-    experimentId?: string;
-    /**
-     * 
+     * completed, failed, not_started
      * @type {string}
      * @memberof CollectorResult
      */
     status?: string;
     /**
      * 
-     * @type {number}
-     * @memberof CollectorResult
-     */
-    dataPointsCollected?: number;
-    /**
-     * 
      * @type {string}
      * @memberof CollectorResult
      */
     error?: string;
+    /**
+     * 
+     * @type {ExperimentData1}
+     * @memberof CollectorResult
+     */
+    data?: ExperimentData1;
 }
 
 /**
@@ -69,10 +71,9 @@ export function CollectorResultFromJSONTyped(json: any, ignoreDiscriminator: boo
     return {
         
         'hostName': json['hostName'] == null ? undefined : json['hostName'],
-        'experimentId': json['experimentId'] == null ? undefined : json['experimentId'],
         'status': json['status'] == null ? undefined : json['status'],
-        'dataPointsCollected': json['dataPointsCollected'] == null ? undefined : json['dataPointsCollected'],
         'error': json['error'] == null ? undefined : json['error'],
+        'data': json['data'] == null ? undefined : ExperimentData1FromJSON(json['data']),
     };
 }
 
@@ -88,10 +89,9 @@ export function CollectorResultToJSONTyped(value?: CollectorResult | null, ignor
     return {
         
         'hostName': value['hostName'],
-        'experimentId': value['experimentId'],
         'status': value['status'],
-        'dataPointsCollected': value['dataPointsCollected'],
         'error': value['error'],
+        'data': ExperimentData1ToJSON(value['data']),
     };
 }
 

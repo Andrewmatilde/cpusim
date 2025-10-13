@@ -69,7 +69,7 @@ func (c *HTTPCollectorClient) StopExperiment(ctx context.Context, experimentID s
 }
 
 // GetExperiment retrieves collector experiment data
-func (c *HTTPCollectorClient) GetExperiment(ctx context.Context, experimentID string) (*CollectorExperimentData, error) {
+func (c *HTTPCollectorClient) GetExperiment(ctx context.Context, experimentID string) (*collectorAPI.ExperimentData, error) {
 	resp, err := c.client.GetExperimentDataWithResponse(ctx, experimentID)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get collector experiment data: %w", err)
@@ -86,12 +86,7 @@ func (c *HTTPCollectorClient) GetExperiment(ctx context.Context, experimentID st
 		return nil, fmt.Errorf("no data returned from collector")
 	}
 
-	// Map the API response to our internal type
-	data := &CollectorExperimentData{
-		DataPointsCollected: len(resp.JSON200.Metrics),
-	}
-
-	return data, nil
+	return resp.JSON200, nil
 }
 
 // GetStatus retrieves the collector service status

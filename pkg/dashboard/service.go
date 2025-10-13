@@ -2,6 +2,8 @@ package dashboard
 
 import (
 	"context"
+	collectorAPI "cpusim/collector/api/generated"
+	requesterAPI "cpusim/requester/api/generated"
 	"fmt"
 	"time"
 
@@ -21,38 +23,27 @@ type Service struct {
 	collectorClients map[string]CollectorClient // key: host name
 	requesterClient  RequesterClient
 
-	// Current experiment ID
+	// Current experiment ID and QPS
 	currentExperimentID string
+	currentQPS          int
 }
 
 // CollectorClient interface for communicating with collector services
 type CollectorClient interface {
 	StartExperiment(ctx context.Context, experimentID string, timeout time.Duration) error
 	StopExperiment(ctx context.Context, experimentID string) error
-	GetExperiment(ctx context.Context, experimentID string) (*CollectorExperimentData, error)
+	GetExperiment(ctx context.Context, experimentID string) (*collectorAPI.ExperimentData, error)
 	GetStatus(ctx context.Context) (string, string, error) // returns status, currentExperimentID, error
 }
 
 // RequesterClient interface for communicating with requester services
 type RequesterClient interface {
-	StartExperiment(ctx context.Context, experimentID string, timeout time.Duration) error
+	StartExperiment(ctx context.Context, experimentID string, timeout time.Duration, qps int) error
 	StopExperiment(ctx context.Context, experimentID string) error
-	GetExperiment(ctx context.Context, experimentID string) (*RequesterExperimentData, error)
+	GetExperiment(ctx context.Context, experimentID string) (*requesterAPI.RequestExperimentStats, error)
 	GetStatus(ctx context.Context) (string, string, error) // returns status, currentExperimentID, error
 }
 
-// CollectorExperimentData represents collector experiment data
-type CollectorExperimentData struct {
-	DataPointsCollected int
-}
-
-// RequesterExperimentData represents requester experiment data
-type RequesterExperimentData struct {
-	TotalRequests   int64
-	Successful      int64
-	Failed          int64
-	AvgResponseTime float64
-}
 
 // NewService creates a new dashboard service
 func NewService(storagePath string, config Config, logger zerolog.Logger) (*Service, error) {
@@ -90,7 +81,7 @@ func (s *Service) SetRequesterClient(client RequesterClient) {
 }
 
 // StartExperiment starts a new dashboard experiment
-func (s *Service) StartExperiment(id string, timeout time.Duration) error {
+func (s *Service) StartExperiment(id string, timeout time.Duration, qps int) error {
 	// Check status before starting
 	status := s.GetStatus()
 	if status != exp.Pending {
@@ -100,10 +91,12 @@ func (s *Service) StartExperiment(id string, timeout time.Duration) error {
 	s.logger.Info().
 		Str("experiment_id", id).
 		Int("num_targets", len(s.config.TargetHosts)).
+		Int("qps", qps).
 		Msg("Starting dashboard experiment")
 
-	// Store the experiment ID so runExperiment can use it
+	// Store the experiment ID and QPS so runExperiment can use them
 	s.currentExperimentID = id
+	s.currentQPS = qps
 
 	return s.Manager.Start(id, timeout)
 }
@@ -342,7 +335,7 @@ func (s *Service) runExperiment(ctx context.Context) (*ExperimentData, error) {
 	if deadline, ok := ctx.Deadline(); ok {
 		timeout = time.Until(deadline)
 	}
-	if err := s.requesterClient.StartExperiment(ctx, s.currentExperimentID, timeout); err != nil {
+	if err := s.requesterClient.StartExperiment(ctx, s.currentExperimentID, timeout, s.currentQPS); err != nil {
 		s.logger.Error().Err(err).Msg("Failed to start requester")
 		data.Errors = append(data.Errors, ExperimentError{
 			Timestamp: time.Now(),
@@ -366,13 +359,35 @@ func (s *Service) runExperiment(ctx context.Context) (*ExperimentData, error) {
 	// Wait for completion or cancellation
 	<-ctx.Done()
 
-	// Phase 3: Collect results
+	// Phase 3: Stop all sub-experiments
+	s.logger.Info().Msg("Phase 3: Stopping all sub-experiments")
+	stopCtx, stopCancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer stopCancel()
+
+	// Stop all collectors
+	for hostName := range data.CollectorResults {
+		client := s.collectorClients[hostName]
+		if err := client.StopExperiment(stopCtx, s.currentExperimentID); err != nil {
+			s.logger.Warn().Err(err).Str("host", hostName).Msg("Failed to stop collector")
+		} else {
+			s.logger.Info().Str("host", hostName).Msg("Collector stopped successfully")
+		}
+	}
+
+	// Stop requester
+	if err := s.requesterClient.StopExperiment(stopCtx, s.currentExperimentID); err != nil {
+		s.logger.Warn().Err(err).Msg("Failed to stop requester")
+	} else {
+		s.logger.Info().Msg("Requester stopped successfully")
+	}
+
+	// Phase 4: Collect results
 	// Use a fresh context for collection since the experiment context is cancelled
 	collectCtx := context.Background()
 	collectCtx, collectCancel := context.WithTimeout(collectCtx, 10*time.Second)
 	defer collectCancel()
 
-	s.logger.Info().Msg("Phase 3: Collecting results from sub-experiments")
+	s.logger.Info().Msg("Phase 4: Collecting results from sub-experiments")
 	data.EndTime = time.Now()
 	data.Duration = data.EndTime.Sub(data.StartTime).Seconds()
 
@@ -381,9 +396,9 @@ func (s *Service) runExperiment(ctx context.Context) (*ExperimentData, error) {
 		client := s.collectorClients[hostName]
 		if collectorData, err := client.GetExperiment(collectCtx, s.currentExperimentID); err == nil {
 			data.CollectorResults[hostName] = CollectorResult{
-				HostName:            hostName,
-				Status:              "completed",
-				DataPointsCollected: collectorData.DataPointsCollected,
+				HostName: hostName,
+				Status:   "completed",
+				Data:     collectorData,
 			}
 		} else {
 			s.logger.Error().Err(err).Str("host", hostName).Msg("Failed to get collector results")
@@ -395,13 +410,10 @@ func (s *Service) runExperiment(ctx context.Context) (*ExperimentData, error) {
 	}
 
 	// Collect requester results
-	if requesterData, err := s.requesterClient.GetExperiment(collectCtx, s.currentExperimentID); err == nil {
+	if requesterStats, err := s.requesterClient.GetExperiment(collectCtx, s.currentExperimentID); err == nil {
 		data.RequesterResult = &RequesterResult{
-			Status:          "completed",
-			TotalRequests:   requesterData.TotalRequests,
-			Successful:      requesterData.Successful,
-			Failed:          requesterData.Failed,
-			AvgResponseTime: requesterData.AvgResponseTime,
+			Status: "completed",
+			Stats:  requesterStats,
 		}
 	} else {
 		s.logger.Error().Err(err).Msg("Failed to get requester results")

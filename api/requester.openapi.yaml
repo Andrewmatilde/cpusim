@@ -245,6 +245,7 @@ components:
       required:
         - experimentId
         - timeout
+        - qps
       properties:
         experimentId:
           type: string
@@ -256,6 +257,12 @@ components:
           minimum: 1
           maximum: 3600
           example: 300
+        qps:
+          type: integer
+          description: 每秒请求数（QPS）
+          minimum: 1
+          maximum: 1000
+          example: 10
         description:
           type: string
           description: 实验描述

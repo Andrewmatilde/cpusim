@@ -31,6 +31,12 @@ export interface StartExperimentRequest {
      * @memberof StartExperimentRequest
      */
     timeout: number;
+    /**
+     * Requests per second for the experiment
+     * @type {number}
+     * @memberof StartExperimentRequest
+     */
+    qps: number;
 }
 
 /**
@@ -39,6 +45,7 @@ export interface StartExperimentRequest {
 export function instanceOfStartExperimentRequest(value: object): value is StartExperimentRequest {
     if (!('experimentId' in value) || value['experimentId'] === undefined) return false;
     if (!('timeout' in value) || value['timeout'] === undefined) return false;
+    if (!('qps' in value) || value['qps'] === undefined) return false;
     return true;
 }
 
@@ -54,6 +61,7 @@ export function StartExperimentRequestFromJSONTyped(json: any, ignoreDiscriminat
         
         'experimentId': json['experimentId'],
         'timeout': json['timeout'],
+        'qps': json['qps'],
     };
 }
 
@@ -70,6 +78,7 @@ export function StartExperimentRequestToJSONTyped(value?: StartExperimentRequest
         
         'experimentId': value['experimentId'],
         'timeout': value['timeout'],
+        'qps': value['qps'],
     };
 }
 

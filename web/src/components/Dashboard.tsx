@@ -14,9 +14,10 @@ import type {
   StartExperimentRequest,
   HostsStatusResponse
 } from '@/api/types';
-import { RefreshCw, Server, AlertCircle, Play, Square, Download, Loader2, Activity, Laptop, History, FileText } from 'lucide-react';
+import { RefreshCw, Server, AlertCircle, Play, Square, Download, Loader2, Activity, Laptop, History, FileText, LineChart as LineChartIcon, BarChart3 } from 'lucide-react';
 import { Toaster } from '@/components/ui/sonner';
 import { toast } from 'sonner';
+import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
 
 export function Dashboard() {
   const [config, setConfig] = useState<ServiceConfig | null>(null);
@@ -27,6 +28,7 @@ export function Dashboard() {
   const [error, setError] = useState<string | null>(null);
   const [experimentId, setExperimentId] = useState(`exp-${Date.now()}`);
   const [timeout, setTimeout] = useState(60);
+  const [qps, setQps] = useState(10);
   const [starting, setStarting] = useState(false);
   const [stopping, setStopping] = useState(false);
   const [experimentData, setExperimentData] = useState<ExperimentData | null>(null);
@@ -64,7 +66,8 @@ export function Dashboard() {
       setStarting(true);
       const request: StartExperimentRequest = {
         experimentId,
-        timeout
+        timeout,
+        qps
       };
       await apiClient.startExperiment(request);
       toast.success('Experiment started successfully');
@@ -285,7 +288,7 @@ export function Dashboard() {
           </CardHeader>
           <CardContent>
             <div className="space-y-4">
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-3 gap-4">
                 <div>
                   <Label htmlFor="experimentId">Experiment ID</Label>
                   <Input
@@ -305,6 +308,18 @@ export function Dashboard() {
                     onChange={(e) => setTimeout(Number(e.target.value))}
                     min={10}
                     max={600}
+                    disabled={isRunning}
+                  />
+                </div>
+                <div>
+                  <Label htmlFor="qps">QPS (Queries/sec)</Label>
+                  <Input
+                    id="qps"
+                    type="number"
+                    value={qps}
+                    onChange={(e) => setQps(Number(e.target.value))}
+                    min={1}
+                    max={1000}
                     disabled={isRunning}
                   />
                 </div>
@@ -408,65 +423,218 @@ export function Dashboard() {
 
         {/* Experiment Data Display */}
         {experimentData && (
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <Download className="h-5 w-5" />
-                Experiment Summary
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="space-y-4">
-                {/* Basic Info */}
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <div className="text-sm text-muted-foreground">Status</div>
-                    <Badge className="mt-1">{experimentData.status}</Badge>
-                  </div>
-                  {experimentData.duration && (
+          <div className="space-y-6">
+            {/* Experiment Summary */}
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <Download className="h-5 w-5" />
+                  Experiment Summary
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="space-y-4">
+                  {/* Basic Info */}
+                  <div className="grid grid-cols-3 gap-4">
                     <div>
-                      <div className="text-sm text-muted-foreground">Duration</div>
-                      <div className="text-lg font-medium">{experimentData.duration.toFixed(2)}s</div>
+                      <div className="text-sm text-muted-foreground">Status</div>
+                      <Badge className="mt-1">{experimentData.status}</Badge>
+                    </div>
+                    {experimentData.duration && (
+                      <div>
+                        <div className="text-sm text-muted-foreground">Duration</div>
+                        <div className="text-lg font-medium">{experimentData.duration.toFixed(2)}s</div>
+                      </div>
+                    )}
+                    <div>
+                      <div className="text-sm text-muted-foreground">Time Range</div>
+                      <div className="text-sm">
+                        {experimentData.startTime && new Date(experimentData.startTime).toLocaleTimeString()} -
+                        {experimentData.endTime && new Date(experimentData.endTime).toLocaleTimeString()}
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Errors */}
+                  {experimentData.errors && experimentData.errors.length > 0 && (
+                    <div>
+                      <h3 className="font-semibold mb-2 text-red-500">Errors</h3>
+                      <div className="space-y-1">
+                        {experimentData.errors.map((error, idx) => (
+                          <Alert key={idx} variant="destructive">
+                            <AlertDescription>
+                              [{error.phase}] {error.message}
+                            </AlertDescription>
+                          </Alert>
+                        ))}
+                      </div>
                     </div>
                   )}
                 </div>
+              </CardContent>
+            </Card>
 
-                {experimentData.startTime && (
-                  <div>
-                    <div className="text-sm text-muted-foreground">Start Time</div>
-                    <div className="text-sm">{new Date(experimentData.startTime).toLocaleString()}</div>
-                  </div>
-                )}
-
-                {experimentData.endTime && (
-                  <div>
-                    <div className="text-sm text-muted-foreground">End Time</div>
-                    <div className="text-sm">{new Date(experimentData.endTime).toLocaleString()}</div>
-                  </div>
-                )}
-
-                {/* Errors */}
-                {experimentData.errors && experimentData.errors.length > 0 && (
-                  <div>
-                    <h3 className="font-semibold mb-2 text-red-500">Errors</h3>
-                    <div className="space-y-1">
-                      {experimentData.errors.map((error, idx) => (
-                        <Alert key={idx} variant="destructive">
-                          <AlertDescription>
-                            [{error.phase}] {error.message}
-                          </AlertDescription>
-                        </Alert>
-                      ))}
+            {/* Requester Statistics */}
+            {experimentData.requesterResult?.stats && (
+              <Card>
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2">
+                    <BarChart3 className="h-5 w-5" />
+                    Request Statistics
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                    <div>
+                      <div className="text-sm text-muted-foreground">Total Requests</div>
+                      <div className="text-2xl font-bold">{experimentData.requesterResult.stats.totalRequests || 0}</div>
+                    </div>
+                    <div>
+                      <div className="text-sm text-muted-foreground">Successful</div>
+                      <div className="text-2xl font-bold text-green-600">{experimentData.requesterResult.stats.successfulRequests || 0}</div>
+                    </div>
+                    <div>
+                      <div className="text-sm text-muted-foreground">Failed</div>
+                      <div className="text-2xl font-bold text-red-600">{experimentData.requesterResult.stats.failedRequests || 0}</div>
+                    </div>
+                    <div>
+                      <div className="text-sm text-muted-foreground">QPS</div>
+                      <div className="text-2xl font-bold">{experimentData.requesterResult.stats.requestsPerSecond?.toFixed(2) || 0}</div>
+                    </div>
+                    <div>
+                      <div className="text-sm text-muted-foreground">Avg Response Time</div>
+                      <div className="text-xl font-bold">{experimentData.requesterResult.stats.averageResponseTime?.toFixed(2) || 0} ms</div>
+                    </div>
+                    <div>
+                      <div className="text-sm text-muted-foreground">P50</div>
+                      <div className="text-xl font-bold">{experimentData.requesterResult.stats.responseTimeP50?.toFixed(2) || 0} ms</div>
+                    </div>
+                    <div>
+                      <div className="text-sm text-muted-foreground">P95</div>
+                      <div className="text-xl font-bold">{experimentData.requesterResult.stats.responseTimeP95?.toFixed(2) || 0} ms</div>
+                    </div>
+                    <div>
+                      <div className="text-sm text-muted-foreground">P99</div>
+                      <div className="text-xl font-bold">{experimentData.requesterResult.stats.responseTimeP99?.toFixed(2) || 0} ms</div>
                     </div>
                   </div>
-                )}
+                </CardContent>
+              </Card>
+            )}
 
-                <div className="text-sm text-muted-foreground pt-2 border-t">
-                  Note: Detailed metrics are stored on individual collector and requester hosts.
-                </div>
-              </div>
-            </CardContent>
-          </Card>
+            {/* Collector Metrics - CPU Charts */}
+            {experimentData.collectorResults && Object.entries(experimentData.collectorResults).map(([hostName, result]) => {
+              if (!result.data?.metrics || result.data.metrics.length === 0) return null;
+
+              // Prepare chart data
+              const chartData = result.data.metrics.map((metric: any, index: number) => ({
+                index: index,
+                time: new Date(metric.timestamp).toLocaleTimeString(),
+                cpuUsage: metric.systemMetrics?.cpuUsagePercent || 0,
+                memoryUsage: metric.systemMetrics?.memoryUsagePercent || 0,
+                networkIn: (metric.systemMetrics?.networkIOBytes?.bytesReceived || 0) / 1024, // KB
+                networkOut: (metric.systemMetrics?.networkIOBytes?.bytesSent || 0) / 1024, // KB
+              }));
+
+              return (
+                <Card key={hostName}>
+                  <CardHeader>
+                    <CardTitle className="flex items-center gap-2">
+                      <LineChartIcon className="h-5 w-5" />
+                      {hostName} - System Metrics ({result.data.metrics.length} data points)
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent className="space-y-6">
+                    {/* CPU Usage Chart */}
+                    <div>
+                      <h4 className="text-sm font-semibold mb-3">CPU Usage (%)</h4>
+                      <ResponsiveContainer width="100%" height={250}>
+                        <LineChart data={chartData}>
+                          <CartesianGrid strokeDasharray="3 3" />
+                          <XAxis
+                            dataKey="time"
+                            tick={{ fontSize: 12 }}
+                            interval="preserveStartEnd"
+                          />
+                          <YAxis domain={[0, 100]} />
+                          <Tooltip />
+                          <Legend />
+                          <Line
+                            type="monotone"
+                            dataKey="cpuUsage"
+                            stroke="#8884d8"
+                            strokeWidth={2}
+                            name="CPU Usage (%)"
+                            dot={false}
+                          />
+                        </LineChart>
+                      </ResponsiveContainer>
+                    </div>
+
+                    {/* Memory Usage Chart */}
+                    <div>
+                      <h4 className="text-sm font-semibold mb-3">Memory Usage (%)</h4>
+                      <ResponsiveContainer width="100%" height={250}>
+                        <LineChart data={chartData}>
+                          <CartesianGrid strokeDasharray="3 3" />
+                          <XAxis
+                            dataKey="time"
+                            tick={{ fontSize: 12 }}
+                            interval="preserveStartEnd"
+                          />
+                          <YAxis domain={[0, 100]} />
+                          <Tooltip />
+                          <Legend />
+                          <Line
+                            type="monotone"
+                            dataKey="memoryUsage"
+                            stroke="#82ca9d"
+                            strokeWidth={2}
+                            name="Memory Usage (%)"
+                            dot={false}
+                          />
+                        </LineChart>
+                      </ResponsiveContainer>
+                    </div>
+
+                    {/* Network I/O Chart */}
+                    <div>
+                      <h4 className="text-sm font-semibold mb-3">Network I/O (KB/s)</h4>
+                      <ResponsiveContainer width="100%" height={250}>
+                        <LineChart data={chartData}>
+                          <CartesianGrid strokeDasharray="3 3" />
+                          <XAxis
+                            dataKey="time"
+                            tick={{ fontSize: 12 }}
+                            interval="preserveStartEnd"
+                          />
+                          <YAxis />
+                          <Tooltip />
+                          <Legend />
+                          <Line
+                            type="monotone"
+                            dataKey="networkIn"
+                            stroke="#ffc658"
+                            strokeWidth={2}
+                            name="Network In (KB/s)"
+                            dot={false}
+                          />
+                          <Line
+                            type="monotone"
+                            dataKey="networkOut"
+                            stroke="#ff7c7c"
+                            strokeWidth={2}
+                            name="Network Out (KB/s)"
+                            dot={false}
+                          />
+                        </LineChart>
+                      </ResponsiveContainer>
+                    </div>
+                  </CardContent>
+                </Card>
+              );
+            })}
+          </div>
         )}
       </main>
     </div>

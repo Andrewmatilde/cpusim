@@ -2,7 +2,7 @@
 /* eslint-disable */
 /**
  * CPU Simulation Dashboard API
- * 管理面API，用于管理多个CPU仿真主机和全局实验
+ * Dashboard service for coordinating distributed CPU simulation experiments
  *
  * The version of the OpenAPI document: 2.0.0
  * 

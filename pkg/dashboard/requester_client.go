@@ -25,12 +25,13 @@ func NewHTTPRequesterClient(serverURL string) (*HTTPRequesterClient, error) {
 }
 
 // StartExperiment starts a requester experiment
-func (c *HTTPRequesterClient) StartExperiment(ctx context.Context, experimentID string, timeout time.Duration) error {
+func (c *HTTPRequesterClient) StartExperiment(ctx context.Context, experimentID string, timeout time.Duration, qps int) error {
 	timeoutSeconds := int(timeout.Seconds())
 
 	req := requesterAPI.StartRequestExperimentJSONRequestBody{
 		ExperimentId: experimentID,
 		Timeout:      timeoutSeconds,
+		Qps:          qps,
 	}
 
 	resp, err := c.client.StartRequestExperimentWithResponse(ctx, req)
@@ -78,7 +79,7 @@ func (c *HTTPRequesterClient) StopExperiment(ctx context.Context, experimentID s
 }
 
 // GetExperiment retrieves requester experiment statistics
-func (c *HTTPRequesterClient) GetExperiment(ctx context.Context, experimentID string) (*RequesterExperimentData, error) {
+func (c *HTTPRequesterClient) GetExperiment(ctx context.Context, experimentID string) (*requesterAPI.RequestExperimentStats, error) {
 	resp, err := c.client.GetRequestExperimentStatsWithResponse(ctx, experimentID)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get requester experiment stats: %w", err)
@@ -98,17 +99,7 @@ func (c *HTTPRequesterClient) GetExperiment(ctx context.Context, experimentID st
 		return nil, fmt.Errorf("no data returned from requester")
 	}
 
-	stats := resp.JSON200
-
-	// Map the API response to our internal type
-	data := &RequesterExperimentData{
-		TotalRequests:   int64(stats.TotalRequests),
-		Successful:      int64(stats.SuccessfulRequests),
-		Failed:          int64(stats.FailedRequests),
-		AvgResponseTime: float64(stats.AverageResponseTime),
-	}
-
-	return data, nil
+	return resp.JSON200, nil
 }
 
 // GetStatus retrieves the requester service status

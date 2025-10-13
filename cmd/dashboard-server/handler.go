@@ -51,7 +51,7 @@ func (h *APIHandler) StartExperiment(c *gin.Context) {
 
 	timeout := time.Duration(request.Timeout) * time.Second
 
-	err := h.service.StartExperiment(request.ExperimentId, timeout)
+	err := h.service.StartExperiment(request.ExperimentId, timeout, request.Qps)
 	if err != nil {
 		statusCode := http.StatusInternalServerError
 		errorCode := "internal_error"
@@ -266,13 +266,16 @@ func convertClientHostToAPI(host dashboard.ClientHost) generated.ClientHost {
 func convertCollectorResultsToAPI(results map[string]dashboard.CollectorResult) map[string]generated.CollectorResult {
 	apiResults := make(map[string]generated.CollectorResult)
 	for key, result := range results {
-		apiResults[key] = generated.CollectorResult{
-			HostName:            result.HostName,
-			ExperimentId:        result.ExperimentID,
-			Status:              result.Status,
-			DataPointsCollected: result.DataPointsCollected,
-			Error:               result.Error,
+		apiResult := generated.CollectorResult{
+			HostName: result.HostName,
+			Status:   result.Status,
+			Error:    result.Error,
 		}
+		// Include complete experiment data if available
+		if result.Data != nil {
+			apiResult.Data = *result.Data
+		}
+		apiResults[key] = apiResult
 	}
 	return apiResults
 }
@@ -281,15 +284,15 @@ func convertRequesterResultToAPI(result *dashboard.RequesterResult) generated.Re
 	if result == nil {
 		return generated.RequesterResult{}
 	}
-	return generated.RequesterResult{
-		ExperimentId:    result.ExperimentID,
-		Status:          result.Status,
-		TotalRequests:   result.TotalRequests,
-		Successful:      result.Successful,
-		Failed:          result.Failed,
-		AvgResponseTime: result.AvgResponseTime,
-		Error:           result.Error,
+	apiResult := generated.RequesterResult{
+		Status: result.Status,
+		Error:  result.Error,
 	}
+	// Include complete stats if available
+	if result.Stats != nil {
+		apiResult.Stats = *result.Stats
+	}
+	return apiResult
 }
 
 func convertErrorsToAPI(errors []dashboard.ExperimentError) []generated.ExperimentError {

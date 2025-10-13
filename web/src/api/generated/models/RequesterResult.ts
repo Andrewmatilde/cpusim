@@ -13,6 +13,14 @@
  */
 
 import { mapValues } from '../runtime';
+import type { RequestExperimentStats } from './RequestExperimentStats';
+import {
+    RequestExperimentStatsFromJSON,
+    RequestExperimentStatsFromJSONTyped,
+    RequestExperimentStatsToJSON,
+    RequestExperimentStatsToJSONTyped,
+} from './RequestExperimentStats';
+
 /**
  * 
  * @export
@@ -20,47 +28,23 @@ import { mapValues } from '../runtime';
  */
 export interface RequesterResult {
     /**
-     * 
-     * @type {string}
-     * @memberof RequesterResult
-     */
-    experimentId?: string;
-    /**
-     * 
+     * completed, failed, not_started
      * @type {string}
      * @memberof RequesterResult
      */
     status?: string;
     /**
      * 
-     * @type {number}
-     * @memberof RequesterResult
-     */
-    totalRequests?: number;
-    /**
-     * 
-     * @type {number}
-     * @memberof RequesterResult
-     */
-    successful?: number;
-    /**
-     * 
-     * @type {number}
-     * @memberof RequesterResult
-     */
-    failed?: number;
-    /**
-     * 
-     * @type {number}
-     * @memberof RequesterResult
-     */
-    avgResponseTime?: number;
-    /**
-     * 
      * @type {string}
      * @memberof RequesterResult
      */
     error?: string;
+    /**
+     * 
+     * @type {RequestExperimentStats}
+     * @memberof RequesterResult
+     */
+    stats?: RequestExperimentStats;
 }
 
 /**
@@ -80,13 +64,9 @@ export function RequesterResultFromJSONTyped(json: any, ignoreDiscriminator: boo
     }
     return {
         
-        'experimentId': json['experimentId'] == null ? undefined : json['experimentId'],
         'status': json['status'] == null ? undefined : json['status'],
-        'totalRequests': json['totalRequests'] == null ? undefined : json['totalRequests'],
-        'successful': json['successful'] == null ? undefined : json['successful'],
-        'failed': json['failed'] == null ? undefined : json['failed'],
-        'avgResponseTime': json['avgResponseTime'] == null ? undefined : json['avgResponseTime'],
         'error': json['error'] == null ? undefined : json['error'],
+        'stats': json['stats'] == null ? undefined : RequestExperimentStatsFromJSON(json['stats']),
     };
 }
 
@@ -101,13 +81,9 @@ export function RequesterResultToJSONTyped(value?: RequesterResult | null, ignor
 
     return {
         
-        'experimentId': value['experimentId'],
         'status': value['status'],
-        'totalRequests': value['totalRequests'],
-        'successful': value['successful'],
-        'failed': value['failed'],
-        'avgResponseTime': value['avgResponseTime'],
         'error': value['error'],
+        'stats': RequestExperimentStatsToJSON(value['stats']),
     };
 }
 

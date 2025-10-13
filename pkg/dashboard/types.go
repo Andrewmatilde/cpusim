@@ -3,6 +3,9 @@ package dashboard
 import (
 	"encoding/json"
 	"time"
+
+	collectorAPI "cpusim/collector/api/generated"
+	requesterAPI "cpusim/requester/api/generated"
 )
 
 // Config defines the dashboard service configuration
@@ -54,22 +57,21 @@ type ExperimentData struct {
 
 // CollectorResult stores the result from a collector experiment
 type CollectorResult struct {
-	HostName          string    `json:"host_name"`
-	ExperimentID      string    `json:"experiment_id"`
-	Status            string    `json:"status"` // "completed", "failed", "not_started"
-	DataPointsCollected int     `json:"data_points_collected"`
-	Error             string    `json:"error,omitempty"`
+	HostName string `json:"host_name"`
+	Status   string `json:"status"` // "completed", "failed", "not_started"
+	Error    string `json:"error,omitempty"`
+
+	// Complete experiment data from collector
+	Data *collectorAPI.ExperimentData `json:"data,omitempty"`
 }
 
 // RequesterResult stores the result from the requester experiment
 type RequesterResult struct {
-	ExperimentID    string  `json:"experiment_id"`
-	Status          string  `json:"status"` // "completed", "failed", "not_started"
-	TotalRequests   int64   `json:"total_requests"`
-	Successful      int64   `json:"successful"`
-	Failed          int64   `json:"failed"`
-	AvgResponseTime float64 `json:"avg_response_time"`
-	Error           string  `json:"error,omitempty"`
+	Status string `json:"status"` // "completed", "failed", "not_started"
+	Error  string `json:"error,omitempty"`
+
+	// Complete experiment stats from requester
+	Stats *requesterAPI.RequestExperimentStats `json:"stats,omitempty"`
 }
 
 // ExperimentError records errors that occurred during the experiment
