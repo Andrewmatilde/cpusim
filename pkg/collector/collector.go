@@ -114,20 +114,24 @@ func (c *Collector) getNetworkIO(ctx context.Context) (*NetworkIO, error) {
 		return &NetworkIO{}, nil
 	}
 
-	networkIO := &NetworkIO{
-		BytesReceived:   int64(currentStats[0].BytesRecv),
-		BytesSent:       int64(currentStats[0].BytesSent),
-		PacketsReceived: int64(currentStats[0].PacketsRecv),
-		PacketsSent:     int64(currentStats[0].PacketsSent),
+	// If this is the first call, initialize lastNetStats and return zero values
+	if len(c.lastNetStats) == 0 {
+		c.lastNetStats = currentStats
+		return &NetworkIO{
+			BytesReceived:   0,
+			BytesSent:       0,
+			PacketsReceived: 0,
+			PacketsSent:     0,
+		}, nil
 	}
 
-	// If we have previous stats, calculate the rate
-	if len(c.lastNetStats) > 0 {
-		lastStat := c.lastNetStats[0]
-		networkIO.BytesReceived = int64(currentStats[0].BytesRecv - lastStat.BytesRecv)
-		networkIO.BytesSent = int64(currentStats[0].BytesSent - lastStat.BytesSent)
-		networkIO.PacketsReceived = int64(currentStats[0].PacketsRecv - lastStat.PacketsRecv)
-		networkIO.PacketsSent = int64(currentStats[0].PacketsSent - lastStat.PacketsSent)
+	// Calculate the rate based on difference from last measurement
+	lastStat := c.lastNetStats[0]
+	networkIO := &NetworkIO{
+		BytesReceived:   int64(currentStats[0].BytesRecv - lastStat.BytesRecv),
+		BytesSent:       int64(currentStats[0].BytesSent - lastStat.BytesSent),
+		PacketsReceived: int64(currentStats[0].PacketsRecv - lastStat.PacketsRecv),
+		PacketsSent:     int64(currentStats[0].PacketsSent - lastStat.PacketsSent),
 	}
 
 	// Store current stats for next calculation
