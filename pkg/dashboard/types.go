@@ -92,3 +92,34 @@ func (e *ExperimentData) UnmarshalJSON(data []byte) error {
 	type Alias ExperimentData
 	return json.Unmarshal(data, (*Alias)(e))
 }
+
+// ExperimentGroup represents a group of repeated experiments
+type ExperimentGroup struct {
+	GroupID      string                  `json:"group_id"`
+	Description  string                  `json:"description,omitempty"`
+	Config       ExperimentGroupConfig   `json:"config"`
+	Experiments  []string                `json:"experiments"` // List of experiment IDs
+	StartTime    time.Time               `json:"start_time"`
+	EndTime      time.Time               `json:"end_time,omitempty"`
+	Status       string                  `json:"status"` // "running", "completed", "failed"
+	CurrentRun   int                     `json:"current_run"` // 1-based, current execution number
+}
+
+// ExperimentGroupConfig defines the configuration for an experiment group
+type ExperimentGroupConfig struct {
+	RepeatCount  int `json:"repeat_count"`  // Number of times to repeat
+	Timeout      int `json:"timeout"`       // Timeout for each experiment in seconds
+	QPS          int `json:"qps"`           // QPS for each experiment
+	DelayBetween int `json:"delay_between"` // Delay between experiments in seconds
+}
+
+// Implement json.Marshaler and json.Unmarshaler for ExperimentGroup
+func (g ExperimentGroup) MarshalJSON() ([]byte, error) {
+	type Alias ExperimentGroup
+	return json.Marshal((Alias)(g))
+}
+
+func (g *ExperimentGroup) UnmarshalJSON(data []byte) error {
+	type Alias ExperimentGroup
+	return json.Unmarshal(data, (*Alias)(g))
+}

@@ -16,9 +16,10 @@ import (
 type Service struct {
 	exp.Manager[*ExperimentData]
 
-	fs     exp.FileStorage[*ExperimentData]
-	logger zerolog.Logger
-	config Config
+	fs          exp.FileStorage[*ExperimentData]
+	groupStorage *GroupStorage
+	logger      zerolog.Logger
+	config      Config
 
 	// HTTP clients for sub-experiments
 	collectorClients map[string]CollectorClient // key: host name
@@ -53,8 +54,16 @@ func NewService(storagePath string, config Config, logger zerolog.Logger) (*Serv
 		return nil, fmt.Errorf("failed to create file storage: %w", err)
 	}
 
+	// Create group storage (in a subdirectory)
+	groupStoragePath := storagePath + "/groups"
+	groupStorage, err := NewGroupStorage(groupStoragePath)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create group storage: %w", err)
+	}
+
 	s := &Service{
 		fs:               *fs,
+		groupStorage:     groupStorage,
 		logger:           logger,
 		config:           config,
 		collectorClients: make(map[string]CollectorClient),
@@ -438,4 +447,145 @@ func (s *Service) runExperiment(ctx context.Context) (*ExperimentData, error) {
 		Msg("Dashboard experiment completed")
 
 	return data, nil
+}
+
+// StartExperimentGroup starts a new experiment group with multiple repeated experiments
+func (s *Service) StartExperimentGroup(groupID string, description string, config ExperimentGroupConfig) error {
+	// Check if service is idle
+	status := s.GetStatus()
+	if status != exp.Pending {
+		return fmt.Errorf("cannot start experiment group: service is %s, must be Pending", status)
+	}
+
+	// Create experiment group
+	group := &ExperimentGroup{
+		GroupID:      groupID,
+		Description:  description,
+		Config:       config,
+		Experiments:  make([]string, 0, config.RepeatCount),
+		StartTime:    time.Now(),
+		Status:       "running",
+		CurrentRun:   0,
+	}
+
+	// Save initial group state
+	if err := s.groupStorage.Save(groupID, group); err != nil {
+		return fmt.Errorf("failed to save experiment group: %w", err)
+	}
+
+	s.logger.Info().
+		Str("group_id", groupID).
+		Int("repeat_count", config.RepeatCount).
+		Int("timeout", config.Timeout).
+		Int("qps", config.QPS).
+		Msg("Starting experiment group")
+
+	// Run experiments serially
+	for i := 1; i <= config.RepeatCount; i++ {
+		// Update current run
+		group.CurrentRun = i
+		if err := s.groupStorage.Save(groupID, group); err != nil {
+			s.logger.Error().Err(err).Msg("Failed to update group status")
+		}
+
+		// Generate experiment ID
+		expID := fmt.Sprintf("%s-run-%d", groupID, i)
+		group.Experiments = append(group.Experiments, expID)
+
+		s.logger.Info().
+			Str("group_id", groupID).
+			Int("run", i).
+			Int("total", config.RepeatCount).
+			Str("experiment_id", expID).
+			Msg("Starting experiment run")
+
+		// Start single experiment
+		timeout := time.Duration(config.Timeout) * time.Second
+		err := s.StartExperiment(expID, timeout, config.QPS)
+		if err != nil {
+			s.logger.Error().
+				Err(err).
+				Str("experiment_id", expID).
+				Msg("Failed to start experiment")
+
+			group.Status = "failed"
+			group.EndTime = time.Now()
+			if saveErr := s.groupStorage.Save(groupID, group); saveErr != nil {
+				s.logger.Error().Err(saveErr).Msg("Failed to save failed group state")
+			}
+			return fmt.Errorf("failed to start experiment %s: %w", expID, err)
+		}
+
+		// Wait for experiment to complete
+		s.logger.Info().Str("experiment_id", expID).Msg("Waiting for experiment to complete")
+		for s.GetStatus() == exp.Running {
+			time.Sleep(1 * time.Second)
+		}
+
+		s.logger.Info().
+			Str("experiment_id", expID).
+			Int("run", i).
+			Msg("Experiment run completed")
+
+		// Optional delay between experiments
+		if i < config.RepeatCount && config.DelayBetween > 0 {
+			s.logger.Info().
+				Int("delay_seconds", config.DelayBetween).
+				Msg("Waiting before next experiment")
+			time.Sleep(time.Duration(config.DelayBetween) * time.Second)
+		}
+
+		// Save updated group state
+		if err := s.groupStorage.Save(groupID, group); err != nil {
+			s.logger.Error().Err(err).Msg("Failed to save group state")
+		}
+	}
+
+	// Mark group as completed
+	group.Status = "completed"
+	group.EndTime = time.Now()
+	if err := s.groupStorage.Save(groupID, group); err != nil {
+		s.logger.Error().Err(err).Msg("Failed to save final group state")
+		return err
+	}
+
+	s.logger.Info().
+		Str("group_id", groupID).
+		Int("completed_runs", len(group.Experiments)).
+		Msg("Experiment group completed successfully")
+
+	return nil
+}
+
+// GetExperimentGroup retrieves an experiment group by ID
+func (s *Service) GetExperimentGroup(groupID string) (*ExperimentGroup, error) {
+	return s.groupStorage.Load(groupID)
+}
+
+// ListExperimentGroups lists all experiment groups
+func (s *Service) ListExperimentGroups() ([]exp.ExperimentInfo, error) {
+	return s.groupStorage.List()
+}
+
+// GetExperimentGroupWithDetails retrieves an experiment group with all experiment details
+func (s *Service) GetExperimentGroupWithDetails(groupID string) (*ExperimentGroup, []*ExperimentData, error) {
+	group, err := s.groupStorage.Load(groupID)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	experiments := make([]*ExperimentData, 0, len(group.Experiments))
+	for _, expID := range group.Experiments {
+		expData, err := s.GetExperiment(expID)
+		if err != nil {
+			s.logger.Warn().
+				Err(err).
+				Str("experiment_id", expID).
+				Msg("Failed to load experiment data")
+			continue
+		}
+		experiments = append(experiments, expData)
+	}
+
+	return group, experiments, nil
 }
