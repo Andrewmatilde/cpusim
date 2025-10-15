@@ -89,6 +89,22 @@ export class DashboardAPIClient {
   async getHostsStatus(): Promise<HostsStatusResponse> {
     return this.request<HostsStatusResponse>('/hosts/status');
   }
+
+  // Experiment Groups
+  async listExperimentGroups(): Promise<import('./generated').ExperimentGroupListResponse> {
+    return this.request('/experiment-groups');
+  }
+
+  async startExperimentGroup(data: import('./generated').StartExperimentGroupRequest): Promise<import('./generated').ExperimentGroupResponse> {
+    return this.request('/experiment-groups', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+  }
+
+  async getExperimentGroupWithDetails(groupId: string): Promise<import('./generated').ExperimentGroupDetail> {
+    return this.request(`/experiment-groups/${encodeURIComponent(groupId)}`);
+  }
 }
 
 // Export singleton instance

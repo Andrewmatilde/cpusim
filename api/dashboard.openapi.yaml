@@ -131,6 +131,74 @@ paths:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
 
+  /experiment-groups:
+    post:
+      summary: Start a new experiment group
+      description: Creates and starts an experiment group with multiple repeated experiments
+      operationId: startExperimentGroup
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/StartExperimentGroupRequest'
+      responses:
+        '200':
+          description: Experiment group started successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ExperimentGroupResponse'
+        '400':
+          description: Bad request
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '409':
+          description: Service is busy
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+    get:
+      summary: List all experiment groups
+      description: Returns a list of all experiment groups with metadata
+      operationId: listExperimentGroups
+      responses:
+        '200':
+          description: List of experiment groups
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ExperimentGroupListResponse'
+
+  /experiment-groups/{groupId}:
+    get:
+      summary: Get experiment group with all experiment details
+      description: Returns experiment group metadata and all associated experiment data
+      operationId: getExperimentGroupWithDetails
+      parameters:
+        - name: groupId
+          in: path
+          required: true
+          schema:
+            type: string
+            pattern: '^[a-z0-9]([a-z0-9-]*[a-z0-9])?$'
+      responses:
+        '200':
+          description: Experiment group with details
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ExperimentGroupDetail'
+        '404':
+          description: Experiment group not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
   /hosts/status:
     get:
       summary: Get status of all hosts
@@ -393,6 +461,166 @@ components:
           type: string
         message:
           type: string
+
+    StartExperimentGroupRequest:
+      type: object
+      required:
+        - groupId
+        - repeatCount
+        - timeout
+        - qps
+      properties:
+        groupId:
+          type: string
+          pattern: '^[a-z0-9]([a-z0-9-]*[a-z0-9])?$'
+          minLength: 1
+          maxLength: 63
+          description: Unique experiment group identifier
+        description:
+          type: string
+          description: Optional description of the experiment group
+        repeatCount:
+          type: integer
+          minimum: 1
+          maximum: 100
+          description: Number of times to repeat the experiment
+        timeout:
+          type: integer
+          minimum: 1
+          maximum: 3600
+          description: Timeout for each experiment in seconds
+        qps:
+          type: integer
+          minimum: 1
+          maximum: 1000
+          description: Requests per second for each experiment
+        delayBetween:
+          type: integer
+          minimum: 0
+          maximum: 3600
+          default: 0
+          description: Delay between experiments in seconds
+
+    ExperimentGroupResponse:
+      type: object
+      properties:
+        groupId:
+          type: string
+        status:
+          type: string
+          description: Response status
+        timestamp:
+          type: string
+          format: date-time
+        message:
+          type: string
+
+    ExperimentGroup:
+      type: object
+      properties:
+        groupId:
+          type: string
+          description: Unique experiment group identifier
+        description:
+          type: string
+          description: Optional description
+        config:
+          $ref: '#/components/schemas/ExperimentGroupConfig'
+        experiments:
+          type: array
+          description: List of experiment IDs in this group
+          items:
+            type: string
+        startTime:
+          type: string
+          format: date-time
+          description: When the group started
+        endTime:
+          type: string
+          format: date-time
+          description: When the group completed
+        status:
+          type: string
+          description: running, completed, failed
+        currentRun:
+          type: integer
+          description: Current execution number (1-based)
+        statistics:
+          type: object
+          description: Steady-state statistics per host (calculated when group is completed)
+          additionalProperties:
+            $ref: '#/components/schemas/SteadyStateStats'
+
+    ExperimentGroupConfig:
+      type: object
+      properties:
+        repeatCount:
+          type: integer
+          description: Number of times to repeat the experiment
+        timeout:
+          type: integer
+          description: Timeout for each experiment in seconds
+        qps:
+          type: integer
+          description: Requests per second for each experiment
+        delayBetween:
+          type: integer
+          description: Delay between experiments in seconds
+
+    SteadyStateStats:
+      type: object
+      description: Steady-state performance statistics with confidence intervals
+      properties:
+        cpuMean:
+          type: number
+          description: Mean CPU usage across all experiments (steady-state)
+        cpuStdDev:
+          type: number
+          description: Standard deviation of CPU usage
+        cpuConfLower:
+          type: number
+          description: Lower bound of 95% confidence interval
+        cpuConfUpper:
+          type: number
+          description: Upper bound of 95% confidence interval
+        cpuMin:
+          type: number
+          description: Minimum CPU value observed
+        cpuMax:
+          type: number
+          description: Maximum CPU value observed
+        sampleSize:
+          type: integer
+          description: Number of experiments used in calculation
+        confidenceLevel:
+          type: number
+          description: Confidence level (e.g., 0.95 for 95%)
+
+    ExperimentGroupListResponse:
+      type: object
+      properties:
+        groups:
+          type: array
+          description: List of experiment groups
+          items:
+            $ref: '#/components/schemas/ExperimentGroup'
+        total:
+          type: integer
+          description: Total number of groups
+        timestamp:
+          type: string
+          format: date-time
+
+    ExperimentGroupDetail:
+      type: object
+      properties:
+        group:
+          $ref: '#/components/schemas/ExperimentGroup'
+        experimentDetails:
+          type: array
+          description: Full data for all experiments in the group
+          items:
+            $ref: '#/components/schemas/ExperimentData'
 
     ErrorResponse:
       type: object

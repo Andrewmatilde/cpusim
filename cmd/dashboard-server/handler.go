@@ -231,6 +231,107 @@ func (h *APIHandler) HealthCheck(c *gin.Context) {
 	c.JSON(http.StatusOK, response)
 }
 
+// StartExperimentGroup implements starting a new experiment group
+func (h *APIHandler) StartExperimentGroup(c *gin.Context) {
+	var request generated.StartExperimentGroupRequest
+	if err := c.ShouldBindJSON(&request); err != nil {
+		c.JSON(http.StatusBadRequest, generated.ErrorResponse{
+			Error:     "invalid_request",
+			Message:   err.Error(),
+			Timestamp: time.Now(),
+		})
+		return
+	}
+
+	// Create experiment group config
+	config := dashboard.ExperimentGroupConfig{
+		RepeatCount:  request.RepeatCount,
+		Timeout:      request.Timeout,
+		QPS:          request.Qps,
+		DelayBetween: request.DelayBetween,
+	}
+
+	// Start experiment group (this will run asynchronously)
+	go func() {
+		err := h.service.StartExperimentGroup(request.GroupId, request.Description, config)
+		if err != nil {
+			h.logger.Error().Err(err).Str("group_id", request.GroupId).Msg("Failed to start experiment group")
+		}
+	}()
+
+	response := generated.ExperimentGroupResponse{
+		GroupId:   request.GroupId,
+		Status:    "started",
+		Timestamp: time.Now(),
+		Message:   "Experiment group started successfully",
+	}
+
+	c.JSON(http.StatusOK, response)
+}
+
+// ListExperimentGroups implements listing all experiment groups
+func (h *APIHandler) ListExperimentGroups(c *gin.Context) {
+	groups, err := h.service.ListExperimentGroups()
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, generated.ErrorResponse{
+			Error:     "internal_error",
+			Message:   err.Error(),
+			Timestamp: time.Now(),
+		})
+		return
+	}
+
+	// Convert to API types
+	apiGroups := make([]generated.ExperimentGroup, len(groups))
+	for i, group := range groups {
+		apiGroups[i] = convertExperimentGroupToAPI(*group)
+	}
+
+	response := generated.ExperimentGroupListResponse{
+		Groups:    apiGroups,
+		Total:     len(apiGroups),
+		Timestamp: time.Now(),
+	}
+
+	c.JSON(http.StatusOK, response)
+}
+
+// GetExperimentGroupWithDetails implements getting experiment group with all experiment data
+func (h *APIHandler) GetExperimentGroupWithDetails(c *gin.Context, groupId string) {
+	group, experiments, err := h.service.GetExperimentGroupWithDetails(groupId)
+	if err != nil {
+		c.JSON(http.StatusNotFound, generated.ErrorResponse{
+			Error:     "group_not_found",
+			Message:   err.Error(),
+			Timestamp: time.Now(),
+		})
+		return
+	}
+
+	// Convert to API types
+	apiGroup := convertExperimentGroupToAPI(*group)
+	apiExperiments := make([]generated.ExperimentData, len(experiments))
+	for i, exp := range experiments {
+		apiExperiments[i] = generated.ExperimentData{
+			Config:           convertConfigToAPI(exp.Config),
+			StartTime:        exp.StartTime,
+			EndTime:          exp.EndTime,
+			Duration:         float32(exp.Duration),
+			Status:           exp.Status,
+			CollectorResults: convertCollectorResultsToAPI(exp.CollectorResults),
+			RequesterResult:  convertRequesterResultToAPI(exp.RequesterResult),
+			Errors:           convertErrorsToAPI(exp.Errors),
+		}
+	}
+
+	response := generated.ExperimentGroupDetail{
+		Group:             apiGroup,
+		ExperimentDetails: apiExperiments,
+	}
+
+	c.JSON(http.StatusOK, response)
+}
+
 // Helper functions to convert between internal and API types
 
 func convertConfigToAPI(cfg dashboard.Config) generated.ServiceConfig {
@@ -306,4 +407,43 @@ func convertErrorsToAPI(errors []dashboard.ExperimentError) []generated.Experime
 		}
 	}
 	return apiErrors
+}
+
+func convertExperimentGroupToAPI(group dashboard.ExperimentGroup) generated.ExperimentGroup {
+	// Convert statistics if present
+	var apiStatistics map[string]generated.SteadyStateStats
+	if group.Statistics != nil {
+		apiStatistics = make(map[string]generated.SteadyStateStats)
+		for hostName, stats := range group.Statistics {
+			if stats != nil {
+				apiStatistics[hostName] = generated.SteadyStateStats{
+					CpuMean:         float32(stats.CPUMean),
+					CpuStdDev:       float32(stats.CPUStdDev),
+					CpuConfLower:    float32(stats.CPUConfLower),
+					CpuConfUpper:    float32(stats.CPUConfUpper),
+					CpuMin:          float32(stats.CPUMin),
+					CpuMax:          float32(stats.CPUMax),
+					SampleSize:      stats.SampleSize,
+					ConfidenceLevel: float32(stats.ConfidenceLevel),
+				}
+			}
+		}
+	}
+
+	return generated.ExperimentGroup{
+		GroupId:     group.GroupID,
+		Description: group.Description,
+		Config: generated.ExperimentGroupConfig{
+			RepeatCount:  group.Config.RepeatCount,
+			Timeout:      group.Config.Timeout,
+			Qps:          group.Config.QPS,
+			DelayBetween: group.Config.DelayBetween,
+		},
+		Experiments: group.Experiments,
+		StartTime:   group.StartTime,
+		EndTime:     group.EndTime,
+		Status:      group.Status,
+		CurrentRun:  group.CurrentRun,
+		Statistics:  apiStatistics,
+	}
 }

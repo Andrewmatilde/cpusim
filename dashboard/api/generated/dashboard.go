@@ -94,6 +94,77 @@ type ExperimentError struct {
 	Timestamp time.Time `json:"timestamp,omitempty"`
 }
 
+// ExperimentGroup defines model for ExperimentGroup.
+type ExperimentGroup struct {
+	Config ExperimentGroupConfig `json:"config,omitempty"`
+
+	// CurrentRun Current execution number (1-based)
+	CurrentRun int `json:"currentRun,omitempty"`
+
+	// Description Optional description
+	Description string `json:"description,omitempty"`
+
+	// EndTime When the group completed
+	EndTime time.Time `json:"endTime,omitempty"`
+
+	// Experiments List of experiment IDs in this group
+	Experiments []string `json:"experiments,omitempty"`
+
+	// GroupId Unique experiment group identifier
+	GroupId string `json:"groupId,omitempty"`
+
+	// StartTime When the group started
+	StartTime time.Time `json:"startTime,omitempty"`
+
+	// Statistics Steady-state statistics per host (calculated when group is completed)
+	Statistics map[string]SteadyStateStats `json:"statistics,omitempty"`
+
+	// Status running, completed, failed
+	Status string `json:"status,omitempty"`
+}
+
+// ExperimentGroupConfig defines model for ExperimentGroupConfig.
+type ExperimentGroupConfig struct {
+	// DelayBetween Delay between experiments in seconds
+	DelayBetween int `json:"delayBetween,omitempty"`
+
+	// Qps Requests per second for each experiment
+	Qps int `json:"qps,omitempty"`
+
+	// RepeatCount Number of times to repeat the experiment
+	RepeatCount int `json:"repeatCount,omitempty"`
+
+	// Timeout Timeout for each experiment in seconds
+	Timeout int `json:"timeout,omitempty"`
+}
+
+// ExperimentGroupDetail defines model for ExperimentGroupDetail.
+type ExperimentGroupDetail struct {
+	// ExperimentDetails Full data for all experiments in the group
+	ExperimentDetails []ExperimentData `json:"experimentDetails,omitempty"`
+	Group             ExperimentGroup  `json:"group,omitempty"`
+}
+
+// ExperimentGroupListResponse defines model for ExperimentGroupListResponse.
+type ExperimentGroupListResponse struct {
+	// Groups List of experiment groups
+	Groups    []ExperimentGroup `json:"groups,omitempty"`
+	Timestamp time.Time         `json:"timestamp,omitempty"`
+
+	// Total Total number of groups
+	Total int `json:"total,omitempty"`
+}
+
+// ExperimentGroupResponse defines model for ExperimentGroupResponse.
+type ExperimentGroupResponse struct {
+	GroupId string `json:"groupId,omitempty"`
+	Message string `json:"message,omitempty"`
+
+	// Status Response status
+	Status    string    `json:"status,omitempty"`
+	Timestamp time.Time `json:"timestamp,omitempty"`
+}
+
 // ExperimentInfo Metadata about a stored experiment
 type ExperimentInfo struct {
 	// CreatedAt When the experiment was created
@@ -164,6 +235,27 @@ type ServiceConfig struct {
 	TargetHosts []TargetHost `json:"targetHosts,omitempty"`
 }
 
+// StartExperimentGroupRequest defines model for StartExperimentGroupRequest.
+type StartExperimentGroupRequest struct {
+	// DelayBetween Delay between experiments in seconds
+	DelayBetween int `json:"delayBetween,omitempty"`
+
+	// Description Optional description of the experiment group
+	Description string `json:"description,omitempty"`
+
+	// GroupId Unique experiment group identifier
+	GroupId string `json:"groupId"`
+
+	// Qps Requests per second for each experiment
+	Qps int `json:"qps"`
+
+	// RepeatCount Number of times to repeat the experiment
+	RepeatCount int `json:"repeatCount"`
+
+	// Timeout Timeout for each experiment in seconds
+	Timeout int `json:"timeout"`
+}
+
 // StartExperimentRequest defines model for StartExperimentRequest.
 type StartExperimentRequest struct {
 	// ExperimentId Unique experiment identifier
@@ -181,6 +273,33 @@ type StatusResponse struct {
 	// Status Current experiment manager status (Pending or Running)
 	Status    string    `json:"status,omitempty"`
 	Timestamp time.Time `json:"timestamp,omitempty"`
+}
+
+// SteadyStateStats Steady-state performance statistics with confidence intervals
+type SteadyStateStats struct {
+	// ConfidenceLevel Confidence level (e.g., 0.95 for 95%)
+	ConfidenceLevel float32 `json:"confidenceLevel,omitempty"`
+
+	// CpuConfLower Lower bound of 95% confidence interval
+	CpuConfLower float32 `json:"cpuConfLower,omitempty"`
+
+	// CpuConfUpper Upper bound of 95% confidence interval
+	CpuConfUpper float32 `json:"cpuConfUpper,omitempty"`
+
+	// CpuMax Maximum CPU value observed
+	CpuMax float32 `json:"cpuMax,omitempty"`
+
+	// CpuMean Mean CPU usage across all experiments (steady-state)
+	CpuMean float32 `json:"cpuMean,omitempty"`
+
+	// CpuMin Minimum CPU value observed
+	CpuMin float32 `json:"cpuMin,omitempty"`
+
+	// CpuStdDev Standard deviation of CPU usage
+	CpuStdDev float32 `json:"cpuStdDev,omitempty"`
+
+	// SampleSize Number of experiments used in calculation
+	SampleSize int `json:"sampleSize,omitempty"`
 }
 
 // TargetHost defines model for TargetHost.
@@ -206,6 +325,9 @@ type TargetHostStatus struct {
 	// Status Service status (Pending, Running, or Error)
 	Status string `json:"status,omitempty"`
 }
+
+// StartExperimentGroupJSONRequestBody defines body for StartExperimentGroup for application/json ContentType.
+type StartExperimentGroupJSONRequestBody = StartExperimentGroupRequest
 
 // StartExperimentJSONRequestBody defines body for StartExperiment for application/json ContentType.
 type StartExperimentJSONRequestBody = StartExperimentRequest
@@ -286,6 +408,17 @@ type ClientInterface interface {
 	// GetServiceConfig request
 	GetServiceConfig(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error)
 
+	// ListExperimentGroups request
+	ListExperimentGroups(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// StartExperimentGroupWithBody request with any body
+	StartExperimentGroupWithBody(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	StartExperimentGroup(ctx context.Context, body StartExperimentGroupJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// GetExperimentGroupWithDetails request
+	GetExperimentGroupWithDetails(ctx context.Context, groupId string, reqEditors ...RequestEditorFn) (*http.Response, error)
+
 	// ListExperiments request
 	ListExperiments(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error)
 
@@ -312,6 +445,54 @@ type ClientInterface interface {
 
 func (c *Client) GetServiceConfig(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error) {
 	req, err := NewGetServiceConfigRequest(c.Server)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) ListExperimentGroups(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewListExperimentGroupsRequest(c.Server)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) StartExperimentGroupWithBody(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewStartExperimentGroupRequestWithBody(c.Server, contentType, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) StartExperimentGroup(ctx context.Context, body StartExperimentGroupJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewStartExperimentGroupRequest(c.Server, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) GetExperimentGroupWithDetails(ctx context.Context, groupId string, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewGetExperimentGroupWithDetailsRequest(c.Server, groupId)
 	if err != nil {
 		return nil, err
 	}
@@ -428,6 +609,107 @@ func NewGetServiceConfigRequest(server string) (*http.Request, error) {
 	}
 
 	operationPath := fmt.Sprintf("/config")
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest("GET", queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
+// NewListExperimentGroupsRequest generates requests for ListExperimentGroups
+func NewListExperimentGroupsRequest(server string) (*http.Request, error) {
+	var err error
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/experiment-groups")
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest("GET", queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
+// NewStartExperimentGroupRequest calls the generic StartExperimentGroup builder with application/json body
+func NewStartExperimentGroupRequest(server string, body StartExperimentGroupJSONRequestBody) (*http.Request, error) {
+	var bodyReader io.Reader
+	buf, err := json.Marshal(body)
+	if err != nil {
+		return nil, err
+	}
+	bodyReader = bytes.NewReader(buf)
+	return NewStartExperimentGroupRequestWithBody(server, "application/json", bodyReader)
+}
+
+// NewStartExperimentGroupRequestWithBody generates requests for StartExperimentGroup with any type of body
+func NewStartExperimentGroupRequestWithBody(server string, contentType string, body io.Reader) (*http.Request, error) {
+	var err error
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/experiment-groups")
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest("POST", queryURL.String(), body)
+	if err != nil {
+		return nil, err
+	}
+
+	req.Header.Add("Content-Type", contentType)
+
+	return req, nil
+}
+
+// NewGetExperimentGroupWithDetailsRequest generates requests for GetExperimentGroupWithDetails
+func NewGetExperimentGroupWithDetailsRequest(server string, groupId string) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithLocation("simple", false, "groupId", runtime.ParamLocationPath, groupId)
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/experiment-groups/%s", pathParam0)
 	if operationPath[0] == '/' {
 		operationPath = "." + operationPath
 	}
@@ -707,6 +989,17 @@ type ClientWithResponsesInterface interface {
 	// GetServiceConfigWithResponse request
 	GetServiceConfigWithResponse(ctx context.Context, reqEditors ...RequestEditorFn) (*GetServiceConfigResponse, error)
 
+	// ListExperimentGroupsWithResponse request
+	ListExperimentGroupsWithResponse(ctx context.Context, reqEditors ...RequestEditorFn) (*ListExperimentGroupsResponse, error)
+
+	// StartExperimentGroupWithBodyWithResponse request with any body
+	StartExperimentGroupWithBodyWithResponse(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*StartExperimentGroupResponse, error)
+
+	StartExperimentGroupWithResponse(ctx context.Context, body StartExperimentGroupJSONRequestBody, reqEditors ...RequestEditorFn) (*StartExperimentGroupResponse, error)
+
+	// GetExperimentGroupWithDetailsWithResponse request
+	GetExperimentGroupWithDetailsWithResponse(ctx context.Context, groupId string, reqEditors ...RequestEditorFn) (*GetExperimentGroupWithDetailsResponse, error)
+
 	// ListExperimentsWithResponse request
 	ListExperimentsWithResponse(ctx context.Context, reqEditors ...RequestEditorFn) (*ListExperimentsResponse, error)
 
@@ -747,6 +1040,75 @@ func (r GetServiceConfigResponse) Status() string {
 
 // StatusCode returns HTTPResponse.StatusCode
 func (r GetServiceConfigResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+type ListExperimentGroupsResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	JSON200      *ExperimentGroupListResponse
+}
+
+// Status returns HTTPResponse.Status
+func (r ListExperimentGroupsResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r ListExperimentGroupsResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+type StartExperimentGroupResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	JSON200      *ExperimentGroupResponse
+	JSON400      *ErrorResponse
+	JSON409      *ErrorResponse
+}
+
+// Status returns HTTPResponse.Status
+func (r StartExperimentGroupResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r StartExperimentGroupResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+type GetExperimentGroupWithDetailsResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	JSON200      *ExperimentGroupDetail
+	JSON404      *ErrorResponse
+}
+
+// Status returns HTTPResponse.Status
+func (r GetExperimentGroupWithDetailsResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r GetExperimentGroupWithDetailsResponse) StatusCode() int {
 	if r.HTTPResponse != nil {
 		return r.HTTPResponse.StatusCode
 	}
@@ -921,6 +1283,41 @@ func (c *ClientWithResponses) GetServiceConfigWithResponse(ctx context.Context, 
 	return ParseGetServiceConfigResponse(rsp)
 }
 
+// ListExperimentGroupsWithResponse request returning *ListExperimentGroupsResponse
+func (c *ClientWithResponses) ListExperimentGroupsWithResponse(ctx context.Context, reqEditors ...RequestEditorFn) (*ListExperimentGroupsResponse, error) {
+	rsp, err := c.ListExperimentGroups(ctx, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseListExperimentGroupsResponse(rsp)
+}
+
+// StartExperimentGroupWithBodyWithResponse request with arbitrary body returning *StartExperimentGroupResponse
+func (c *ClientWithResponses) StartExperimentGroupWithBodyWithResponse(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*StartExperimentGroupResponse, error) {
+	rsp, err := c.StartExperimentGroupWithBody(ctx, contentType, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseStartExperimentGroupResponse(rsp)
+}
+
+func (c *ClientWithResponses) StartExperimentGroupWithResponse(ctx context.Context, body StartExperimentGroupJSONRequestBody, reqEditors ...RequestEditorFn) (*StartExperimentGroupResponse, error) {
+	rsp, err := c.StartExperimentGroup(ctx, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseStartExperimentGroupResponse(rsp)
+}
+
+// GetExperimentGroupWithDetailsWithResponse request returning *GetExperimentGroupWithDetailsResponse
+func (c *ClientWithResponses) GetExperimentGroupWithDetailsWithResponse(ctx context.Context, groupId string, reqEditors ...RequestEditorFn) (*GetExperimentGroupWithDetailsResponse, error) {
+	rsp, err := c.GetExperimentGroupWithDetails(ctx, groupId, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseGetExperimentGroupWithDetailsResponse(rsp)
+}
+
 // ListExperimentsWithResponse request returning *ListExperimentsResponse
 func (c *ClientWithResponses) ListExperimentsWithResponse(ctx context.Context, reqEditors ...RequestEditorFn) (*ListExperimentsResponse, error) {
 	rsp, err := c.ListExperiments(ctx, reqEditors...)
@@ -1012,6 +1409,105 @@ func ParseGetServiceConfigResponse(rsp *http.Response) (*GetServiceConfigRespons
 			return nil, err
 		}
 		response.JSON200 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseListExperimentGroupsResponse parses an HTTP response from a ListExperimentGroupsWithResponse call
+func ParseListExperimentGroupsResponse(rsp *http.Response) (*ListExperimentGroupsResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &ListExperimentGroupsResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest ExperimentGroupListResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseStartExperimentGroupResponse parses an HTTP response from a StartExperimentGroupWithResponse call
+func ParseStartExperimentGroupResponse(rsp *http.Response) (*StartExperimentGroupResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &StartExperimentGroupResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest ExperimentGroupResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
+		var dest ErrorResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON400 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 409:
+		var dest ErrorResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON409 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseGetExperimentGroupWithDetailsResponse parses an HTTP response from a GetExperimentGroupWithDetailsWithResponse call
+func ParseGetExperimentGroupWithDetailsResponse(rsp *http.Response) (*GetExperimentGroupWithDetailsResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &GetExperimentGroupWithDetailsResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest ExperimentGroupDetail
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
+		var dest ErrorResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON404 = &dest
 
 	}
 
@@ -1240,6 +1736,15 @@ type ServerInterface interface {
 	// Get service configuration
 	// (GET /config)
 	GetServiceConfig(c *gin.Context)
+	// List all experiment groups
+	// (GET /experiment-groups)
+	ListExperimentGroups(c *gin.Context)
+	// Start a new experiment group
+	// (POST /experiment-groups)
+	StartExperimentGroup(c *gin.Context)
+	// Get experiment group with all experiment details
+	// (GET /experiment-groups/{groupId})
+	GetExperimentGroupWithDetails(c *gin.Context, groupId string)
 	// List all stored experiments
 	// (GET /experiments)
 	ListExperiments(c *gin.Context)
@@ -1283,6 +1788,56 @@ func (siw *ServerInterfaceWrapper) GetServiceConfig(c *gin.Context) {
 	}
 
 	siw.Handler.GetServiceConfig(c)
+}
+
+// ListExperimentGroups operation middleware
+func (siw *ServerInterfaceWrapper) ListExperimentGroups(c *gin.Context) {
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		middleware(c)
+		if c.IsAborted() {
+			return
+		}
+	}
+
+	siw.Handler.ListExperimentGroups(c)
+}
+
+// StartExperimentGroup operation middleware
+func (siw *ServerInterfaceWrapper) StartExperimentGroup(c *gin.Context) {
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		middleware(c)
+		if c.IsAborted() {
+			return
+		}
+	}
+
+	siw.Handler.StartExperimentGroup(c)
+}
+
+// GetExperimentGroupWithDetails operation middleware
+func (siw *ServerInterfaceWrapper) GetExperimentGroupWithDetails(c *gin.Context) {
+
+	var err error
+
+	// ------------- Path parameter "groupId" -------------
+	var groupId string
+
+	err = runtime.BindStyledParameterWithOptions("simple", "groupId", c.Param("groupId"), &groupId, runtime.BindStyledParameterOptions{Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandler(c, fmt.Errorf("Invalid format for parameter groupId: %w", err), http.StatusBadRequest)
+		return
+	}
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		middleware(c)
+		if c.IsAborted() {
+			return
+		}
+	}
+
+	siw.Handler.GetExperimentGroupWithDetails(c, groupId)
 }
 
 // ListExperiments operation middleware
@@ -1426,6 +1981,9 @@ func RegisterHandlersWithOptions(router gin.IRouter, si ServerInterface, options
 	}
 
 	router.GET(options.BaseURL+"/config", wrapper.GetServiceConfig)
+	router.GET(options.BaseURL+"/experiment-groups", wrapper.ListExperimentGroups)
+	router.POST(options.BaseURL+"/experiment-groups", wrapper.StartExperimentGroup)
+	router.GET(options.BaseURL+"/experiment-groups/:groupId", wrapper.GetExperimentGroupWithDetails)
 	router.GET(options.BaseURL+"/experiments", wrapper.ListExperiments)
 	router.POST(options.BaseURL+"/experiments", wrapper.StartExperiment)
 	router.GET(options.BaseURL+"/experiments/:experimentId", wrapper.GetExperimentData)
@@ -1438,48 +1996,59 @@ func RegisterHandlersWithOptions(router gin.IRouter, si ServerInterface, options
 // Base64 encoded, gzipped, json marshaled Swagger object
 var swaggerSpec = []string{
 
-	"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",
-	"qkQwAAA=",
+	"H4sIAAAAAAAC/+wb224kxfVXSh2QvFHbnmUxkuclYr0bsPAuxoPFw8pBNd1nZortruqtqrY9rCwteYAN",
+	"4SYgQSghvBCtlChZUBBRwiZfE9vwxC9EVdX3ru7p8Y0g8gLrrqpzq3Orc87cdTwWRowClcLp33WEN4EQ",
+	"63+uBQSofJYJqf6KOIuASwJ6DfYlcIqD9U31l5xG4PQdITmhY+fAdQhtXaY4BOsChzsxCAl8AHyXeLC9",
+	"tWHZd+CmX9jwFfCkOpkTO5BYxqJOshdzDlRe34+AkxCoXPfVZx+Ex0kkCaNO31kzmxBku9D6NURGiMeU",
+	"KuRunWjgnPE6qOvqMwpBCDwGBWKESQA+kgzdiYFPbaBSwZQhKa6QXrIcERm75UOJBJFZRwubQH1Cxy7a",
+	"Mpy4iHGkabxUB2uVMAsC8CTjWyDiwKITPpZY/f8xDiOn7/xkOdes5UStlr0UyMv5PVxT54pyrPE4YULe",
+	"bNKZJgEo7AFI8N1E8i6iTL4sJOYS/G48a/lsgYgYFWCxgkaKk2u3rkkSgpA4jNTqiPEQS6evpAeLaqkj",
+	"ZWXx1RU54R75WEyGDHO/qNPcXKFbNZHyFetv2PeJgomDzdLetluuqsqBW6EugY9GnIUow1qgULjoNkzB",
+	"R8MpmtTVP5eDx+iIjGcRlBjDmtmsyIk5NrRUBXctWUGEIgEeo77I8dI4HALXykr9F4nRyC5XmGi3lhyR",
+	"EM4UYX6/WgedXAcw53hacpa5QbZB3KpsN6bD5XxsNFlbTm/iceZV4+upLZVVstX026wsmmABNq+QOiDN",
+	"vIsyKaYfhGSRi0B6Szb+z9h4n+EsjiyxqpNWV8Dk2p2Euq2YtkU48GKt6Eap0cLlxSEW4BfCgQrjY6Pv",
+	"JSBVmM9HxkOg4mebDeRGUwbw0gQokhNAY8UIyly343a1rtxz1KFvECERG5WDulAGLidEGJyOm9tl/dIr",
+	"lqdP2NKHbUruxFBEZBgiPlBJRgR4g03lZtgqmDx4dbdWIiTxTuzKBxKwP1U5Faj/iLovNzsWFSqTbRiE",
+	"KAJuXPeChwMvDrAEH+0pfhKZiPyeL9lce5Or4WkCU4vwJ7K+tczWKukMBHh6FeQegC1MqFU0NMvFwGWN",
+	"GwVDuhNZWEp8sxGaOY1GKiBib1IAbgXIIQIs11hMZR3wTWPbbIS041LJp9mvlWoGZHWExRaoL5oFG4nt",
+	"7He4jmsgMQlsL44s4dE7LFL8eRwESGWhmjAcBNV7yQypaO3dPGyapFpdwZyOupMclNNqzjw12m6uLtk6",
+	"N8cJqXWW5w6BriOZxIFFj9TnNP6wUU7qCfRmhqyMt54rg2jyPymmxkTnzLOEdTpidTpugMRa2/FQGSNW",
+	"mQsHv2zVlbyCg3LDT8uWSFNQnT0sUHKkc8gZkQAG5FV47qrlTUpeBe2LymiMyZIAlI0+d7WIilD51JNW",
+	"50T81iR0/ZqNuJD5KgrPJYAAC4nSgx3F0H6d7abdKZWpXfUJDFxr1YXad5nc+Yy8i8B+gEb+LOBATpqZ",
+	"y+k7PX7XiSNpTTPTYpFZnz+GP8uEFKbw1syKZynRtVYRqvsVZszHIAvoLLyYgpdyM3qzTkIFWshefuJS",
+	"V1t5McNWoOC01mKT31b9Kd+10iR0Vj6DkfyRm2DK7SrL6s+zjlauv9ST6axGJRJFNA/gtBSzwGgwzda2",
+	"tzb0FTZpV3e9qmhUs7staZJkackKhSC5euuMOAvnV6q6OlllpwRdS3b0LXZ5tIywVqiee7IHTIj3SRiH",
+	"Tv/KU72e64SEmj97Z1IksCQDaX5eU/TTPbpDvL8BdCwnTv+pK5qP9M/LrhNhKYErWL+4hRdf7S2u7iwk",
+	"/1jc+Wn66dLPHrPRdcoHXSbgy72SgC+f51uviHQWztO/Apt06LI1uChfRTj4Tv9WdudlznOajPR3ZltN",
+	"o8FAazuorlr/i0pVu17Yx8pnq+udU8EaL7uQWid7zuqOSzfQ8Wpb84ymQGbp7YWY4rESZrlJhhhP22SX",
+	"zi3zq1XWLJlMobIWAdeYqFeqsu0ROTHR0ge1pDuvuzgQluZOumkDdiGwtYwyKIHagRZgabzkot7S6orW",
+	"s9WVxy/ZeiFeFKuzG2wPLH1Q/RkNWUx95ZtWVx630dsCdzuKbHD155PCvYH3LQ9qo8NobXMb7eIgBsSG",
+	"KukoZjllKICp7V2OqYYR684v9jgTolaOWhCF220S6w1ig29sqzuZA+lfg11rpkx9lXX5sEtwGo8zym3Q",
+	"hHYs6h3fFn+KfMYCfOUq0iJwqTXQ+qgoJEqWBkmSzLcOChju23ecyyRDOzv/n1A4nwmFxuGCJvUhjK6n",
+	"fsLiDtM9mTNRehySICBtBf5KElwTxwlbzwUM8/eeKxp1fnlL8iDq3ObOr+yGPqmua5MRKm1P7bnb1e2Z",
+	"Rg4up3unVa2qNNZTj6mQEN7IhdCN90Hp2AkTjCKn+Xm3QlM7gzdB7jF+e/35OmvDqQSxBR4QFWhquntV",
+	"LSOerBcyVFs1t/0VqTENwPbEMViEcnqnwRBh7zbIFm42zYaz4SfBZucoxXRKnir3X76sokjrzJcJbNeP",
+	"QVW/K241ifFZWDbVzam12C4nwFF+IivvECV2ldv7pWg2ZCxQ6ZYJ6tsqZG0C96xCzZOvyGwx2Uwm0VHA",
+	"cMszuGdJfEIIGZ9qtFoJbWmf2pHgJRRpmc+vLQVEjfyVUJ0ZizQ1/ozBbt4rdxpVNaxelEWMVoZrtLjN",
+	"qmVT2Jnlzprm4l3geAzpo9I+jHH4j78dfvLG4QdvH/7zw6OPvvr2oy+/e3T/6OGfjx+8/92jX9mkX5Nx",
+	"c/A/euu146//koHNYLaG/zKI468/OPrkUwOiqVFF4yDAwwCcvuQxNOWKW1ha4H/74cffPHx4/M4bir6P",
+	"/314//Wjhx925by90HL41z98+6e37E07k5WmxQ/L2c+++ObLP37z8O9HX/zy6DefW2UWYCG3I193Muui",
+	"//29w/feOfrdl0e//bxdevV8B++364yC/dmDU+lMSOhsHJ+/eyocicWITeADE4DqWB6+e/zg/UzM3z26",
+	"/8LmoDv8nIHNlV4d+krv8cP7r//nX2+fko0CmtWVOprVlbNHs2pBs3oWaFrmwg4f3Tt88Os5lbXpIWaM",
+	"7/jNr47uveYo/6IixC0nf1AKyaJIpwrFyTzzqtyxIYo9D4QYxUGz1R7df+/wzU/brVa3lVtA3Pu67Xz9",
+	"iXigH/S2WYp6B2rEOPIY4z6hWBI6Rj5RDA5jCb6ukQgSJvWMal+bSOVfdRYyyDflKJ7eXHdcZxe4MMif",
+	"WOot9RS/LAKKI+L0nStLvaUrOjWTE835cj4SOgadEqjwpSErf+o8A7LcZMu1VJ9/otdLioAySSlwFAXE",
+	"0xCWXxEmJJngPuc09UF9JNDWxdMXIuIwxHxqCLZ3+/S+5Vyki/msU8J5tSouY04FwihIunXlUlsyVWQq",
+	"pWEyM+O4FfltEFFtsonzlGHbtJdFos1zXWWp6n1W/vVLJKmlVbJlPeEjEKa+GTBV/6y304z84kCSKICk",
+	"s1QbQSkL1da6dLJgc5X507PTyZYu6UE5L1WJz8HFXW3btV6vCjnpqqPcgwa69PHkWdJX+lGLhaqr2E/H",
+	"4g3u1YvDPchfgcNYTCvqrW8ZYURhr94ztvuN5btJE/FgpgepqXyYTdhRX1sVFoJ5pKL3yOpQnoGqOr5E",
+	"5CSdXVWeneMQJHDh9G/ddYgiRHl7J62xlpqfRd11C7I+RbHuYOfibCAZ6u1iAdrN+ImYtPY9eXHaV6OG",
+	"MolGLKa+JXrZPWTF+WaclJXz5OFsvkB2QTFs/vDVGLgsk42NkWtgolU+2YUY1UDMvI5wkZwATYNaVhWY",
+	"FacuJkR979GpoyH86ENSQRY44ID9adZra45Otp9d1pzA8t1iVeSgLbmvdLS6xI9Ku+OHHETMry9ar8ZP",
+	"fqDxfcWLjpHCkNmuB8vqva0vJvF6VW/FopKz+lGpQmevpUsWFq/1vavHBbuvm6z0y+8Gz8UiPUaWLBdP",
+	"qNzXCwBT9TyJh4vVGL480ZX4RudlCvVrE/Bun2cyUhmkb39aTJLmQVkKBgTyNKmGNSYUiqxuZs3YXoiB",
+	"T9MphiRfSwaGjeyIEqMGZXslFIfZz1M+lhF9m5BKbBiiLYWbhl11UdWrVOfO6Wwm0xmatrG/Vi9enhs0",
+	"KPQIVuKC24qLOv+MeeD0nYmUUX95OWAeDpQQ+6u91Z5zsHPw3wAAAP//QSAitpZFAAA=",
 }
 
 // GetSwagger returns the content of the embedded swagger specification file

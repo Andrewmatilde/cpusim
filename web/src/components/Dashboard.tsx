@@ -15,7 +15,6 @@ import type {
   HostsStatusResponse
 } from '@/api/types';
 import { RefreshCw, Server, AlertCircle, Play, Square, Download, Loader2, Activity, Laptop, History, FileText, LineChart as LineChartIcon, BarChart3 } from 'lucide-react';
-import { Toaster } from '@/components/ui/sonner';
 import { toast } from 'sonner';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
 
@@ -114,27 +113,14 @@ export function Dashboard() {
   const isRunning = status?.status === 'Running';
 
   return (
-    <div className="min-h-screen bg-background">
-      <Toaster />
-
-      {/* Header */}
-      <header className="border-b">
-        <div className="container mx-auto px-4 py-4">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              <Activity className="h-6 w-6" />
-              <h1 className="text-2xl font-bold">CPU Simulation Dashboard v0.7.0</h1>
-            </div>
-            <Button onClick={fetchData} variant="outline" size="sm" disabled={loading}>
-              <RefreshCw className={`h-4 w-4 mr-2 ${loading ? 'animate-spin' : ''}`} />
-              Refresh
-            </Button>
-          </div>
-        </div>
-      </header>
-
-      {/* Main Content */}
-      <main className="container mx-auto px-4 py-8 space-y-6">
+    <div className="space-y-6">
+      {/* Refresh Button */}
+      <div className="flex justify-end">
+        <Button onClick={fetchData} variant="outline" size="sm" disabled={loading}>
+          <RefreshCw className={`h-4 w-4 mr-2 ${loading ? 'animate-spin' : ''}`} />
+          Refresh
+        </Button>
+      </div>
         {error && (
           <Alert variant="destructive">
             <AlertCircle className="h-4 w-4" />
@@ -365,7 +351,7 @@ export function Dashboard() {
                       )}
                     </Button>
                     <Button
-                      onClick={handleViewData}
+                      onClick={() => handleViewData()}
                       variant="outline"
                     >
                       <Download className="mr-2 h-4 w-4" />
@@ -636,7 +622,6 @@ export function Dashboard() {
             })}
           </div>
         )}
-      </main>
     </div>
   );
 }

@@ -6,8 +6,6 @@ import (
 	"os"
 	"path/filepath"
 	"sort"
-
-	"cpusim/pkg/exp"
 )
 
 // GroupStorage handles file-based storage for experiment groups
@@ -64,13 +62,13 @@ func (s *GroupStorage) Load(groupID string) (*ExperimentGroup, error) {
 }
 
 // List returns a list of all experiment groups, sorted by start time (newest first)
-func (s *GroupStorage) List() ([]exp.ExperimentInfo, error) {
+func (s *GroupStorage) List() ([]*ExperimentGroup, error) {
 	files, err := os.ReadDir(s.basePath)
 	if err != nil {
 		return nil, fmt.Errorf("failed to read storage directory: %w", err)
 	}
 
-	var groups []exp.ExperimentInfo
+	var groups []*ExperimentGroup
 	for _, file := range files {
 		if file.IsDir() || filepath.Ext(file.Name()) != ".json" {
 			continue
@@ -82,16 +80,12 @@ func (s *GroupStorage) List() ([]exp.ExperimentInfo, error) {
 			continue // Skip files that can't be loaded
 		}
 
-		groups = append(groups, exp.ExperimentInfo{
-			ID:         group.GroupID,
-			CreatedAt:  group.StartTime,
-			ModifiedAt: group.EndTime,
-		})
+		groups = append(groups, group)
 	}
 
-	// Sort by created time, newest first
+	// Sort by start time, newest first
 	sort.Slice(groups, func(i, j int) bool {
-		return groups[i].CreatedAt.After(groups[j].CreatedAt)
+		return groups[i].StartTime.After(groups[j].StartTime)
 	})
 
 	return groups, nil

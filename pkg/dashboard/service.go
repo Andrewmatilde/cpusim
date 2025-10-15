@@ -16,10 +16,10 @@ import (
 type Service struct {
 	exp.Manager[*ExperimentData]
 
-	fs          exp.FileStorage[*ExperimentData]
+	fs           exp.FileStorage[*ExperimentData]
 	groupStorage *GroupStorage
-	logger      zerolog.Logger
-	config      Config
+	logger       zerolog.Logger
+	config       Config
 
 	// HTTP clients for sub-experiments
 	collectorClients map[string]CollectorClient // key: host name
@@ -45,7 +45,6 @@ type RequesterClient interface {
 	GetExperiment(ctx context.Context, experimentID string) (*requesterAPI.RequestExperimentStats, error)
 	GetStatus(ctx context.Context) (string, string, error) // returns status, currentExperimentID, error
 }
-
 
 // NewService creates a new dashboard service
 func NewService(storagePath string, config Config, logger zerolog.Logger) (*Service, error) {
@@ -450,6 +449,7 @@ func (s *Service) runExperiment(ctx context.Context) (*ExperimentData, error) {
 }
 
 // StartExperimentGroup starts a new experiment group with multiple repeated experiments
+// Supports resume: if the group already exists and is "running" or "failed", it will continue from where it left off
 func (s *Service) StartExperimentGroup(groupID string, description string, config ExperimentGroupConfig) error {
 	// Check if service is idle
 	status := s.GetStatus()
@@ -457,31 +457,60 @@ func (s *Service) StartExperimentGroup(groupID string, description string, confi
 		return fmt.Errorf("cannot start experiment group: service is %s, must be Pending", status)
 	}
 
-	// Create experiment group
-	group := &ExperimentGroup{
-		GroupID:      groupID,
-		Description:  description,
-		Config:       config,
-		Experiments:  make([]string, 0, config.RepeatCount),
-		StartTime:    time.Now(),
-		Status:       "running",
-		CurrentRun:   0,
+	// Try to load existing group (for resume functionality)
+	existingGroup, err := s.groupStorage.Load(groupID)
+	var group *ExperimentGroup
+	var startFrom int
+
+	if err == nil {
+		// Group exists, check if we can resume
+		if existingGroup.Status == "completed" {
+			return fmt.Errorf("experiment group %s already completed", groupID)
+		}
+
+		s.logger.Info().
+			Str("group_id", groupID).
+			Int("completed_runs", len(existingGroup.Experiments)).
+			Int("total_runs", config.RepeatCount).
+			Msg("Resuming existing experiment group")
+
+		group = existingGroup
+		// Resume from current run (retry the last one if it failed)
+		startFrom = group.CurrentRun
+		if startFrom == 0 {
+			startFrom = 1
+		}
+		// Update config in case it changed
+		group.Config = config
+		group.Status = "running"
+	} else {
+		// Create new experiment group
+		s.logger.Info().
+			Str("group_id", groupID).
+			Int("repeat_count", config.RepeatCount).
+			Int("timeout", config.Timeout).
+			Int("qps", config.QPS).
+			Msg("Starting new experiment group")
+
+		group = &ExperimentGroup{
+			GroupID:     groupID,
+			Description: description,
+			Config:      config,
+			Experiments: make([]string, 0, config.RepeatCount),
+			StartTime:   time.Now(),
+			Status:      "running",
+			CurrentRun:  0,
+		}
+		startFrom = 1
 	}
 
-	// Save initial group state
+	// Save initial/resumed group state
 	if err := s.groupStorage.Save(groupID, group); err != nil {
 		return fmt.Errorf("failed to save experiment group: %w", err)
 	}
 
-	s.logger.Info().
-		Str("group_id", groupID).
-		Int("repeat_count", config.RepeatCount).
-		Int("timeout", config.Timeout).
-		Int("qps", config.QPS).
-		Msg("Starting experiment group")
-
 	// Run experiments serially
-	for i := 1; i <= config.RepeatCount; i++ {
+	for i := startFrom; i <= config.RepeatCount; i++ {
 		// Update current run
 		group.CurrentRun = i
 		if err := s.groupStorage.Save(groupID, group); err != nil {
@@ -490,7 +519,18 @@ func (s *Service) StartExperimentGroup(groupID string, description string, confi
 
 		// Generate experiment ID
 		expID := fmt.Sprintf("%s-run-%d", groupID, i)
-		group.Experiments = append(group.Experiments, expID)
+
+		// Check if this experiment already exists in the list
+		alreadyExists := false
+		for _, existingExpID := range group.Experiments {
+			if existingExpID == expID {
+				alreadyExists = true
+				break
+			}
+		}
+		if !alreadyExists {
+			group.Experiments = append(group.Experiments, expID)
+		}
 
 		s.logger.Info().
 			Str("group_id", groupID).
@@ -562,12 +602,42 @@ func (s *Service) GetExperimentGroup(groupID string) (*ExperimentGroup, error) {
 	return s.groupStorage.Load(groupID)
 }
 
-// ListExperimentGroups lists all experiment groups
-func (s *Service) ListExperimentGroups() ([]exp.ExperimentInfo, error) {
-	return s.groupStorage.List()
+// ListExperimentGroups lists all experiment groups with statistics for completed groups
+func (s *Service) ListExperimentGroups() ([]*ExperimentGroup, error) {
+	groups, err := s.groupStorage.List()
+	if err != nil {
+		return nil, err
+	}
+
+	// Calculate statistics for completed groups
+	for _, group := range groups {
+		if group.Status == "completed" && len(group.Experiments) > 0 {
+			// Load experiments for this group
+			experiments := make([]*ExperimentData, 0, len(group.Experiments))
+			for _, expID := range group.Experiments {
+				expData, err := s.GetExperiment(expID)
+				if err != nil {
+					s.logger.Warn().
+						Err(err).
+						Str("experiment_id", expID).
+						Msg("Failed to load experiment data for statistics")
+					continue
+				}
+				experiments = append(experiments, expData)
+			}
+
+			// Calculate and attach statistics
+			if len(experiments) > 0 {
+				group.Statistics = s.calculateSteadyStateStats(experiments)
+			}
+		}
+	}
+
+	return groups, nil
 }
 
 // GetExperimentGroupWithDetails retrieves an experiment group with all experiment details
+// and calculates steady-state statistics with confidence intervals
 func (s *Service) GetExperimentGroupWithDetails(groupID string) (*ExperimentGroup, []*ExperimentData, error) {
 	group, err := s.groupStorage.Load(groupID)
 	if err != nil {
@@ -587,5 +657,210 @@ func (s *Service) GetExperimentGroupWithDetails(groupID string) (*ExperimentGrou
 		experiments = append(experiments, expData)
 	}
 
+	// Calculate steady-state statistics if group is completed
+	if group.Status == "completed" && len(experiments) > 0 {
+		s.logger.Info().
+			Str("group_id", groupID).
+			Int("experiment_count", len(experiments)).
+			Msg("Calculating steady-state statistics")
+		group.Statistics = s.calculateSteadyStateStats(experiments)
+		s.logger.Info().
+			Str("group_id", groupID).
+			Int("stats_count", len(group.Statistics)).
+			Msg("Steady-state statistics calculated")
+	}
+
 	return group, experiments, nil
+}
+
+// calculateSteadyStateStats calculates steady-state statistics with confidence intervals
+// for each host across all experiments in the group
+func (s *Service) calculateSteadyStateStats(experiments []*ExperimentData) map[string]*SteadyStateStats {
+	if len(experiments) == 0 {
+		s.logger.Warn().Msg("calculateSteadyStateStats: no experiments")
+		return nil
+	}
+
+	stats := make(map[string]*SteadyStateStats)
+
+	// Group metrics by host
+	hostMetrics := make(map[string][]float64) // key: host name, value: steady-state mean CPU for each experiment
+
+	for expIdx, exp := range experiments {
+		if exp.CollectorResults == nil {
+			s.logger.Warn().Int("exp_idx", expIdx).Msg("Experiment has nil CollectorResults")
+			continue
+		}
+
+		for hostName, result := range exp.CollectorResults {
+			if result.Data == nil {
+				s.logger.Warn().
+					Int("exp_idx", expIdx).
+					Str("host", hostName).
+					Msg("Collector result has nil Data")
+				continue
+			}
+			if result.Data.Metrics == nil {
+				s.logger.Warn().
+					Int("exp_idx", expIdx).
+					Str("host", hostName).
+					Msg("Collector data has nil Metrics")
+				continue
+			}
+			if len(result.Data.Metrics) == 0 {
+				s.logger.Warn().
+					Int("exp_idx", expIdx).
+					Str("host", hostName).
+					Msg("Collector data has empty Metrics")
+				continue
+			}
+
+			// Calculate steady-state mean for this experiment (last 90% of data)
+			metrics := result.Data.Metrics
+			steadyStateStart := len(metrics) / 10 // Skip first 10%
+			if steadyStateStart >= len(metrics) {
+				steadyStateStart = 0
+			}
+
+			var cpuSum float64
+			cpuCount := 0
+			for i := steadyStateStart; i < len(metrics); i++ {
+				cpuSum += float64(metrics[i].SystemMetrics.CpuUsagePercent)
+				cpuCount++
+			}
+
+			if cpuCount > 0 {
+				steadyStateMean := cpuSum / float64(cpuCount)
+				s.logger.Debug().
+					Int("exp_idx", expIdx).
+					Str("host", hostName).
+					Int("metric_count", len(metrics)).
+					Float64("steady_state_mean", steadyStateMean).
+					Msg("Calculated steady-state mean for experiment")
+				hostMetrics[hostName] = append(hostMetrics[hostName], steadyStateMean)
+			}
+		}
+	}
+
+	s.logger.Info().Int("host_count", len(hostMetrics)).Msg("Grouped metrics by host")
+
+	// Calculate statistics for each host
+	for hostName, cpuValues := range hostMetrics {
+		if len(cpuValues) == 0 {
+			continue
+		}
+
+		s.logger.Info().
+			Str("host", hostName).
+			Int("sample_size", len(cpuValues)).
+			Msg("Calculating confidence interval")
+		stats[hostName] = calculateConfidenceInterval(cpuValues, 0.95)
+	}
+
+	s.logger.Info().Int("stats_count", len(stats)).Msg("Calculated steady-state statistics")
+
+	return stats
+}
+
+// calculateConfidenceInterval calculates statistics and confidence interval for a set of values
+func calculateConfidenceInterval(values []float64, confidenceLevel float64) *SteadyStateStats {
+	n := len(values)
+	if n == 0 {
+		return nil
+	}
+
+	// Calculate mean
+	var sum float64
+	for _, v := range values {
+		sum += v
+	}
+	mean := sum / float64(n)
+
+	// Calculate standard deviation
+	var varianceSum float64
+	for _, v := range values {
+		diff := v - mean
+		varianceSum += diff * diff
+	}
+	variance := varianceSum / float64(n-1) // Sample variance (n-1)
+	stdDev := 0.0
+	if variance > 0 {
+		stdDev = sqrt(variance)
+	}
+
+	// Calculate standard error
+	se := stdDev / sqrt(float64(n))
+
+	// t-values for 95% confidence interval (two-tailed)
+	// Map of degrees of freedom (n-1) to t-value
+	tValues := map[int]float64{
+		1: 12.706, 2: 4.303, 3: 3.182, 4: 2.776, 5: 2.571,
+		6: 2.447, 7: 2.365, 8: 2.306, 9: 2.262, 10: 2.228,
+		11: 2.201, 12: 2.179, 13: 2.160, 14: 2.145, 15: 2.131,
+		16: 2.120, 17: 2.110, 18: 2.101, 19: 2.093, 20: 2.086,
+		25: 2.060, 30: 2.042, 40: 2.021, 50: 2.009, 60: 2.000,
+		80: 1.990, 100: 1.984, 120: 1.980,
+	}
+
+	// Get appropriate t-value
+	df := n - 1
+	tValue := 1.96 // Default to z-value for large samples
+
+	if df <= 20 {
+		if val, ok := tValues[df]; ok {
+			tValue = val
+		}
+	} else if df <= 30 {
+		tValue = tValues[25]
+	} else if df <= 40 {
+		tValue = tValues[30]
+	} else if df <= 60 {
+		tValue = tValues[40]
+	} else if df <= 120 {
+		tValue = tValues[100]
+	}
+
+	// Calculate confidence interval
+	margin := tValue * se
+	confLower := mean - margin
+	confUpper := mean + margin
+
+	// Find min and max
+	minVal := values[0]
+	maxVal := values[0]
+	for _, v := range values {
+		if v < minVal {
+			minVal = v
+		}
+		if v > maxVal {
+			maxVal = v
+		}
+	}
+
+	return &SteadyStateStats{
+		CPUMean:         mean,
+		CPUStdDev:       stdDev,
+		CPUConfLower:    confLower,
+		CPUConfUpper:    confUpper,
+		CPUMin:          minVal,
+		CPUMax:          maxVal,
+		SampleSize:      n,
+		ConfidenceLevel: confidenceLevel,
+	}
+}
+
+// sqrt calculates square root using Newton's method
+func sqrt(x float64) float64 {
+	if x == 0 {
+		return 0
+	}
+	if x < 0 {
+		return 0 // Return 0 for negative numbers (shouldn't happen in our case)
+	}
+
+	z := x
+	for i := 0; i < 10; i++ {
+		z = z - (z*z-x)/(2*z)
+	}
+	return z
 }

@@ -41,11 +41,11 @@ type ClientHost struct {
 
 // ExperimentData contains the complete dashboard experiment result
 type ExperimentData struct {
-	Config      Config                   `json:"config"`
-	StartTime   time.Time                `json:"start_time"`
-	EndTime     time.Time                `json:"end_time"`
-	Duration    float64                  `json:"duration"` // seconds
-	Status      string                   `json:"status"`   // "completed", "failed", "partial"
+	Config    Config    `json:"config"`
+	StartTime time.Time `json:"start_time"`
+	EndTime   time.Time `json:"end_time"`
+	Duration  float64   `json:"duration"` // seconds
+	Status    string    `json:"status"`   // "completed", "failed", "partial"
 
 	// Sub-experiment results
 	CollectorResults map[string]CollectorResult `json:"collector_results"` // key: target host name
@@ -95,14 +95,31 @@ func (e *ExperimentData) UnmarshalJSON(data []byte) error {
 
 // ExperimentGroup represents a group of repeated experiments
 type ExperimentGroup struct {
-	GroupID      string                  `json:"group_id"`
-	Description  string                  `json:"description,omitempty"`
-	Config       ExperimentGroupConfig   `json:"config"`
-	Experiments  []string                `json:"experiments"` // List of experiment IDs
-	StartTime    time.Time               `json:"start_time"`
-	EndTime      time.Time               `json:"end_time,omitempty"`
-	Status       string                  `json:"status"` // "running", "completed", "failed"
-	CurrentRun   int                     `json:"current_run"` // 1-based, current execution number
+	GroupID     string                `json:"group_id"`
+	Description string                `json:"description,omitempty"`
+	Config      ExperimentGroupConfig `json:"config"`
+	Experiments []string              `json:"experiments"` // List of experiment IDs
+	StartTime   time.Time             `json:"start_time"`
+	EndTime     time.Time             `json:"end_time,omitempty"`
+	Status      string                `json:"status"`      // "running", "completed", "failed"
+	CurrentRun  int                   `json:"current_run"` // 1-based, current execution number
+
+	// Steady-state statistics (calculated per host)
+	Statistics map[string]*SteadyStateStats `json:"statistics,omitempty"` // key: host name
+}
+
+// SteadyStateStats contains steady-state performance statistics with confidence intervals
+type SteadyStateStats struct {
+	// CPU statistics
+	CPUMean      float64 `json:"cpu_mean"`       // Mean CPU usage across all experiments
+	CPUStdDev    float64 `json:"cpu_std_dev"`    // Standard deviation
+	CPUConfLower float64 `json:"cpu_conf_lower"` // 95% CI lower bound
+	CPUConfUpper float64 `json:"cpu_conf_upper"` // 95% CI upper bound
+	CPUMin       float64 `json:"cpu_min"`        // Minimum value
+	CPUMax       float64 `json:"cpu_max"`        // Maximum value
+
+	SampleSize      int     `json:"sample_size"`      // Number of experiments used
+	ConfidenceLevel float64 `json:"confidence_level"` // Confidence level (e.g., 0.95)
 }
 
 // ExperimentGroupConfig defines the configuration for an experiment group

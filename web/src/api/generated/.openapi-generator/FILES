@@ -8,6 +8,11 @@ models/ErrorResponse.ts
 models/ExperimentData.ts
 models/ExperimentData1.ts
 models/ExperimentError.ts
+models/ExperimentGroup.ts
+models/ExperimentGroupConfig.ts
+models/ExperimentGroupDetail.ts
+models/ExperimentGroupListResponse.ts
+models/ExperimentGroupResponse.ts
 models/ExperimentInfo.ts
 models/ExperimentListResponse.ts
 models/ExperimentResponse.ts
@@ -18,8 +23,10 @@ models/NetworkIO.ts
 models/RequestExperimentStats.ts
 models/RequesterResult.ts
 models/ServiceConfig.ts
+models/StartExperimentGroupRequest.ts
 models/StartExperimentRequest.ts
 models/StatusResponse.ts
+models/SteadyStateStats.ts
 models/SystemMetrics.ts
 models/TargetHost.ts
 models/TargetHostStatus.ts

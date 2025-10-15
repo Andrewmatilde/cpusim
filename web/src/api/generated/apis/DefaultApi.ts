@@ -17,11 +17,15 @@ import * as runtime from '../runtime';
 import type {
   ErrorResponse,
   ExperimentData,
+  ExperimentGroupDetail,
+  ExperimentGroupListResponse,
+  ExperimentGroupResponse,
   ExperimentListResponse,
   ExperimentResponse,
   HealthResponse,
   HostsStatusResponse,
   ServiceConfig,
+  StartExperimentGroupRequest,
   StartExperimentRequest,
   StatusResponse,
 } from '../models/index';
@@ -30,6 +34,12 @@ import {
     ErrorResponseToJSON,
     ExperimentDataFromJSON,
     ExperimentDataToJSON,
+    ExperimentGroupDetailFromJSON,
+    ExperimentGroupDetailToJSON,
+    ExperimentGroupListResponseFromJSON,
+    ExperimentGroupListResponseToJSON,
+    ExperimentGroupResponseFromJSON,
+    ExperimentGroupResponseToJSON,
     ExperimentListResponseFromJSON,
     ExperimentListResponseToJSON,
     ExperimentResponseFromJSON,
@@ -40,6 +50,8 @@ import {
     HostsStatusResponseToJSON,
     ServiceConfigFromJSON,
     ServiceConfigToJSON,
+    StartExperimentGroupRequestFromJSON,
+    StartExperimentGroupRequestToJSON,
     StartExperimentRequestFromJSON,
     StartExperimentRequestToJSON,
     StatusResponseFromJSON,
@@ -50,8 +62,16 @@ export interface GetExperimentDataRequest {
     experimentId: string;
 }
 
+export interface GetExperimentGroupWithDetailsRequest {
+    groupId: string;
+}
+
 export interface StartExperimentOperationRequest {
     startExperimentRequest: StartExperimentRequest;
+}
+
+export interface StartExperimentGroupOperationRequest {
+    startExperimentGroupRequest: StartExperimentGroupRequest;
 }
 
 export interface StopExperimentRequest {
@@ -97,6 +117,45 @@ export class DefaultApi extends runtime.BaseAPI {
      */
     async getExperimentData(requestParameters: GetExperimentDataRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<ExperimentData> {
         const response = await this.getExperimentDataRaw(requestParameters, initOverrides);
+        return await response.value();
+    }
+
+    /**
+     * Returns experiment group metadata and all associated experiment data
+     * Get experiment group with all experiment details
+     */
+    async getExperimentGroupWithDetailsRaw(requestParameters: GetExperimentGroupWithDetailsRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<runtime.ApiResponse<ExperimentGroupDetail>> {
+        if (requestParameters['groupId'] == null) {
+            throw new runtime.RequiredError(
+                'groupId',
+                'Required parameter "groupId" was null or undefined when calling getExperimentGroupWithDetails().'
+            );
+        }
+
+        const queryParameters: any = {};
+
+        const headerParameters: runtime.HTTPHeaders = {};
+
+
+        let urlPath = `/experiment-groups/{groupId}`;
+        urlPath = urlPath.replace(`{${"groupId"}}`, encodeURIComponent(String(requestParameters['groupId'])));
+
+        const response = await this.request({
+            path: urlPath,
+            method: 'GET',
+            headers: headerParameters,
+            query: queryParameters,
+        }, initOverrides);
+
+        return new runtime.JSONApiResponse(response, (jsonValue) => ExperimentGroupDetailFromJSON(jsonValue));
+    }
+
+    /**
+     * Returns experiment group metadata and all associated experiment data
+     * Get experiment group with all experiment details
+     */
+    async getExperimentGroupWithDetails(requestParameters: GetExperimentGroupWithDetailsRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<ExperimentGroupDetail> {
+        const response = await this.getExperimentGroupWithDetailsRaw(requestParameters, initOverrides);
         return await response.value();
     }
 
@@ -219,6 +278,37 @@ export class DefaultApi extends runtime.BaseAPI {
     }
 
     /**
+     * Returns a list of all experiment groups with metadata
+     * List all experiment groups
+     */
+    async listExperimentGroupsRaw(initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<runtime.ApiResponse<ExperimentGroupListResponse>> {
+        const queryParameters: any = {};
+
+        const headerParameters: runtime.HTTPHeaders = {};
+
+
+        let urlPath = `/experiment-groups`;
+
+        const response = await this.request({
+            path: urlPath,
+            method: 'GET',
+            headers: headerParameters,
+            query: queryParameters,
+        }, initOverrides);
+
+        return new runtime.JSONApiResponse(response, (jsonValue) => ExperimentGroupListResponseFromJSON(jsonValue));
+    }
+
+    /**
+     * Returns a list of all experiment groups with metadata
+     * List all experiment groups
+     */
+    async listExperimentGroups(initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<ExperimentGroupListResponse> {
+        const response = await this.listExperimentGroupsRaw(initOverrides);
+        return await response.value();
+    }
+
+    /**
      * Returns a list of all experiments with metadata
      * List all stored experiments
      */
@@ -287,6 +377,47 @@ export class DefaultApi extends runtime.BaseAPI {
      */
     async startExperiment(requestParameters: StartExperimentOperationRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<ExperimentResponse> {
         const response = await this.startExperimentRaw(requestParameters, initOverrides);
+        return await response.value();
+    }
+
+    /**
+     * Creates and starts an experiment group with multiple repeated experiments
+     * Start a new experiment group
+     */
+    async startExperimentGroupRaw(requestParameters: StartExperimentGroupOperationRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<runtime.ApiResponse<ExperimentGroupResponse>> {
+        if (requestParameters['startExperimentGroupRequest'] == null) {
+            throw new runtime.RequiredError(
+                'startExperimentGroupRequest',
+                'Required parameter "startExperimentGroupRequest" was null or undefined when calling startExperimentGroup().'
+            );
+        }
+
+        const queryParameters: any = {};
+
+        const headerParameters: runtime.HTTPHeaders = {};
+
+        headerParameters['Content-Type'] = 'application/json';
+
+
+        let urlPath = `/experiment-groups`;
+
+        const response = await this.request({
+            path: urlPath,
+            method: 'POST',
+            headers: headerParameters,
+            query: queryParameters,
+            body: StartExperimentGroupRequestToJSON(requestParameters['startExperimentGroupRequest']),
+        }, initOverrides);
+
+        return new runtime.JSONApiResponse(response, (jsonValue) => ExperimentGroupResponseFromJSON(jsonValue));
+    }
+
+    /**
+     * Creates and starts an experiment group with multiple repeated experiments
+     * Start a new experiment group
+     */
+    async startExperimentGroup(requestParameters: StartExperimentGroupOperationRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<ExperimentGroupResponse> {
+        const response = await this.startExperimentGroupRaw(requestParameters, initOverrides);
         return await response.value();
     }
 
