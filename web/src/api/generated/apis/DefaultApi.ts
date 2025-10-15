@@ -66,6 +66,10 @@ export interface GetExperimentGroupWithDetailsRequest {
     groupId: string;
 }
 
+export interface ResumeExperimentGroupRequest {
+    groupId: string;
+}
+
 export interface StartExperimentOperationRequest {
     startExperimentRequest: StartExperimentRequest;
 }
@@ -336,6 +340,45 @@ export class DefaultApi extends runtime.BaseAPI {
      */
     async listExperiments(initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<ExperimentListResponse> {
         const response = await this.listExperimentsRaw(initOverrides);
+        return await response.value();
+    }
+
+    /**
+     * Resume a running or failed experiment group from where it left off
+     * Resume an incomplete experiment group
+     */
+    async resumeExperimentGroupRaw(requestParameters: ResumeExperimentGroupRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<runtime.ApiResponse<ExperimentGroupResponse>> {
+        if (requestParameters['groupId'] == null) {
+            throw new runtime.RequiredError(
+                'groupId',
+                'Required parameter "groupId" was null or undefined when calling resumeExperimentGroup().'
+            );
+        }
+
+        const queryParameters: any = {};
+
+        const headerParameters: runtime.HTTPHeaders = {};
+
+
+        let urlPath = `/experiment-groups/{groupId}/resume`;
+        urlPath = urlPath.replace(`{${"groupId"}}`, encodeURIComponent(String(requestParameters['groupId'])));
+
+        const response = await this.request({
+            path: urlPath,
+            method: 'POST',
+            headers: headerParameters,
+            query: queryParameters,
+        }, initOverrides);
+
+        return new runtime.JSONApiResponse(response, (jsonValue) => ExperimentGroupResponseFromJSON(jsonValue));
+    }
+
+    /**
+     * Resume a running or failed experiment group from where it left off
+     * Resume an incomplete experiment group
+     */
+    async resumeExperimentGroup(requestParameters: ResumeExperimentGroupRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<ExperimentGroupResponse> {
+        const response = await this.resumeExperimentGroupRaw(requestParameters, initOverrides);
         return await response.value();
     }
 

@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"fmt"
+	"io"
 	"math"
 	"net/http"
 	"sort"
@@ -27,8 +28,8 @@ type Collector struct {
 	rtMu          sync.Mutex
 
 	// Detailed samples (limited to avoid memory issues)
-	samples   []ResponseTimeSnapshot
-	samplesMu sync.Mutex
+	samples    []ResponseTimeSnapshot
+	samplesMu  sync.Mutex
 	maxSamples int
 }
 
@@ -117,6 +118,10 @@ func (c *Collector) sendRequest(ctx context.Context, targetURL string) {
 		return
 	}
 	defer resp.Body.Close()
+
+	// CRITICAL: Must read and discard response body to enable connection reuse
+	// If body is not fully read, the connection will be closed instead of returned to the pool
+	_, _ = io.Copy(io.Discard, resp.Body)
 
 	// Check status code
 	if resp.StatusCode >= 200 && resp.StatusCode < 300 {

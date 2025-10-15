@@ -24,10 +24,6 @@ type Service struct {
 	// HTTP clients for sub-experiments
 	collectorClients map[string]CollectorClient // key: host name
 	requesterClient  RequesterClient
-
-	// Current experiment ID and QPS
-	currentExperimentID string
-	currentQPS          int
 }
 
 // CollectorClient interface for communicating with collector services
@@ -70,7 +66,18 @@ func NewService(storagePath string, config Config, logger zerolog.Logger) (*Serv
 
 	// Create collector function
 	collectFunc := func(ctx context.Context, params gin.Params) (*ExperimentData, error) {
-		return s.runExperiment(ctx)
+		experimentID := ""
+		qps := 0
+
+		for _, param := range params {
+			if param.Key == "experimentID" {
+				experimentID = param.Value
+			} else if param.Key == "qps" {
+				fmt.Sscanf(param.Value, "%d", &qps)
+			}
+		}
+
+		return s.runExperiment(ctx, experimentID, qps)
 	}
 
 	// Create and embed the manager
@@ -103,11 +110,9 @@ func (s *Service) StartExperiment(id string, timeout time.Duration, qps int) err
 		Int("qps", qps).
 		Msg("Starting dashboard experiment")
 
-	// Store the experiment ID and QPS so runExperiment can use them
-	s.currentExperimentID = id
-	s.currentQPS = qps
-
+	// Pass experiment ID and QPS through params
 	params := gin.Params{
+		{Key: "experimentID", Value: id},
 		{Key: "qps", Value: fmt.Sprintf("%d", qps)},
 	}
 	return s.Manager.Start(id, timeout, params)
@@ -257,7 +262,7 @@ func (s *Service) GetHostsStatus(ctx context.Context) ([]HostStatus, *HostStatus
 }
 
 // runExperiment executes the complete dashboard experiment
-func (s *Service) runExperiment(ctx context.Context) (*ExperimentData, error) {
+func (s *Service) runExperiment(ctx context.Context, experimentID string, qps int) (*ExperimentData, error) {
 	data := &ExperimentData{
 		Config:           s.config,
 		StartTime:        time.Now(),
@@ -285,7 +290,7 @@ func (s *Service) runExperiment(ctx context.Context) (*ExperimentData, error) {
 				Error:    err.Error(),
 			}
 			// Rollback: stop all
-			s.StopAll(s.currentExperimentID)
+			s.StopAll(experimentID)
 			return data, err
 		}
 
@@ -295,7 +300,7 @@ func (s *Service) runExperiment(ctx context.Context) (*ExperimentData, error) {
 		if deadline, ok := ctx.Deadline(); ok {
 			timeout = time.Until(deadline)
 		}
-		if err := client.StartExperiment(ctx, s.currentExperimentID, timeout); err != nil {
+		if err := client.StartExperiment(ctx, experimentID, timeout); err != nil {
 			s.logger.Error().
 				Err(err).
 				Str("host", target.Name).
@@ -312,7 +317,7 @@ func (s *Service) runExperiment(ctx context.Context) (*ExperimentData, error) {
 				Error:    err.Error(),
 			}
 			// Rollback: stop all
-			s.StopAll(s.currentExperimentID)
+			s.StopAll(experimentID)
 			return data, err
 		}
 
@@ -338,7 +343,7 @@ func (s *Service) runExperiment(ctx context.Context) (*ExperimentData, error) {
 			Error:  err.Error(),
 		}
 		// Rollback: stop all
-		s.StopAll(s.currentExperimentID)
+		s.StopAll(experimentID)
 		return data, err
 	}
 
@@ -347,7 +352,7 @@ func (s *Service) runExperiment(ctx context.Context) (*ExperimentData, error) {
 	if deadline, ok := ctx.Deadline(); ok {
 		timeout = time.Until(deadline)
 	}
-	if err := s.requesterClient.StartExperiment(ctx, s.currentExperimentID, timeout, s.currentQPS); err != nil {
+	if err := s.requesterClient.StartExperiment(ctx, experimentID, timeout, qps); err != nil {
 		s.logger.Error().Err(err).Msg("Failed to start requester")
 		data.Errors = append(data.Errors, ExperimentError{
 			Timestamp: time.Now(),
@@ -359,7 +364,7 @@ func (s *Service) runExperiment(ctx context.Context) (*ExperimentData, error) {
 			Error:  err.Error(),
 		}
 		// Rollback: stop all
-		s.StopAll(s.currentExperimentID)
+		s.StopAll(experimentID)
 		return data, err
 	}
 
@@ -379,7 +384,7 @@ func (s *Service) runExperiment(ctx context.Context) (*ExperimentData, error) {
 	// Stop all collectors
 	for hostName := range data.CollectorResults {
 		client := s.collectorClients[hostName]
-		if err := client.StopExperiment(stopCtx, s.currentExperimentID); err != nil {
+		if err := client.StopExperiment(stopCtx, experimentID); err != nil {
 			s.logger.Warn().Err(err).Str("host", hostName).Msg("Failed to stop collector")
 		} else {
 			s.logger.Info().Str("host", hostName).Msg("Collector stopped successfully")
@@ -387,7 +392,7 @@ func (s *Service) runExperiment(ctx context.Context) (*ExperimentData, error) {
 	}
 
 	// Stop requester
-	if err := s.requesterClient.StopExperiment(stopCtx, s.currentExperimentID); err != nil {
+	if err := s.requesterClient.StopExperiment(stopCtx, experimentID); err != nil {
 		s.logger.Warn().Err(err).Msg("Failed to stop requester")
 	} else {
 		s.logger.Info().Msg("Requester stopped successfully")
@@ -406,7 +411,7 @@ func (s *Service) runExperiment(ctx context.Context) (*ExperimentData, error) {
 	// Collect collector results
 	for hostName := range data.CollectorResults {
 		client := s.collectorClients[hostName]
-		if collectorData, err := client.GetExperiment(collectCtx, s.currentExperimentID); err == nil {
+		if collectorData, err := client.GetExperiment(collectCtx, experimentID); err == nil {
 			data.CollectorResults[hostName] = CollectorResult{
 				HostName: hostName,
 				Status:   "completed",
@@ -422,7 +427,7 @@ func (s *Service) runExperiment(ctx context.Context) (*ExperimentData, error) {
 	}
 
 	// Collect requester results
-	if requesterStats, err := s.requesterClient.GetExperiment(collectCtx, s.currentExperimentID); err == nil {
+	if requesterStats, err := s.requesterClient.GetExperiment(collectCtx, experimentID); err == nil {
 		data.RequesterResult = &RequesterResult{
 			Status: "completed",
 			Stats:  requesterStats,
@@ -448,7 +453,7 @@ func (s *Service) runExperiment(ctx context.Context) (*ExperimentData, error) {
 	return data, nil
 }
 
-// StartExperimentGroup starts a new experiment group with multiple repeated experiments
+// StartExperimentGroup starts a new experiment group with QPS range testing
 // Supports resume: if the group already exists and is "running" or "failed", it will continue from where it left off
 func (s *Service) StartExperimentGroup(groupID string, description string, config ExperimentGroupConfig) error {
 	// Check if service is idle
@@ -457,10 +462,18 @@ func (s *Service) StartExperimentGroup(groupID string, description string, confi
 		return fmt.Errorf("cannot start experiment group: service is %s, must be Pending", status)
 	}
 
+	// Generate QPS values from range
+	qpsValues := make([]int, 0)
+	for qps := config.QPSMin; qps <= config.QPSMax; qps += config.QPSStep {
+		qpsValues = append(qpsValues, qps)
+	}
+	if len(qpsValues) == 0 {
+		return fmt.Errorf("invalid QPS range: min=%d, max=%d, step=%d produces no values", config.QPSMin, config.QPSMax, config.QPSStep)
+	}
+
 	// Try to load existing group (for resume functionality)
 	existingGroup, err := s.groupStorage.Load(groupID)
 	var group *ExperimentGroup
-	var startFrom int
 
 	if err == nil {
 		// Group exists, check if we can resume
@@ -470,16 +483,11 @@ func (s *Service) StartExperimentGroup(groupID string, description string, confi
 
 		s.logger.Info().
 			Str("group_id", groupID).
-			Int("completed_runs", len(existingGroup.Experiments)).
-			Int("total_runs", config.RepeatCount).
+			Int("completed_qps_points", len(existingGroup.QPSPoints)).
+			Int("total_qps_points", len(qpsValues)).
 			Msg("Resuming existing experiment group")
 
 		group = existingGroup
-		// Resume from current run (retry the last one if it failed)
-		startFrom = group.CurrentRun
-		if startFrom == 0 {
-			startFrom = 1
-		}
 		// Update config in case it changed
 		group.Config = config
 		group.Status = "running"
@@ -487,21 +495,32 @@ func (s *Service) StartExperimentGroup(groupID string, description string, confi
 		// Create new experiment group
 		s.logger.Info().
 			Str("group_id", groupID).
-			Int("repeat_count", config.RepeatCount).
+			Int("qps_points", len(qpsValues)).
+			Int("repeat_per_qps", config.RepeatCount).
 			Int("timeout", config.Timeout).
-			Int("qps", config.QPS).
 			Msg("Starting new experiment group")
+
+		// Initialize QPSPoints
+		qpsPoints := make([]QPSPoint, 0, len(qpsValues))
+		for _, qps := range qpsValues {
+			qpsPoints = append(qpsPoints, QPSPoint{
+				QPS:         qps,
+				Experiments: make([]string, 0, config.RepeatCount),
+				Statistics:  nil,
+				Status:      "pending",
+			})
+		}
 
 		group = &ExperimentGroup{
 			GroupID:     groupID,
 			Description: description,
 			Config:      config,
-			Experiments: make([]string, 0, config.RepeatCount),
+			QPSPoints:   qpsPoints,
 			StartTime:   time.Now(),
 			Status:      "running",
+			CurrentQPS:  0,
 			CurrentRun:  0,
 		}
-		startFrom = 1
 	}
 
 	// Save initial/resumed group state
@@ -509,76 +528,147 @@ func (s *Service) StartExperimentGroup(groupID string, description string, confi
 		return fmt.Errorf("failed to save experiment group: %w", err)
 	}
 
-	// Run experiments serially
-	for i := startFrom; i <= config.RepeatCount; i++ {
-		// Update current run
-		group.CurrentRun = i
-		if err := s.groupStorage.Save(groupID, group); err != nil {
-			s.logger.Error().Err(err).Msg("Failed to update group status")
-		}
+	// Execute the experiment group
+	return s.executeExperimentGroup(groupID, group)
+}
 
-		// Generate experiment ID
-		expID := fmt.Sprintf("%s-run-%d", groupID, i)
+// executeExperimentGroup runs the experiments for a group (common logic for both start and resume)
+func (s *Service) executeExperimentGroup(groupID string, group *ExperimentGroup) error {
+	config := group.Config
 
-		// Check if this experiment already exists in the list
-		alreadyExists := false
-		for _, existingExpID := range group.Experiments {
-			if existingExpID == expID {
-				alreadyExists = true
-				break
-			}
-		}
-		if !alreadyExists {
-			group.Experiments = append(group.Experiments, expID)
+	// Run experiments for each QPS value
+	for qpsIdx, qpsPoint := range group.QPSPoints {
+		qps := qpsPoint.QPS
+		group.CurrentQPS = qps
+
+		// Skip completed QPS points (for resume)
+		if qpsPoint.Status == "completed" {
+			s.logger.Info().
+				Str("group_id", groupID).
+				Int("qps", qps).
+				Int("completed_runs", len(qpsPoint.Experiments)).
+				Msg("Skipping completed QPS point")
+			continue
 		}
 
 		s.logger.Info().
 			Str("group_id", groupID).
-			Int("run", i).
-			Int("total", config.RepeatCount).
-			Str("experiment_id", expID).
-			Msg("Starting experiment run")
+			Int("qps", qps).
+			Int("qps_idx", qpsIdx+1).
+			Int("total_qps", len(group.QPSPoints)).
+			Msg("Starting QPS point experiments")
 
-		// Start single experiment
-		timeout := time.Duration(config.Timeout) * time.Second
-		err := s.StartExperiment(expID, timeout, config.QPS)
-		if err != nil {
-			s.logger.Error().
-				Err(err).
-				Str("experiment_id", expID).
-				Msg("Failed to start experiment")
-
-			group.Status = "failed"
-			group.EndTime = time.Now()
-			if saveErr := s.groupStorage.Save(groupID, group); saveErr != nil {
-				s.logger.Error().Err(saveErr).Msg("Failed to save failed group state")
-			}
-			return fmt.Errorf("failed to start experiment %s: %w", expID, err)
+		// Update QPS point status
+		group.QPSPoints[qpsIdx].Status = "running"
+		if err := s.groupStorage.Save(groupID, group); err != nil {
+			s.logger.Error().Err(err).Msg("Failed to update group status")
 		}
 
-		// Wait for experiment to complete
-		s.logger.Info().Str("experiment_id", expID).Msg("Waiting for experiment to complete")
-		for s.GetStatus() == exp.Running {
-			time.Sleep(1 * time.Second)
+		// Determine starting run (for resume)
+		startRun := 1
+		if len(qpsPoint.Experiments) > 0 {
+			startRun = len(qpsPoint.Experiments) + 1
+		}
+
+		// Run RepeatCount experiments for this QPS
+		for run := startRun; run <= config.RepeatCount; run++ {
+			group.CurrentRun = run
+			if err := s.groupStorage.Save(groupID, group); err != nil {
+				s.logger.Error().Err(err).Msg("Failed to update group status")
+			}
+
+			// Generate experiment ID
+			expID := fmt.Sprintf("%s-qps-%d-run-%d", groupID, qps, run)
+
+			s.logger.Info().
+				Str("group_id", groupID).
+				Int("qps", qps).
+				Int("run", run).
+				Int("total_runs", config.RepeatCount).
+				Str("experiment_id", expID).
+				Msg("Starting experiment")
+
+			// Add experiment to QPS point
+			group.QPSPoints[qpsIdx].Experiments = append(group.QPSPoints[qpsIdx].Experiments, expID)
+
+			// Start single experiment
+			timeout := time.Duration(config.Timeout) * time.Second
+			err := s.StartExperiment(expID, timeout, qps)
+			if err != nil {
+				s.logger.Error().
+					Err(err).
+					Str("experiment_id", expID).
+					Msg("Failed to start experiment")
+
+				group.Status = "failed"
+				group.QPSPoints[qpsIdx].Status = "failed"
+				group.EndTime = time.Now()
+				if saveErr := s.groupStorage.Save(groupID, group); saveErr != nil {
+					s.logger.Error().Err(saveErr).Msg("Failed to save failed group state")
+				}
+				return fmt.Errorf("failed to start experiment %s: %w", expID, err)
+			}
+
+			// Wait for experiment to complete
+			s.logger.Info().Str("experiment_id", expID).Msg("Waiting for experiment to complete")
+			for s.GetStatus() == exp.Running {
+				time.Sleep(1 * time.Second)
+			}
+
+			s.logger.Info().
+				Str("experiment_id", expID).
+				Int("qps", qps).
+				Int("run", run).
+				Msg("Experiment completed")
+
+			// Optional delay between experiments
+			if run < config.RepeatCount && config.DelayBetween > 0 {
+				s.logger.Info().
+					Int("delay_seconds", config.DelayBetween).
+					Msg("Waiting before next experiment")
+				time.Sleep(time.Duration(config.DelayBetween) * time.Second)
+			}
+
+			// Save updated group state
+			if err := s.groupStorage.Save(groupID, group); err != nil {
+				s.logger.Error().Err(err).Msg("Failed to save group state")
+			}
+		}
+
+		// Calculate statistics for this QPS point
+		s.logger.Info().
+			Str("group_id", groupID).
+			Int("qps", qps).
+			Msg("Calculating statistics for QPS point")
+
+		experiments := make([]*ExperimentData, 0, len(group.QPSPoints[qpsIdx].Experiments))
+		for _, expID := range group.QPSPoints[qpsIdx].Experiments {
+			expData, err := s.GetExperiment(expID)
+			if err != nil {
+				s.logger.Warn().
+					Err(err).
+					Str("experiment_id", expID).
+					Msg("Failed to load experiment data for statistics")
+				continue
+			}
+			experiments = append(experiments, expData)
+		}
+
+		if len(experiments) > 0 {
+			group.QPSPoints[qpsIdx].Statistics = s.calculateSteadyStateStats(experiments)
+		}
+		group.QPSPoints[qpsIdx].Status = "completed"
+
+		// Save updated group with statistics
+		if err := s.groupStorage.Save(groupID, group); err != nil {
+			s.logger.Error().Err(err).Msg("Failed to save group state with statistics")
 		}
 
 		s.logger.Info().
-			Str("experiment_id", expID).
-			Int("run", i).
-			Msg("Experiment run completed")
-
-		// Optional delay between experiments
-		if i < config.RepeatCount && config.DelayBetween > 0 {
-			s.logger.Info().
-				Int("delay_seconds", config.DelayBetween).
-				Msg("Waiting before next experiment")
-			time.Sleep(time.Duration(config.DelayBetween) * time.Second)
-		}
-
-		// Save updated group state
-		if err := s.groupStorage.Save(groupID, group); err != nil {
-			s.logger.Error().Err(err).Msg("Failed to save group state")
-		}
+			Str("group_id", groupID).
+			Int("qps", qps).
+			Int("completed_runs", len(group.QPSPoints[qpsIdx].Experiments)).
+			Msg("QPS point completed")
 	}
 
 	// Mark group as completed
@@ -591,10 +681,45 @@ func (s *Service) StartExperimentGroup(groupID string, description string, confi
 
 	s.logger.Info().
 		Str("group_id", groupID).
-		Int("completed_runs", len(group.Experiments)).
+		Int("qps_points", len(group.QPSPoints)).
 		Msg("Experiment group completed successfully")
 
 	return nil
+}
+
+// ResumeExperimentGroup resumes an incomplete experiment group
+func (s *Service) ResumeExperimentGroup(groupID string) error {
+	// Check if service is idle
+	status := s.GetStatus()
+	if status != exp.Pending {
+		return fmt.Errorf("cannot resume experiment group: service is %s, must be Pending", status)
+	}
+
+	// Load existing group
+	group, err := s.groupStorage.Load(groupID)
+	if err != nil {
+		return fmt.Errorf("failed to load experiment group: %w", err)
+	}
+
+	// Check if group is already completed
+	if group.Status == "completed" {
+		return fmt.Errorf("experiment group %s already completed", groupID)
+	}
+
+	s.logger.Info().
+		Str("group_id", groupID).
+		Str("status", group.Status).
+		Int("qps_points", len(group.QPSPoints)).
+		Msg("Resuming experiment group")
+
+	// Update status and continue execution
+	group.Status = "running"
+	if err := s.groupStorage.Save(groupID, group); err != nil {
+		return fmt.Errorf("failed to save experiment group: %w", err)
+	}
+
+	// Execute the experiment group (same logic as StartExperimentGroup)
+	return s.executeExperimentGroup(groupID, group)
 }
 
 // GetExperimentGroup retrieves an experiment group by ID
@@ -602,72 +727,39 @@ func (s *Service) GetExperimentGroup(groupID string) (*ExperimentGroup, error) {
 	return s.groupStorage.Load(groupID)
 }
 
-// ListExperimentGroups lists all experiment groups with statistics for completed groups
+// ListExperimentGroups lists all experiment groups
+// Statistics are already calculated and saved per QPS point during group execution
 func (s *Service) ListExperimentGroups() ([]*ExperimentGroup, error) {
 	groups, err := s.groupStorage.List()
 	if err != nil {
 		return nil, err
 	}
 
-	// Calculate statistics for completed groups
-	for _, group := range groups {
-		if group.Status == "completed" && len(group.Experiments) > 0 {
-			// Load experiments for this group
-			experiments := make([]*ExperimentData, 0, len(group.Experiments))
-			for _, expID := range group.Experiments {
-				expData, err := s.GetExperiment(expID)
-				if err != nil {
-					s.logger.Warn().
-						Err(err).
-						Str("experiment_id", expID).
-						Msg("Failed to load experiment data for statistics")
-					continue
-				}
-				experiments = append(experiments, expData)
-			}
-
-			// Calculate and attach statistics
-			if len(experiments) > 0 {
-				group.Statistics = s.calculateSteadyStateStats(experiments)
-			}
-		}
-	}
-
 	return groups, nil
 }
 
 // GetExperimentGroupWithDetails retrieves an experiment group with all experiment details
-// and calculates steady-state statistics with confidence intervals
+// Statistics are already calculated and saved per QPS point during group execution
 func (s *Service) GetExperimentGroupWithDetails(groupID string) (*ExperimentGroup, []*ExperimentData, error) {
 	group, err := s.groupStorage.Load(groupID)
 	if err != nil {
 		return nil, nil, err
 	}
 
-	experiments := make([]*ExperimentData, 0, len(group.Experiments))
-	for _, expID := range group.Experiments {
-		expData, err := s.GetExperiment(expID)
-		if err != nil {
-			s.logger.Warn().
-				Err(err).
-				Str("experiment_id", expID).
-				Msg("Failed to load experiment data")
-			continue
+	// Collect all experiments from all QPS points
+	experiments := make([]*ExperimentData, 0)
+	for _, qpsPoint := range group.QPSPoints {
+		for _, expID := range qpsPoint.Experiments {
+			expData, err := s.GetExperiment(expID)
+			if err != nil {
+				s.logger.Warn().
+					Err(err).
+					Str("experiment_id", expID).
+					Msg("Failed to load experiment data")
+				continue
+			}
+			experiments = append(experiments, expData)
 		}
-		experiments = append(experiments, expData)
-	}
-
-	// Calculate steady-state statistics if group is completed
-	if group.Status == "completed" && len(experiments) > 0 {
-		s.logger.Info().
-			Str("group_id", groupID).
-			Int("experiment_count", len(experiments)).
-			Msg("Calculating steady-state statistics")
-		group.Statistics = s.calculateSteadyStateStats(experiments)
-		s.logger.Info().
-			Str("group_id", groupID).
-			Int("stats_count", len(group.Statistics)).
-			Msg("Steady-state statistics calculated")
 	}
 
 	return group, experiments, nil

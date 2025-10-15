@@ -243,11 +243,13 @@ func (h *APIHandler) StartExperimentGroup(c *gin.Context) {
 		return
 	}
 
-	// Create experiment group config
+	// Create experiment group config with QPS range
 	config := dashboard.ExperimentGroupConfig{
+		QPSMin:       request.QpsMin,
+		QPSMax:       request.QpsMax,
+		QPSStep:      request.QpsStep,
 		RepeatCount:  request.RepeatCount,
 		Timeout:      request.Timeout,
-		QPS:          request.Qps,
 		DelayBetween: request.DelayBetween,
 	}
 
@@ -264,6 +266,58 @@ func (h *APIHandler) StartExperimentGroup(c *gin.Context) {
 		Status:    "started",
 		Timestamp: time.Now(),
 		Message:   "Experiment group started successfully",
+	}
+
+	c.JSON(http.StatusOK, response)
+}
+
+// ResumeExperimentGroup implements resuming an incomplete experiment group
+func (h *APIHandler) ResumeExperimentGroup(c *gin.Context, groupId string) {
+	// Check if service is busy
+	status := h.service.GetStatus()
+	if status != "Pending" {
+		c.JSON(http.StatusConflict, generated.ErrorResponse{
+			Error:     "service_busy",
+			Message:   "Service is currently busy running another experiment group",
+			Timestamp: time.Now(),
+		})
+		return
+	}
+
+	// Check if group exists
+	group, err := h.service.GetExperimentGroup(groupId)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, generated.ErrorResponse{
+			Error:     "group_not_found",
+			Message:   err.Error(),
+			Timestamp: time.Now(),
+		})
+		return
+	}
+
+	// Check if group is already completed
+	if group.Status == "completed" {
+		c.JSON(http.StatusBadRequest, generated.ErrorResponse{
+			Error:     "group_already_completed",
+			Message:   "Cannot resume a completed experiment group",
+			Timestamp: time.Now(),
+		})
+		return
+	}
+
+	// Resume experiment group (this will run asynchronously)
+	go func() {
+		err := h.service.ResumeExperimentGroup(groupId)
+		if err != nil {
+			h.logger.Error().Err(err).Str("group_id", groupId).Msg("Failed to resume experiment group")
+		}
+	}()
+
+	response := generated.ExperimentGroupResponse{
+		GroupId:   groupId,
+		Status:    "resumed",
+		Timestamp: time.Now(),
+		Message:   "Experiment group resumed successfully",
 	}
 
 	c.JSON(http.StatusOK, response)
@@ -410,23 +464,34 @@ func convertErrorsToAPI(errors []dashboard.ExperimentError) []generated.Experime
 }
 
 func convertExperimentGroupToAPI(group dashboard.ExperimentGroup) generated.ExperimentGroup {
-	// Convert statistics if present
-	var apiStatistics map[string]generated.SteadyStateStats
-	if group.Statistics != nil {
-		apiStatistics = make(map[string]generated.SteadyStateStats)
-		for hostName, stats := range group.Statistics {
-			if stats != nil {
-				apiStatistics[hostName] = generated.SteadyStateStats{
-					CpuMean:         float32(stats.CPUMean),
-					CpuStdDev:       float32(stats.CPUStdDev),
-					CpuConfLower:    float32(stats.CPUConfLower),
-					CpuConfUpper:    float32(stats.CPUConfUpper),
-					CpuMin:          float32(stats.CPUMin),
-					CpuMax:          float32(stats.CPUMax),
-					SampleSize:      stats.SampleSize,
-					ConfidenceLevel: float32(stats.ConfidenceLevel),
+	// Convert QPS points with statistics
+	apiQPSPoints := make([]generated.QPSPoint, len(group.QPSPoints))
+	for i, qpsPoint := range group.QPSPoints {
+		// Convert statistics for this QPS point
+		var apiStatistics map[string]generated.SteadyStateStats
+		if qpsPoint.Statistics != nil {
+			apiStatistics = make(map[string]generated.SteadyStateStats)
+			for hostName, stats := range qpsPoint.Statistics {
+				if stats != nil {
+					apiStatistics[hostName] = generated.SteadyStateStats{
+						CpuMean:         float32(stats.CPUMean),
+						CpuStdDev:       float32(stats.CPUStdDev),
+						CpuConfLower:    float32(stats.CPUConfLower),
+						CpuConfUpper:    float32(stats.CPUConfUpper),
+						CpuMin:          float32(stats.CPUMin),
+						CpuMax:          float32(stats.CPUMax),
+						SampleSize:      stats.SampleSize,
+						ConfidenceLevel: float32(stats.ConfidenceLevel),
+					}
 				}
 			}
+		}
+
+		apiQPSPoints[i] = generated.QPSPoint{
+			Qps:         qpsPoint.QPS,
+			Experiments: qpsPoint.Experiments,
+			Statistics:  apiStatistics,
+			Status:      qpsPoint.Status,
 		}
 	}
 
@@ -434,16 +499,18 @@ func convertExperimentGroupToAPI(group dashboard.ExperimentGroup) generated.Expe
 		GroupId:     group.GroupID,
 		Description: group.Description,
 		Config: generated.ExperimentGroupConfig{
+			QpsMin:       group.Config.QPSMin,
+			QpsMax:       group.Config.QPSMax,
+			QpsStep:      group.Config.QPSStep,
 			RepeatCount:  group.Config.RepeatCount,
 			Timeout:      group.Config.Timeout,
-			Qps:          group.Config.QPS,
 			DelayBetween: group.Config.DelayBetween,
 		},
-		Experiments: group.Experiments,
-		StartTime:   group.StartTime,
-		EndTime:     group.EndTime,
-		Status:      group.Status,
-		CurrentRun:  group.CurrentRun,
-		Statistics:  apiStatistics,
+		QpsPoints:  apiQPSPoints,
+		StartTime:  group.StartTime,
+		EndTime:    group.EndTime,
+		Status:     group.Status,
+		CurrentQPS: group.CurrentQPS,
+		CurrentRun: group.CurrentRun,
 	}
 }

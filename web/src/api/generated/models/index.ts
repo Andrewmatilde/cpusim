@@ -19,6 +19,7 @@ export * from './HealthResponse';
 export * from './HostsStatusResponse';
 export * from './MetricDataPoint';
 export * from './NetworkIO';
+export * from './QPSPoint';
 export * from './RequestExperimentStats';
 export * from './RequesterResult';
 export * from './ServiceConfig';

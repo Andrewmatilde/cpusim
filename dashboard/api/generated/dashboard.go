@@ -98,7 +98,10 @@ type ExperimentError struct {
 type ExperimentGroup struct {
 	Config ExperimentGroupConfig `json:"config,omitempty"`
 
-	// CurrentRun Current execution number (1-based)
+	// CurrentQPS Current QPS value being tested
+	CurrentQPS int `json:"currentQPS,omitempty"`
+
+	// CurrentRun Current run for current QPS (1-based)
 	CurrentRun int `json:"currentRun,omitempty"`
 
 	// Description Optional description
@@ -107,17 +110,14 @@ type ExperimentGroup struct {
 	// EndTime When the group completed
 	EndTime time.Time `json:"endTime,omitempty"`
 
-	// Experiments List of experiment IDs in this group
-	Experiments []string `json:"experiments,omitempty"`
-
 	// GroupId Unique experiment group identifier
 	GroupId string `json:"groupId,omitempty"`
 
+	// QpsPoints Results organized by QPS value
+	QpsPoints []QPSPoint `json:"qpsPoints,omitempty"`
+
 	// StartTime When the group started
 	StartTime time.Time `json:"startTime,omitempty"`
-
-	// Statistics Steady-state statistics per host (calculated when group is completed)
-	Statistics map[string]SteadyStateStats `json:"statistics,omitempty"`
 
 	// Status running, completed, failed
 	Status string `json:"status,omitempty"`
@@ -128,10 +128,16 @@ type ExperimentGroupConfig struct {
 	// DelayBetween Delay between experiments in seconds
 	DelayBetween int `json:"delayBetween,omitempty"`
 
-	// Qps Requests per second for each experiment
-	Qps int `json:"qps,omitempty"`
+	// QpsMax Maximum QPS value (e.g., 500)
+	QpsMax int `json:"qpsMax,omitempty"`
 
-	// RepeatCount Number of times to repeat the experiment
+	// QpsMin Minimum QPS value (e.g., 100)
+	QpsMin int `json:"qpsMin,omitempty"`
+
+	// QpsStep Step size for QPS values (e.g., 100)
+	QpsStep int `json:"qpsStep,omitempty"`
+
+	// RepeatCount Number of times to repeat each QPS value
 	RepeatCount int `json:"repeatCount,omitempty"`
 
 	// Timeout Timeout for each experiment in seconds
@@ -218,6 +224,21 @@ type HostsStatusResponse struct {
 	Timestamp         time.Time          `json:"timestamp,omitempty"`
 }
 
+// QPSPoint Results for a specific QPS value
+type QPSPoint struct {
+	// Experiments List of experiment IDs for this QPS
+	Experiments []string `json:"experiments,omitempty"`
+
+	// Qps QPS value for this point
+	Qps int `json:"qps,omitempty"`
+
+	// Statistics Steady-state statistics per host for this QPS
+	Statistics map[string]SteadyStateStats `json:"statistics,omitempty"`
+
+	// Status running, completed, failed
+	Status string `json:"status,omitempty"`
+}
+
 // RequesterResult defines model for RequesterResult.
 type RequesterResult struct {
 	Error string                              `json:"error,omitempty"`
@@ -246,10 +267,16 @@ type StartExperimentGroupRequest struct {
 	// GroupId Unique experiment group identifier
 	GroupId string `json:"groupId"`
 
-	// Qps Requests per second for each experiment
-	Qps int `json:"qps"`
+	// QpsMax Maximum QPS value (e.g., 500)
+	QpsMax int `json:"qpsMax"`
 
-	// RepeatCount Number of times to repeat the experiment
+	// QpsMin Minimum QPS value (e.g., 100)
+	QpsMin int `json:"qpsMin"`
+
+	// QpsStep Step size for QPS values (e.g., 100)
+	QpsStep int `json:"qpsStep"`
+
+	// RepeatCount Number of times to repeat each QPS value
 	RepeatCount int `json:"repeatCount"`
 
 	// Timeout Timeout for each experiment in seconds
@@ -419,6 +446,9 @@ type ClientInterface interface {
 	// GetExperimentGroupWithDetails request
 	GetExperimentGroupWithDetails(ctx context.Context, groupId string, reqEditors ...RequestEditorFn) (*http.Response, error)
 
+	// ResumeExperimentGroup request
+	ResumeExperimentGroup(ctx context.Context, groupId string, reqEditors ...RequestEditorFn) (*http.Response, error)
+
 	// ListExperiments request
 	ListExperiments(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error)
 
@@ -493,6 +523,18 @@ func (c *Client) StartExperimentGroup(ctx context.Context, body StartExperimentG
 
 func (c *Client) GetExperimentGroupWithDetails(ctx context.Context, groupId string, reqEditors ...RequestEditorFn) (*http.Response, error) {
 	req, err := NewGetExperimentGroupWithDetailsRequest(c.Server, groupId)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) ResumeExperimentGroup(ctx context.Context, groupId string, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewResumeExperimentGroupRequest(c.Server, groupId)
 	if err != nil {
 		return nil, err
 	}
@@ -720,6 +762,40 @@ func NewGetExperimentGroupWithDetailsRequest(server string, groupId string) (*ht
 	}
 
 	req, err := http.NewRequest("GET", queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
+// NewResumeExperimentGroupRequest generates requests for ResumeExperimentGroup
+func NewResumeExperimentGroupRequest(server string, groupId string) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithLocation("simple", false, "groupId", runtime.ParamLocationPath, groupId)
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/experiment-groups/%s/resume", pathParam0)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest("POST", queryURL.String(), nil)
 	if err != nil {
 		return nil, err
 	}
@@ -1000,6 +1076,9 @@ type ClientWithResponsesInterface interface {
 	// GetExperimentGroupWithDetailsWithResponse request
 	GetExperimentGroupWithDetailsWithResponse(ctx context.Context, groupId string, reqEditors ...RequestEditorFn) (*GetExperimentGroupWithDetailsResponse, error)
 
+	// ResumeExperimentGroupWithResponse request
+	ResumeExperimentGroupWithResponse(ctx context.Context, groupId string, reqEditors ...RequestEditorFn) (*ResumeExperimentGroupResponse, error)
+
 	// ListExperimentsWithResponse request
 	ListExperimentsWithResponse(ctx context.Context, reqEditors ...RequestEditorFn) (*ListExperimentsResponse, error)
 
@@ -1109,6 +1188,30 @@ func (r GetExperimentGroupWithDetailsResponse) Status() string {
 
 // StatusCode returns HTTPResponse.StatusCode
 func (r GetExperimentGroupWithDetailsResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+type ResumeExperimentGroupResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	JSON200      *ExperimentGroupResponse
+	JSON400      *ErrorResponse
+	JSON409      *ErrorResponse
+}
+
+// Status returns HTTPResponse.Status
+func (r ResumeExperimentGroupResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r ResumeExperimentGroupResponse) StatusCode() int {
 	if r.HTTPResponse != nil {
 		return r.HTTPResponse.StatusCode
 	}
@@ -1318,6 +1421,15 @@ func (c *ClientWithResponses) GetExperimentGroupWithDetailsWithResponse(ctx cont
 	return ParseGetExperimentGroupWithDetailsResponse(rsp)
 }
 
+// ResumeExperimentGroupWithResponse request returning *ResumeExperimentGroupResponse
+func (c *ClientWithResponses) ResumeExperimentGroupWithResponse(ctx context.Context, groupId string, reqEditors ...RequestEditorFn) (*ResumeExperimentGroupResponse, error) {
+	rsp, err := c.ResumeExperimentGroup(ctx, groupId, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseResumeExperimentGroupResponse(rsp)
+}
+
 // ListExperimentsWithResponse request returning *ListExperimentsResponse
 func (c *ClientWithResponses) ListExperimentsWithResponse(ctx context.Context, reqEditors ...RequestEditorFn) (*ListExperimentsResponse, error) {
 	rsp, err := c.ListExperiments(ctx, reqEditors...)
@@ -1508,6 +1620,46 @@ func ParseGetExperimentGroupWithDetailsResponse(rsp *http.Response) (*GetExperim
 			return nil, err
 		}
 		response.JSON404 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseResumeExperimentGroupResponse parses an HTTP response from a ResumeExperimentGroupWithResponse call
+func ParseResumeExperimentGroupResponse(rsp *http.Response) (*ResumeExperimentGroupResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &ResumeExperimentGroupResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest ExperimentGroupResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
+		var dest ErrorResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON400 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 409:
+		var dest ErrorResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON409 = &dest
 
 	}
 
@@ -1745,6 +1897,9 @@ type ServerInterface interface {
 	// Get experiment group with all experiment details
 	// (GET /experiment-groups/{groupId})
 	GetExperimentGroupWithDetails(c *gin.Context, groupId string)
+	// Resume an incomplete experiment group
+	// (POST /experiment-groups/{groupId}/resume)
+	ResumeExperimentGroup(c *gin.Context, groupId string)
 	// List all stored experiments
 	// (GET /experiments)
 	ListExperiments(c *gin.Context)
@@ -1838,6 +1993,30 @@ func (siw *ServerInterfaceWrapper) GetExperimentGroupWithDetails(c *gin.Context)
 	}
 
 	siw.Handler.GetExperimentGroupWithDetails(c, groupId)
+}
+
+// ResumeExperimentGroup operation middleware
+func (siw *ServerInterfaceWrapper) ResumeExperimentGroup(c *gin.Context) {
+
+	var err error
+
+	// ------------- Path parameter "groupId" -------------
+	var groupId string
+
+	err = runtime.BindStyledParameterWithOptions("simple", "groupId", c.Param("groupId"), &groupId, runtime.BindStyledParameterOptions{Explode: false, Required: true})
+	if err != nil {
+		siw.ErrorHandler(c, fmt.Errorf("Invalid format for parameter groupId: %w", err), http.StatusBadRequest)
+		return
+	}
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		middleware(c)
+		if c.IsAborted() {
+			return
+		}
+	}
+
+	siw.Handler.ResumeExperimentGroup(c, groupId)
 }
 
 // ListExperiments operation middleware
@@ -1984,6 +2163,7 @@ func RegisterHandlersWithOptions(router gin.IRouter, si ServerInterface, options
 	router.GET(options.BaseURL+"/experiment-groups", wrapper.ListExperimentGroups)
 	router.POST(options.BaseURL+"/experiment-groups", wrapper.StartExperimentGroup)
 	router.GET(options.BaseURL+"/experiment-groups/:groupId", wrapper.GetExperimentGroupWithDetails)
+	router.POST(options.BaseURL+"/experiment-groups/:groupId/resume", wrapper.ResumeExperimentGroup)
 	router.GET(options.BaseURL+"/experiments", wrapper.ListExperiments)
 	router.POST(options.BaseURL+"/experiments", wrapper.StartExperiment)
 	router.GET(options.BaseURL+"/experiments/:experimentId", wrapper.GetExperimentData)
@@ -1996,59 +2176,63 @@ func RegisterHandlersWithOptions(router gin.IRouter, si ServerInterface, options
 // Base64 encoded, gzipped, json marshaled Swagger object
 var swaggerSpec = []string{
 
-	"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",
+	"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",
+	"Mxf7yoi9je5G1zncPfxvAAAA///p2KxD2UsAAA==",
 }
 
 // GetSwagger returns the content of the embedded swagger specification file

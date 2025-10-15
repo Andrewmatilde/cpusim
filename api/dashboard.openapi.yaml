@@ -199,6 +199,38 @@ paths:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
 
+  /experiment-groups/{groupId}/resume:
+    post:
+      summary: Resume an incomplete experiment group
+      description: Resume a running or failed experiment group from where it left off
+      operationId: resumeExperimentGroup
+      parameters:
+        - name: groupId
+          in: path
+          required: true
+          schema:
+            type: string
+            pattern: '^[a-z0-9]([a-z0-9-]*[a-z0-9])?$'
+      responses:
+        '200':
+          description: Experiment group resumed successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ExperimentGroupResponse'
+        '400':
+          description: Bad request (group already completed or not found)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '409':
+          description: Service is busy
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
   /hosts/status:
     get:
       summary: Get status of all hosts
@@ -466,9 +498,11 @@ components:
       type: object
       required:
         - groupId
+        - qpsMin
+        - qpsMax
+        - qpsStep
         - repeatCount
         - timeout
-        - qps
       properties:
         groupId:
           type: string
@@ -479,21 +513,31 @@ components:
         description:
           type: string
           description: Optional description of the experiment group
+        qpsMin:
+          type: integer
+          minimum: 1
+          maximum: 1000
+          description: Minimum QPS value (e.g., 100)
+        qpsMax:
+          type: integer
+          minimum: 1
+          maximum: 1000
+          description: Maximum QPS value (e.g., 500)
+        qpsStep:
+          type: integer
+          minimum: 1
+          maximum: 1000
+          description: Step size for QPS values (e.g., 100)
         repeatCount:
           type: integer
           minimum: 1
           maximum: 100
-          description: Number of times to repeat the experiment
+          description: Number of times to repeat each QPS value
         timeout:
           type: integer
           minimum: 1
           maximum: 3600
           description: Timeout for each experiment in seconds
-        qps:
-          type: integer
-          minimum: 1
-          maximum: 1000
-          description: Requests per second for each experiment
         delayBetween:
           type: integer
           minimum: 0
@@ -526,11 +570,11 @@ components:
           description: Optional description
         config:
           $ref: '#/components/schemas/ExperimentGroupConfig'
-        experiments:
+        qpsPoints:
           type: array
-          description: List of experiment IDs in this group
+          description: Results organized by QPS value
           items:
-            type: string
+            $ref: '#/components/schemas/QPSPoint'
         startTime:
           type: string
           format: date-time
@@ -542,27 +586,52 @@ components:
         status:
           type: string
           description: running, completed, failed
+        currentQPS:
+          type: integer
+          description: Current QPS value being tested
         currentRun:
           type: integer
-          description: Current execution number (1-based)
+          description: Current run for current QPS (1-based)
+
+    QPSPoint:
+      type: object
+      description: Results for a specific QPS value
+      properties:
+        qps:
+          type: integer
+          description: QPS value for this point
+        experiments:
+          type: array
+          description: List of experiment IDs for this QPS
+          items:
+            type: string
         statistics:
           type: object
-          description: Steady-state statistics per host (calculated when group is completed)
+          description: Steady-state statistics per host for this QPS
           additionalProperties:
             $ref: '#/components/schemas/SteadyStateStats'
+        status:
+          type: string
+          description: running, completed, failed
 
     ExperimentGroupConfig:
       type: object
       properties:
+        qpsMin:
+          type: integer
+          description: Minimum QPS value (e.g., 100)
+        qpsMax:
+          type: integer
+          description: Maximum QPS value (e.g., 500)
+        qpsStep:
+          type: integer
+          description: Step size for QPS values (e.g., 100)
         repeatCount:
           type: integer
-          description: Number of times to repeat the experiment
+          description: Number of times to repeat each QPS value
         timeout:
           type: integer
           description: Timeout for each experiment in seconds
-        qps:
-          type: integer
-          description: Requests per second for each experiment
         delayBetween:
           type: integer
           description: Delay between experiments in seconds

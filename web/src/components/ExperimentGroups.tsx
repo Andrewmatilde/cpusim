@@ -12,7 +12,7 @@ import type {
   StartExperimentGroupRequest,
   ExperimentGroup
 } from '@/api/generated';
-import { RefreshCw, AlertCircle, Play, Loader2, Layers, FileText, BarChart3, Clock } from 'lucide-react';
+import { RefreshCw, AlertCircle, Play, Loader2, Layers, FileText, BarChart3, Clock, RotateCw } from 'lucide-react';
 import { toast } from 'sonner';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Area, ComposedChart } from 'recharts';
 import type { ChartConfig } from '@/components/ui/chart';
@@ -27,9 +27,11 @@ export function ExperimentGroups() {
   // Form state
   const [groupId, setGroupId] = useState(`group-${Date.now()}`);
   const [description, setDescription] = useState('');
-  const [repeatCount, setRepeatCount] = useState(3);
+  const [qpsMin, setQpsMin] = useState(100);
+  const [qpsMax, setQpsMax] = useState(500);
+  const [qpsStep, setQpsStep] = useState(100);
+  const [repeatCount, setRepeatCount] = useState(10);
   const [timeout, setTimeout] = useState(60);
-  const [qps, setQps] = useState(10);
   const [delayBetween, setDelayBetween] = useState(5);
   const [starting, setStarting] = useState(false);
 
@@ -56,16 +58,22 @@ export function ExperimentGroups() {
   const handleStartGroup = async () => {
     try {
       setStarting(true);
+      const qpsValues = [];
+      for (let qps = qpsMin; qps <= qpsMax; qps += qpsStep) {
+        qpsValues.push(qps);
+      }
       const request: StartExperimentGroupRequest = {
         groupId,
         description,
+        qpsMin,
+        qpsMax,
+        qpsStep,
         repeatCount,
         timeout,
-        qps,
         delayBetween
       };
       await apiClient.startExperimentGroup(request);
-      toast.success(`Experiment group started: ${repeatCount} experiments`);
+      toast.success(`Experiment group started: ${qpsValues.length} QPS points × ${repeatCount} runs = ${qpsValues.length * repeatCount} total experiments`);
       setGroupId(`group-${Date.now()}`);
       setDescription('');
       fetchData();
@@ -88,10 +96,25 @@ export function ExperimentGroups() {
     }
   };
 
+  const handleResumeGroup = async (gId: string, e: React.MouseEvent) => {
+    e.stopPropagation(); // Prevent triggering view group
+    try {
+      await apiClient.resumeExperimentGroup({ groupId: gId });
+      toast.success(`Experiment group resumed: ${gId}`);
+      fetchData();
+    } catch (err) {
+      toast.error('Failed to resume experiment group');
+      console.error('Resume group error:', err);
+    }
+  };
+
   const formatDuration = (start: Date | string, end?: Date | string) => {
     if (!end) return 'In progress...';
+    const endDate = end instanceof Date ? end : new Date(end);
+    // Check if end time is zero value (0001-01-01)
+    if (endDate.getFullYear() < 1900) return 'In progress...';
     const startTime = start instanceof Date ? start.getTime() : new Date(start).getTime();
-    const endTime = end instanceof Date ? end.getTime() : new Date(end).getTime();
+    const endTime = endDate.getTime();
     const duration = (endTime - startTime) / 1000;
     return `${duration.toFixed(2)}s`;
   };
@@ -113,7 +136,7 @@ export function ExperimentGroups() {
             Create Experiment Group
           </CardTitle>
           <CardDescription>
-            Run multiple experiments with the same configuration
+            Test QPS range with multiple repetitions per QPS value
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -139,9 +162,45 @@ export function ExperimentGroups() {
               </div>
             </div>
 
-            <div className="grid grid-cols-4 gap-4">
+            <div className="grid grid-cols-3 gap-4">
               <div>
-                <Label htmlFor="repeatCount">Repeat Count</Label>
+                <Label htmlFor="qpsMin">QPS Min</Label>
+                <Input
+                  id="qpsMin"
+                  type="number"
+                  value={qpsMin}
+                  onChange={(e) => setQpsMin(Number(e.target.value))}
+                  min={1}
+                  max={1000}
+                />
+              </div>
+              <div>
+                <Label htmlFor="qpsMax">QPS Max</Label>
+                <Input
+                  id="qpsMax"
+                  type="number"
+                  value={qpsMax}
+                  onChange={(e) => setQpsMax(Number(e.target.value))}
+                  min={1}
+                  max={1000}
+                />
+              </div>
+              <div>
+                <Label htmlFor="qpsStep">QPS Step</Label>
+                <Input
+                  id="qpsStep"
+                  type="number"
+                  value={qpsStep}
+                  onChange={(e) => setQpsStep(Number(e.target.value))}
+                  min={1}
+                  max={1000}
+                />
+              </div>
+            </div>
+
+            <div className="grid grid-cols-3 gap-4">
+              <div>
+                <Label htmlFor="repeatCount">Repeat Count (per QPS)</Label>
                 <Input
                   id="repeatCount"
                   type="number"
@@ -160,17 +219,6 @@ export function ExperimentGroups() {
                   onChange={(e) => setTimeout(Number(e.target.value))}
                   min={10}
                   max={600}
-                />
-              </div>
-              <div>
-                <Label htmlFor="qps">QPS</Label>
-                <Input
-                  id="qps"
-                  type="number"
-                  value={qps}
-                  onChange={(e) => setQps(Number(e.target.value))}
-                  min={1}
-                  max={1000}
                 />
               </div>
               <div>
@@ -242,6 +290,17 @@ export function ExperimentGroups() {
                         <Badge variant={group.status === 'completed' ? 'default' : group.status === 'running' ? 'secondary' : 'destructive'}>
                           {group.status}
                         </Badge>
+                        {group.status === 'running' || group.status === 'failed' ? (
+                          <Button
+                            onClick={(e) => group.groupId && handleResumeGroup(group.groupId, e)}
+                            variant="outline"
+                            size="sm"
+                            className="ml-2"
+                          >
+                            <RotateCw className="h-3 w-3 mr-1" />
+                            Resume
+                          </Button>
+                        ) : null}
                       </div>
                       {group.description && (
                         <div className="text-sm text-muted-foreground mb-2">
@@ -251,14 +310,17 @@ export function ExperimentGroups() {
                       <div className="grid grid-cols-2 gap-2 text-sm">
                         <div className="flex items-center gap-1">
                           <BarChart3 className="h-3 w-3 text-muted-foreground" />
-                          <span className="text-muted-foreground">Experiments:</span>
-                          <span className="font-medium">{group.currentRun}/{group.config?.repeatCount}</span>
+                          <span className="text-muted-foreground">QPS Range:</span>
+                          <span className="font-medium">{group.config?.qpsMin}-{group.config?.qpsMax} (step {group.config?.qpsStep})</span>
                         </div>
                         <div className="flex items-center gap-1">
                           <Clock className="h-3 w-3 text-muted-foreground" />
                           <span className="text-muted-foreground">Duration:</span>
                           <span className="font-medium">{group.startTime && formatDuration(group.startTime, group.endTime)}</span>
                         </div>
+                      </div>
+                      <div className="text-xs text-muted-foreground mt-1">
+                        Progress: QPS {group.currentQPS}, Run {group.currentRun}/{group.config?.repeatCount}
                       </div>
                       <div className="text-xs text-muted-foreground mt-2">
                         Started: {group.startTime && (group.startTime instanceof Date ? group.startTime : new Date(group.startTime)).toLocaleString()}
@@ -274,28 +336,41 @@ export function ExperimentGroups() {
 
       {/* QPS vs CPU Line Chart with Confidence Intervals */}
       {groupsList && groupsList.groups && groupsList.groups.length > 0 && (() => {
-        // Filter completed groups with statistics
+        // Filter completed groups with QPS points data
         const completedGroups = groupsList.groups.filter(
-          (g: ExperimentGroup) => g.status === 'completed' && g.statistics && Object.keys(g.statistics).length > 0
+          (g: ExperimentGroup) => g.status === 'completed' && g.qpsPoints && g.qpsPoints.length > 0
         );
 
         if (completedGroups.length === 0) return null;
 
-        // Extract and sort data points by QPS
-        const chartData = completedGroups
-          .map((group: ExperimentGroup) => {
-            const hostName = Object.keys(group.statistics || {})[0]; // Get first host
-            const stats = group.statistics?.[hostName];
+        // Extract data points from all QPS points across all completed groups
+        const allDataPoints: Array<{qps: number; cpuMean: number; cpuConfLower: number; cpuConfUpper: number; groupId: string}> = [];
 
-            return {
-              qps: group.config?.qps || 0,
-              cpuMean: stats?.cpuMean || 0,
-              cpuConfLower: stats?.cpuConfLower || 0,
-              cpuConfUpper: stats?.cpuConfUpper || 0,
-              groupId: group.groupId,
-            };
-          })
-          .sort((a, b) => a.qps - b.qps); // Sort by QPS for proper line connection
+        completedGroups.forEach((group: ExperimentGroup) => {
+          group.qpsPoints?.forEach((qpsPoint: any) => {
+            if (qpsPoint.statistics && Object.keys(qpsPoint.statistics).length > 0) {
+              const hostName = Object.keys(qpsPoint.statistics)[0]; // Get first host
+              const stats = qpsPoint.statistics[hostName];
+
+              allDataPoints.push({
+                qps: qpsPoint.qps || 0,
+                cpuMean: stats?.cpuMean || 0,
+                cpuConfLower: stats?.cpuConfLower || 0,
+                cpuConfUpper: stats?.cpuConfUpper || 0,
+                groupId: `${group.groupId}-qps${qpsPoint.qps}`,
+              });
+            }
+          });
+        });
+
+        if (allDataPoints.length === 0) return null;
+
+        // Sort by QPS and remove duplicates (keep first occurrence)
+        const chartData = allDataPoints
+          .sort((a, b) => a.qps - b.qps)
+          .filter((point, index, array) =>
+            index === 0 || point.qps !== array[index - 1].qps
+          );
 
         // Add origin point (0,0)
         chartData.unshift({
@@ -468,9 +543,9 @@ export function ExperimentGroups() {
                 )}
                 <div className="grid grid-cols-2 gap-4 pt-2">
                   <div>
-                    <div className="text-sm text-muted-foreground">Progress</div>
+                    <div className="text-sm text-muted-foreground">QPS Range</div>
                     <div className="text-lg font-medium">
-                      {groupDetail.group?.currentRun}/{groupDetail.group?.config?.repeatCount} experiments
+                      {groupDetail.group?.config?.qpsMin} - {groupDetail.group?.config?.qpsMax} (step {groupDetail.group?.config?.qpsStep})
                     </div>
                   </div>
                   <div>
@@ -486,55 +561,97 @@ export function ExperimentGroups() {
                     <span className="font-medium">{groupDetail.group?.config?.timeout}s</span>
                   </div>
                   <div>
-                    <span className="text-muted-foreground">QPS: </span>
-                    <span className="font-medium">{groupDetail.group?.config?.qps}</span>
+                    <span className="text-muted-foreground">Repeat per QPS: </span>
+                    <span className="font-medium">{groupDetail.group?.config?.repeatCount}</span>
                   </div>
                   <div>
                     <span className="text-muted-foreground">Delay: </span>
                     <span className="font-medium">{groupDetail.group?.config?.delayBetween}s</span>
                   </div>
                 </div>
+                <div className="text-sm pt-2">
+                  <span className="text-muted-foreground">Progress: </span>
+                  <span className="font-medium">QPS {groupDetail.group?.currentQPS}, Run {groupDetail.group?.currentRun}/{groupDetail.group?.config?.repeatCount}</span>
+                </div>
               </div>
 
-              {/* Experiments List */}
+              {/* QPS Points with Experiments */}
               <div>
-                <h3 className="font-semibold mb-3">Experiments in Group</h3>
-                <div className="space-y-2">
-                  {groupDetail.group?.experiments?.map((expId, idx) => {
-                    const expData = groupDetail.experimentDetails?.[idx];
-                    return (
-                      <div key={expId} className="border rounded-lg p-3">
-                        <div className="flex items-center justify-between mb-2">
-                          <span className="font-medium">{expId}</span>
-                          {expData && (
-                            <Badge variant={expData.status === 'completed' ? 'default' : 'secondary'}>
-                              {expData.status}
-                            </Badge>
-                          )}
-                        </div>
-                        {expData && (
-                          <div className="grid grid-cols-3 gap-2 text-sm">
-                            <div>
-                              <span className="text-muted-foreground">Duration: </span>
-                              <span>{expData.duration?.toFixed(2)}s</span>
-                            </div>
-                            {expData.requesterResult?.stats && (
-                              <>
-                                <div>
-                                  <span className="text-muted-foreground">Requests: </span>
-                                  <span>{expData.requesterResult.stats.totalRequests}</span>
-                                </div>
-                                <div>
-                                  <span className="text-muted-foreground">Avg RT: </span>
-                                  <span>{expData.requesterResult.stats.averageResponseTime?.toFixed(2)}ms</span>
-                                </div>
-                              </>
-                            )}
-                          </div>
-                        )}
+                <h3 className="font-semibold mb-3">QPS Points and Experiments</h3>
+                <div className="space-y-4">
+                  {groupDetail.group?.qpsPoints?.map((qpsPoint: any, qpsIdx) => (
+                    <div key={qpsIdx} className="border rounded-lg p-4">
+                      <div className="flex items-center justify-between mb-3">
+                        <h4 className="font-semibold">QPS: {qpsPoint.qps}</h4>
+                        <Badge variant={qpsPoint.status === 'completed' ? 'default' : qpsPoint.status === 'running' ? 'secondary' : 'outline'}>
+                          {qpsPoint.status}
+                        </Badge>
                       </div>
-                    );
-                  })}
+
+                      {/* Statistics for this QPS */}
+                      {qpsPoint.statistics && Object.keys(qpsPoint.statistics).length > 0 && (
+                        <div className="mb-3 p-2 bg-muted rounded">
+                          {Object.entries(qpsPoint.statistics).map(([hostName, stats]: [string, any]) => (
+                            <div key={hostName} className="text-sm">
+                              <span className="text-muted-foreground">{hostName}: </span>
+                              <span className="font-medium">Mean CPU: {stats.cpuMean?.toFixed(2)}%</span>
+                              <span className="text-muted-foreground ml-2">95% CI: [{stats.cpuConfLower?.toFixed(2)}%, {stats.cpuConfUpper?.toFixed(2)}%]</span>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+
+                      {/* Experiments for this QPS */}
+                      <div className="space-y-2">
+                        {qpsPoint.experiments?.map((expId: string) => {
+                          const expData = groupDetail.experimentDetails?.find((exp: any) =>
+                            groupDetail.experimentDetails?.indexOf(exp) ===
+                            groupDetail.experimentDetails?.findIndex((e: any) => {
+                              // Match experiment IDs from group
+                              const allExpIds: string[] = [];
+                              groupDetail.group?.qpsPoints?.forEach((qp: any) => {
+                                qp.experiments?.forEach((id: string) => allExpIds.push(id));
+                              });
+                              return allExpIds[groupDetail.experimentDetails?.indexOf(exp) || 0] === expId;
+                            })
+                          );
+
+                          return (
+                            <div key={expId} className="border rounded p-2 text-sm">
+                              <div className="flex items-center justify-between">
+                                <span className="font-medium text-xs">{expId}</span>
+                                {expData && (
+                                  <Badge variant={expData.status === 'completed' ? 'default' : 'secondary'} className="text-xs">
+                                    {expData.status}
+                                  </Badge>
+                                )}
+                              </div>
+                              {expData && (
+                                <div className="grid grid-cols-3 gap-2 mt-1 text-xs">
+                                  <div>
+                                    <span className="text-muted-foreground">Duration: </span>
+                                    <span>{expData.duration?.toFixed(2)}s</span>
+                                  </div>
+                                  {expData.requesterResult?.stats && (
+                                    <>
+                                      <div>
+                                        <span className="text-muted-foreground">Requests: </span>
+                                        <span>{expData.requesterResult.stats.totalRequests}</span>
+                                      </div>
+                                      <div>
+                                        <span className="text-muted-foreground">Avg RT: </span>
+                                        <span>{expData.requesterResult.stats.averageResponseTime?.toFixed(2)}ms</span>
+                                      </div>
+                                    </>
+                                  )}
+                                </div>
+                              )}
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  ))}
                 </div>
               </div>
 
@@ -545,8 +662,14 @@ export function ExperimentGroups() {
                 const experimentSeriesData: { [expId: string]: Array<{ relativeTime: number; cpuUsage: number }> } = {};
                 let maxDuration = 0;
 
+                // Build array of all experiment IDs from qpsPoints
+                const allExpIds: string[] = [];
+                groupDetail.group?.qpsPoints?.forEach((qp: any) => {
+                  qp.experiments?.forEach((id: string) => allExpIds.push(id));
+                });
+
                 groupDetail.experimentDetails.forEach((expData, idx) => {
-                  const expId = groupDetail.group?.experiments?.[idx];
+                  const expId = allExpIds[idx];
                   if (!expId) return;
                   if (!expData.collectorResults) return;
 

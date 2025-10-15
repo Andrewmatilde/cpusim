@@ -20,13 +20,13 @@ import {
     ExperimentGroupConfigToJSON,
     ExperimentGroupConfigToJSONTyped,
 } from './ExperimentGroupConfig';
-import type { SteadyStateStats } from './SteadyStateStats';
+import type { QPSPoint } from './QPSPoint';
 import {
-    SteadyStateStatsFromJSON,
-    SteadyStateStatsFromJSONTyped,
-    SteadyStateStatsToJSON,
-    SteadyStateStatsToJSONTyped,
-} from './SteadyStateStats';
+    QPSPointFromJSON,
+    QPSPointFromJSONTyped,
+    QPSPointToJSON,
+    QPSPointToJSONTyped,
+} from './QPSPoint';
 
 /**
  * 
@@ -53,11 +53,11 @@ export interface ExperimentGroup {
      */
     config?: ExperimentGroupConfig;
     /**
-     * List of experiment IDs in this group
-     * @type {Array<string>}
+     * Results organized by QPS value
+     * @type {Array<QPSPoint>}
      * @memberof ExperimentGroup
      */
-    experiments?: Array<string>;
+    qpsPoints?: Array<QPSPoint>;
     /**
      * When the group started
      * @type {Date}
@@ -77,17 +77,17 @@ export interface ExperimentGroup {
      */
     status?: string;
     /**
-     * Current execution number (1-based)
+     * Current QPS value being tested
+     * @type {number}
+     * @memberof ExperimentGroup
+     */
+    currentQPS?: number;
+    /**
+     * Current run for current QPS (1-based)
      * @type {number}
      * @memberof ExperimentGroup
      */
     currentRun?: number;
-    /**
-     * Steady-state statistics per host (calculated when group is completed)
-     * @type {{ [key: string]: SteadyStateStats; }}
-     * @memberof ExperimentGroup
-     */
-    statistics?: { [key: string]: SteadyStateStats; };
 }
 
 /**
@@ -110,12 +110,12 @@ export function ExperimentGroupFromJSONTyped(json: any, ignoreDiscriminator: boo
         'groupId': json['groupId'] == null ? undefined : json['groupId'],
         'description': json['description'] == null ? undefined : json['description'],
         'config': json['config'] == null ? undefined : ExperimentGroupConfigFromJSON(json['config']),
-        'experiments': json['experiments'] == null ? undefined : json['experiments'],
+        'qpsPoints': json['qpsPoints'] == null ? undefined : ((json['qpsPoints'] as Array<any>).map(QPSPointFromJSON)),
         'startTime': json['startTime'] == null ? undefined : (new Date(json['startTime'])),
         'endTime': json['endTime'] == null ? undefined : (new Date(json['endTime'])),
         'status': json['status'] == null ? undefined : json['status'],
+        'currentQPS': json['currentQPS'] == null ? undefined : json['currentQPS'],
         'currentRun': json['currentRun'] == null ? undefined : json['currentRun'],
-        'statistics': json['statistics'] == null ? undefined : (mapValues(json['statistics'], SteadyStateStatsFromJSON)),
     };
 }
 
@@ -133,12 +133,12 @@ export function ExperimentGroupToJSONTyped(value?: ExperimentGroup | null, ignor
         'groupId': value['groupId'],
         'description': value['description'],
         'config': ExperimentGroupConfigToJSON(value['config']),
-        'experiments': value['experiments'],
+        'qpsPoints': value['qpsPoints'] == null ? undefined : ((value['qpsPoints'] as Array<any>).map(QPSPointToJSON)),
         'startTime': value['startTime'] == null ? undefined : ((value['startTime']).toISOString()),
         'endTime': value['endTime'] == null ? undefined : ((value['endTime']).toISOString()),
         'status': value['status'],
+        'currentQPS': value['currentQPS'],
         'currentRun': value['currentRun'],
-        'statistics': value['statistics'] == null ? undefined : (mapValues(value['statistics'], SteadyStateStatsToJSON)),
     };
 }
 

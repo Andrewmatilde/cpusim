@@ -32,7 +32,25 @@ export interface StartExperimentGroupRequest {
      */
     description?: string;
     /**
-     * Number of times to repeat the experiment
+     * Minimum QPS value (e.g., 100)
+     * @type {number}
+     * @memberof StartExperimentGroupRequest
+     */
+    qpsMin: number;
+    /**
+     * Maximum QPS value (e.g., 500)
+     * @type {number}
+     * @memberof StartExperimentGroupRequest
+     */
+    qpsMax: number;
+    /**
+     * Step size for QPS values (e.g., 100)
+     * @type {number}
+     * @memberof StartExperimentGroupRequest
+     */
+    qpsStep: number;
+    /**
+     * Number of times to repeat each QPS value
      * @type {number}
      * @memberof StartExperimentGroupRequest
      */
@@ -43,12 +61,6 @@ export interface StartExperimentGroupRequest {
      * @memberof StartExperimentGroupRequest
      */
     timeout: number;
-    /**
-     * Requests per second for each experiment
-     * @type {number}
-     * @memberof StartExperimentGroupRequest
-     */
-    qps: number;
     /**
      * Delay between experiments in seconds
      * @type {number}
@@ -62,9 +74,11 @@ export interface StartExperimentGroupRequest {
  */
 export function instanceOfStartExperimentGroupRequest(value: object): value is StartExperimentGroupRequest {
     if (!('groupId' in value) || value['groupId'] === undefined) return false;
+    if (!('qpsMin' in value) || value['qpsMin'] === undefined) return false;
+    if (!('qpsMax' in value) || value['qpsMax'] === undefined) return false;
+    if (!('qpsStep' in value) || value['qpsStep'] === undefined) return false;
     if (!('repeatCount' in value) || value['repeatCount'] === undefined) return false;
     if (!('timeout' in value) || value['timeout'] === undefined) return false;
-    if (!('qps' in value) || value['qps'] === undefined) return false;
     return true;
 }
 
@@ -80,9 +94,11 @@ export function StartExperimentGroupRequestFromJSONTyped(json: any, ignoreDiscri
         
         'groupId': json['groupId'],
         'description': json['description'] == null ? undefined : json['description'],
+        'qpsMin': json['qpsMin'],
+        'qpsMax': json['qpsMax'],
+        'qpsStep': json['qpsStep'],
         'repeatCount': json['repeatCount'],
         'timeout': json['timeout'],
-        'qps': json['qps'],
         'delayBetween': json['delayBetween'] == null ? undefined : json['delayBetween'],
     };
 }
@@ -100,9 +116,11 @@ export function StartExperimentGroupRequestToJSONTyped(value?: StartExperimentGr
         
         'groupId': value['groupId'],
         'description': value['description'],
+        'qpsMin': value['qpsMin'],
+        'qpsMax': value['qpsMax'],
+        'qpsStep': value['qpsStep'],
         'repeatCount': value['repeatCount'],
         'timeout': value['timeout'],
-        'qps': value['qps'],
         'delayBetween': value['delayBetween'],
     };
 }

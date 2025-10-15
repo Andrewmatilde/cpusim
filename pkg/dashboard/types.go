@@ -93,19 +93,25 @@ func (e *ExperimentData) UnmarshalJSON(data []byte) error {
 	return json.Unmarshal(data, (*Alias)(e))
 }
 
-// ExperimentGroup represents a group of repeated experiments
+// ExperimentGroup represents a group of experiments across QPS range
 type ExperimentGroup struct {
 	GroupID     string                `json:"group_id"`
 	Description string                `json:"description,omitempty"`
 	Config      ExperimentGroupConfig `json:"config"`
-	Experiments []string              `json:"experiments"` // List of experiment IDs
+	QPSPoints   []QPSPoint            `json:"qps_points"` // Organized by QPS value
 	StartTime   time.Time             `json:"start_time"`
 	EndTime     time.Time             `json:"end_time,omitempty"`
 	Status      string                `json:"status"`      // "running", "completed", "failed"
-	CurrentRun  int                   `json:"current_run"` // 1-based, current execution number
+	CurrentQPS  int                   `json:"current_qps"` // Current QPS being tested
+	CurrentRun  int                   `json:"current_run"` // Current run for current QPS (1-based)
+}
 
-	// Steady-state statistics (calculated per host)
-	Statistics map[string]*SteadyStateStats `json:"statistics,omitempty"` // key: host name
+// QPSPoint represents results for a specific QPS value
+type QPSPoint struct {
+	QPS         int                          `json:"qps"`         // QPS value for this point
+	Experiments []string                     `json:"experiments"` // List of experiment IDs for this QPS
+	Statistics  map[string]*SteadyStateStats `json:"statistics"`  // key: host name
+	Status      string                       `json:"status"`      // "running", "completed", "failed"
 }
 
 // SteadyStateStats contains steady-state performance statistics with confidence intervals
@@ -124,9 +130,11 @@ type SteadyStateStats struct {
 
 // ExperimentGroupConfig defines the configuration for an experiment group
 type ExperimentGroupConfig struct {
-	RepeatCount  int `json:"repeat_count"`  // Number of times to repeat
+	QPSMin       int `json:"qps_min"`       // Minimum QPS value (e.g., 100)
+	QPSMax       int `json:"qps_max"`       // Maximum QPS value (e.g., 500)
+	QPSStep      int `json:"qps_step"`      // Step size for QPS values (e.g., 100)
+	RepeatCount  int `json:"repeat_count"`  // Number of times to repeat each QPS
 	Timeout      int `json:"timeout"`       // Timeout for each experiment in seconds
-	QPS          int `json:"qps"`           // QPS for each experiment
 	DelayBetween int `json:"delay_between"` // Delay between experiments in seconds
 }
 

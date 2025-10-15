@@ -20,7 +20,25 @@ import { mapValues } from '../runtime';
  */
 export interface ExperimentGroupConfig {
     /**
-     * Number of times to repeat the experiment
+     * Minimum QPS value (e.g., 100)
+     * @type {number}
+     * @memberof ExperimentGroupConfig
+     */
+    qpsMin?: number;
+    /**
+     * Maximum QPS value (e.g., 500)
+     * @type {number}
+     * @memberof ExperimentGroupConfig
+     */
+    qpsMax?: number;
+    /**
+     * Step size for QPS values (e.g., 100)
+     * @type {number}
+     * @memberof ExperimentGroupConfig
+     */
+    qpsStep?: number;
+    /**
+     * Number of times to repeat each QPS value
      * @type {number}
      * @memberof ExperimentGroupConfig
      */
@@ -31,12 +49,6 @@ export interface ExperimentGroupConfig {
      * @memberof ExperimentGroupConfig
      */
     timeout?: number;
-    /**
-     * Requests per second for each experiment
-     * @type {number}
-     * @memberof ExperimentGroupConfig
-     */
-    qps?: number;
     /**
      * Delay between experiments in seconds
      * @type {number}
@@ -62,9 +74,11 @@ export function ExperimentGroupConfigFromJSONTyped(json: any, ignoreDiscriminato
     }
     return {
         
+        'qpsMin': json['qpsMin'] == null ? undefined : json['qpsMin'],
+        'qpsMax': json['qpsMax'] == null ? undefined : json['qpsMax'],
+        'qpsStep': json['qpsStep'] == null ? undefined : json['qpsStep'],
         'repeatCount': json['repeatCount'] == null ? undefined : json['repeatCount'],
         'timeout': json['timeout'] == null ? undefined : json['timeout'],
-        'qps': json['qps'] == null ? undefined : json['qps'],
         'delayBetween': json['delayBetween'] == null ? undefined : json['delayBetween'],
     };
 }
@@ -80,9 +94,11 @@ export function ExperimentGroupConfigToJSONTyped(value?: ExperimentGroupConfig |
 
     return {
         
+        'qpsMin': value['qpsMin'],
+        'qpsMax': value['qpsMax'],
+        'qpsStep': value['qpsStep'],
         'repeatCount': value['repeatCount'],
         'timeout': value['timeout'],
-        'qps': value['qps'],
         'delayBetween': value['delayBetween'],
     };
 }
