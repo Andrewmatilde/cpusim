@@ -424,7 +424,7 @@ export function ExperimentGroups() {
               {/* QPS vs CPU Chart for this Group */}
               {groupDetail.group?.qpsPoints && groupDetail.group.qpsPoints.length > 0 && (() => {
                 // Extract data points from this group's QPS points
-                const dataPoints: Array<{qps: number; cpuMean: number; cpuConfLower: number; cpuConfUpper: number; groupId: string}> = [];
+                const dataPoints: Array<{qps: number; cpuMean: number; cpuConfLower: number; cpuConfUpper: number; groupId: string; linearRef?: number}> = [];
 
                 groupDetail.group.qpsPoints.forEach((qpsPoint: any) => {
                   if (qpsPoint.statistics && Object.keys(qpsPoint.statistics).length > 0) {
@@ -793,104 +793,6 @@ export function ExperimentGroups() {
                 );
               })()}
 
-              {/* Steady-State Statistics with Confidence Intervals */}
-              {groupDetail.group?.statistics && Object.keys(groupDetail.group.statistics).length > 0 && (
-                <Card>
-                  <CardHeader>
-                    <CardTitle>Steady-State CPU Statistics (95% Confidence Interval)</CardTitle>
-                    <CardDescription>
-                      Based on the last 90% of each experiment's data, showing mean and confidence intervals across all runs
-                    </CardDescription>
-                  </CardHeader>
-                  <CardContent>
-                    <div className="space-y-4">
-                      {Object.entries(groupDetail.group.statistics).map(([hostName, stats]) => (
-                        <div key={hostName} className="border rounded-lg p-4">
-                          <h4 className="font-semibold mb-3 flex items-center gap-2">
-                            <BarChart3 className="h-4 w-4" />
-                            {hostName}
-                          </h4>
-
-                          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                            {/* Mean CPU */}
-                            <div className="space-y-1">
-                              <div className="text-xs text-muted-foreground">Mean CPU Usage</div>
-                              <div className="text-2xl font-bold text-primary">
-                                {stats.cpuMean?.toFixed(2)}%
-                              </div>
-                            </div>
-
-                            {/* Confidence Interval */}
-                            <div className="space-y-1">
-                              <div className="text-xs text-muted-foreground">95% Confidence Interval</div>
-                              <div className="text-lg font-semibold">
-                                [{stats.cpuConfLower?.toFixed(2)}%, {stats.cpuConfUpper?.toFixed(2)}%]
-                              </div>
-                            </div>
-
-                            {/* Standard Deviation */}
-                            <div className="space-y-1">
-                              <div className="text-xs text-muted-foreground">Std Deviation</div>
-                              <div className="text-lg font-semibold">
-                                ±{stats.cpuStdDev?.toFixed(2)}%
-                              </div>
-                            </div>
-
-                            {/* Range */}
-                            <div className="space-y-1">
-                              <div className="text-xs text-muted-foreground">Range (Min-Max)</div>
-                              <div className="text-lg font-semibold">
-                                {stats.cpuMin?.toFixed(2)}% - {stats.cpuMax?.toFixed(2)}%
-                              </div>
-                            </div>
-                          </div>
-
-                          {/* Additional Info */}
-                          <div className="mt-3 pt-3 border-t text-xs text-muted-foreground">
-                            Sample size: {stats.sampleSize} experiments | Confidence level: {((stats.confidenceLevel || 0.95) * 100).toFixed(0)}%
-                          </div>
-
-                          {/* Visual representation of CI */}
-                          <div className="mt-4">
-                            <div className="relative h-8 bg-muted rounded-lg overflow-hidden">
-                              {/* Min-Max range background */}
-                              <div
-                                className="absolute h-full bg-blue-100 dark:bg-blue-950"
-                                style={{
-                                  left: `${stats.cpuMin}%`,
-                                  width: `${(stats.cpuMax || 0) - (stats.cpuMin || 0)}%`
-                                }}
-                              />
-
-                              {/* Confidence Interval */}
-                              <div
-                                className="absolute h-full bg-blue-300 dark:bg-blue-700"
-                                style={{
-                                  left: `${stats.cpuConfLower}%`,
-                                  width: `${(stats.cpuConfUpper || 0) - (stats.cpuConfLower || 0)}%`
-                                }}
-                              />
-
-                              {/* Mean line */}
-                              <div
-                                className="absolute h-full w-0.5 bg-primary"
-                                style={{
-                                  left: `${stats.cpuMean}%`
-                                }}
-                              />
-                            </div>
-                            <div className="flex justify-between text-xs text-muted-foreground mt-1">
-                              <span>0%</span>
-                              <span>50%</span>
-                              <span>100%</span>
-                            </div>
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  </CardContent>
-                </Card>
-              )}
             </div>
           </CardContent>
         </Card>
