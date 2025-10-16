@@ -570,6 +570,9 @@ components:
           description: Optional description
         config:
           $ref: '#/components/schemas/ExperimentGroupConfig'
+        environmentConfig:
+          $ref: '#/components/schemas/ServiceConfig'
+          description: Client and Target host information for this experiment group
         qpsPoints:
           type: array
           description: Results organized by QPS value

@@ -105,6 +105,12 @@ export class DashboardAPIClient {
   async getExperimentGroupWithDetails(groupId: string): Promise<import('./generated').ExperimentGroupDetail> {
     return this.request(`/experiment-groups/${encodeURIComponent(groupId)}`);
   }
+
+  async resumeExperimentGroup(data: { groupId: string }): Promise<import('./generated').ExperimentGroupResponse> {
+    return this.request(`/experiment-groups/${encodeURIComponent(data.groupId)}/resume`, {
+      method: 'POST',
+    });
+  }
 }
 
 // Export singleton instance

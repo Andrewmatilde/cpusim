@@ -95,15 +95,16 @@ func (e *ExperimentData) UnmarshalJSON(data []byte) error {
 
 // ExperimentGroup represents a group of experiments across QPS range
 type ExperimentGroup struct {
-	GroupID     string                `json:"group_id"`
-	Description string                `json:"description,omitempty"`
-	Config      ExperimentGroupConfig `json:"config"`
-	QPSPoints   []QPSPoint            `json:"qps_points"` // Organized by QPS value
-	StartTime   time.Time             `json:"start_time"`
-	EndTime     time.Time             `json:"end_time,omitempty"`
-	Status      string                `json:"status"`      // "running", "completed", "failed"
-	CurrentQPS  int                   `json:"current_qps"` // Current QPS being tested
-	CurrentRun  int                   `json:"current_run"` // Current run for current QPS (1-based)
+	GroupID           string                `json:"group_id"`
+	Description       string                `json:"description,omitempty"`
+	Config            ExperimentGroupConfig `json:"config"`
+	EnvironmentConfig Config                `json:"environment_config"` // Client and Target host information
+	QPSPoints         []QPSPoint            `json:"qps_points"`         // Organized by QPS value
+	StartTime         time.Time             `json:"start_time"`
+	EndTime           time.Time             `json:"end_time,omitempty"`
+	Status            string                `json:"status"`      // "running", "completed", "failed"
+	CurrentQPS        int                   `json:"current_qps"` // Current QPS being tested
+	CurrentRun        int                   `json:"current_run"` // Current run for current QPS (1-based)
 }
 
 // QPSPoint represents results for a specific QPS value

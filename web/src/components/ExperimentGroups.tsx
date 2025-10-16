@@ -334,182 +334,6 @@ export function ExperimentGroups() {
         </Card>
       )}
 
-      {/* QPS vs CPU Line Chart with Confidence Intervals */}
-      {groupsList && groupsList.groups && groupsList.groups.length > 0 && (() => {
-        // Filter completed groups with QPS points data
-        const completedGroups = groupsList.groups.filter(
-          (g: ExperimentGroup) => g.status === 'completed' && g.qpsPoints && g.qpsPoints.length > 0
-        );
-
-        if (completedGroups.length === 0) return null;
-
-        // Extract data points from all QPS points across all completed groups
-        const allDataPoints: Array<{qps: number; cpuMean: number; cpuConfLower: number; cpuConfUpper: number; groupId: string}> = [];
-
-        completedGroups.forEach((group: ExperimentGroup) => {
-          group.qpsPoints?.forEach((qpsPoint: any) => {
-            if (qpsPoint.statistics && Object.keys(qpsPoint.statistics).length > 0) {
-              const hostName = Object.keys(qpsPoint.statistics)[0]; // Get first host
-              const stats = qpsPoint.statistics[hostName];
-
-              allDataPoints.push({
-                qps: qpsPoint.qps || 0,
-                cpuMean: stats?.cpuMean || 0,
-                cpuConfLower: stats?.cpuConfLower || 0,
-                cpuConfUpper: stats?.cpuConfUpper || 0,
-                groupId: `${group.groupId}-qps${qpsPoint.qps}`,
-              });
-            }
-          });
-        });
-
-        if (allDataPoints.length === 0) return null;
-
-        // Sort by QPS and remove duplicates (keep first occurrence)
-        const chartData = allDataPoints
-          .sort((a, b) => a.qps - b.qps)
-          .filter((point, index, array) =>
-            index === 0 || point.qps !== array[index - 1].qps
-          );
-
-        // Add origin point (0,0)
-        chartData.unshift({
-          qps: 0,
-          cpuMean: 0,
-          cpuConfLower: 0,
-          cpuConfUpper: 0,
-          groupId: 'origin',
-        });
-
-        // Calculate linear reference line from origin (0,0) to last point
-        if (chartData.length >= 2) {
-          const lastPoint = chartData[chartData.length - 1];
-          const slope = lastPoint.cpuMean / lastPoint.qps;
-
-          chartData.forEach(point => {
-            point.linearRef = slope * point.qps;
-          });
-        }
-
-        const chartConfig: ChartConfig = {
-          cpuMean: {
-            label: "Mean CPU Usage",
-            color: "hsl(var(--chart-1))",
-          },
-          cpuConfLower: {
-            label: "95% CI Lower",
-            color: "hsl(var(--chart-1))",
-          },
-          cpuConfUpper: {
-            label: "95% CI Upper",
-            color: "hsl(var(--chart-1))",
-          },
-        };
-
-        return (
-          <Card>
-            <CardHeader>
-              <CardTitle>QPS vs CPU Usage Analysis</CardTitle>
-              <CardDescription>
-                Average CPU usage across different QPS levels with 95% confidence interval boundaries
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              <ChartContainer config={chartConfig}>
-                <ComposedChart
-                  data={chartData}
-                  margin={{
-                    top: 20,
-                    right: 20,
-                    bottom: 40,
-                    left: 20,
-                  }}
-                >
-                  <CartesianGrid strokeDasharray="3 3" />
-                  <XAxis
-                    dataKey="qps"
-                    type="number"
-                    domain={['dataMin', 'dataMax']}
-                    label={{ value: 'QPS (Requests per Second)', position: 'insideBottom', offset: -10 }}
-                  />
-                  <YAxis
-                    label={{ value: 'CPU Usage (%)', angle: -90, position: 'insideLeft' }}
-                  />
-                  <ChartTooltip
-                    content={({ active, payload }) => {
-                      if (active && payload && payload.length) {
-                        const data = payload[0].payload;
-                        return (
-                          <div className="bg-background border rounded-lg p-3 shadow-lg">
-                            <div className="font-semibold text-sm mb-2">{data.groupId}</div>
-                            <div className="space-y-1 text-sm">
-                              <div>
-                                <span className="text-muted-foreground">QPS:</span>{' '}
-                                <span className="font-medium">{data.qps}</span>
-                              </div>
-                              <div>
-                                <span className="text-muted-foreground">Mean CPU:</span>{' '}
-                                <span className="font-medium">{data.cpuMean.toFixed(2)}%</span>
-                              </div>
-                              <div>
-                                <span className="text-muted-foreground">95% CI:</span>{' '}
-                                <span className="font-medium">
-                                  [{data.cpuConfLower.toFixed(2)}%, {data.cpuConfUpper.toFixed(2)}%]
-                                </span>
-                              </div>
-                            </div>
-                          </div>
-                        );
-                      }
-                      return null;
-                    }}
-                  />
-                  {/* Upper confidence interval line */}
-                  <Line
-                    type="monotone"
-                    dataKey="cpuConfUpper"
-                    stroke="#8884d8"
-                    strokeWidth={1}
-                    strokeDasharray="5 5"
-                    dot={false}
-                  />
-                  {/* Lower confidence interval line */}
-                  <Line
-                    type="monotone"
-                    dataKey="cpuConfLower"
-                    stroke="#8884d8"
-                    strokeWidth={1}
-                    strokeDasharray="5 5"
-                    dot={false}
-                  />
-                  {/* Mean CPU line */}
-                  <Line
-                    type="monotone"
-                    dataKey="cpuMean"
-                    stroke="#8884d8"
-                    strokeWidth={3}
-                    dot={{ fill: '#8884d8', r: 5 }}
-                  />
-                  {/* Linear reference line (origin to last point) - orange */}
-                  <Line
-                    type="linear"
-                    dataKey="linearRef"
-                    stroke="#f97316"
-                    strokeWidth={2}
-                    strokeDasharray="3 3"
-                    dot={false}
-                  />
-                </ComposedChart>
-              </ChartContainer>
-              <div className="mt-4 text-sm text-muted-foreground">
-                <div>Solid thick blue line: mean CPU usage</div>
-                <div>Blue dashed lines: 95% confidence interval boundaries</div>
-                <div>Orange dashed line: linear reference (origin to last point)</div>
-              </div>
-            </CardContent>
-          </Card>
-        );
-      })()}
 
       {/* Group Detail View */}
       {groupDetail && (
@@ -539,6 +363,28 @@ export function ExperimentGroups() {
                   <div>
                     <span className="text-sm text-muted-foreground">Description: </span>
                     <span className="text-sm">{groupDetail.group.description}</span>
+                  </div>
+                )}
+                {/* Environment Configuration */}
+                {groupDetail.group?.environmentConfig && (
+                  <div className="pt-2 border-t">
+                    <div className="text-sm font-medium mb-2">Environment:</div>
+                    <div className="grid grid-cols-2 gap-2 text-xs">
+                      <div>
+                        <span className="text-muted-foreground">Client: </span>
+                        <span className="font-medium">{groupDetail.group.environmentConfig.clientHost?.name}</span>
+                        <span className="text-muted-foreground ml-1">({groupDetail.group.environmentConfig.clientHost?.externalIP})</span>
+                      </div>
+                      <div>
+                        <span className="text-muted-foreground">Target: </span>
+                        {groupDetail.group.environmentConfig.targetHosts && groupDetail.group.environmentConfig.targetHosts.map((target, idx) => (
+                          <span key={idx}>
+                            <span className="font-medium">{target.name}</span>
+                            <span className="text-muted-foreground ml-1">({target.externalIP})</span>
+                          </span>
+                        ))}
+                      </div>
+                    </div>
                   </div>
                 )}
                 <div className="grid grid-cols-2 gap-4 pt-2">
@@ -574,6 +420,170 @@ export function ExperimentGroups() {
                   <span className="font-medium">QPS {groupDetail.group?.currentQPS}, Run {groupDetail.group?.currentRun}/{groupDetail.group?.config?.repeatCount}</span>
                 </div>
               </div>
+
+              {/* QPS vs CPU Chart for this Group */}
+              {groupDetail.group?.qpsPoints && groupDetail.group.qpsPoints.length > 0 && (() => {
+                // Extract data points from this group's QPS points
+                const dataPoints: Array<{qps: number; cpuMean: number; cpuConfLower: number; cpuConfUpper: number; groupId: string}> = [];
+
+                groupDetail.group.qpsPoints.forEach((qpsPoint: any) => {
+                  if (qpsPoint.statistics && Object.keys(qpsPoint.statistics).length > 0) {
+                    const hostName = Object.keys(qpsPoint.statistics)[0]; // Get first host
+                    const stats = qpsPoint.statistics[hostName];
+
+                    dataPoints.push({
+                      qps: qpsPoint.qps || 0,
+                      cpuMean: stats?.cpuMean || 0,
+                      cpuConfLower: stats?.cpuConfLower || 0,
+                      cpuConfUpper: stats?.cpuConfUpper || 0,
+                      groupId: `qps-${qpsPoint.qps}`,
+                    });
+                  }
+                });
+
+                if (dataPoints.length === 0) return null;
+
+                // Sort by QPS
+                const chartData = dataPoints.sort((a, b) => a.qps - b.qps);
+
+                // Add origin point (0,0)
+                chartData.unshift({
+                  qps: 0,
+                  cpuMean: 0,
+                  cpuConfLower: 0,
+                  cpuConfUpper: 0,
+                  groupId: 'origin',
+                });
+
+                // Calculate linear reference line from origin (0,0) to last point
+                if (chartData.length >= 2) {
+                  const lastPoint = chartData[chartData.length - 1];
+                  const slope = lastPoint.cpuMean / lastPoint.qps;
+
+                  chartData.forEach(point => {
+                    point.linearRef = slope * point.qps;
+                  });
+                }
+
+                const chartConfig: ChartConfig = {
+                  cpuMean: {
+                    label: "Mean CPU Usage",
+                    color: "hsl(var(--chart-1))",
+                  },
+                  cpuConfLower: {
+                    label: "95% CI Lower",
+                    color: "hsl(var(--chart-1))",
+                  },
+                  cpuConfUpper: {
+                    label: "95% CI Upper",
+                    color: "hsl(var(--chart-1))",
+                  },
+                };
+
+                return (
+                  <Card className="mb-4">
+                    <CardHeader>
+                      <CardTitle>QPS vs CPU Usage Analysis</CardTitle>
+                      <CardDescription>
+                        Average CPU usage across different QPS levels with 95% confidence interval boundaries
+                      </CardDescription>
+                    </CardHeader>
+                    <CardContent>
+                      <ChartContainer config={chartConfig}>
+                        <ComposedChart
+                          data={chartData}
+                          margin={{
+                            top: 20,
+                            right: 20,
+                            bottom: 40,
+                            left: 20,
+                          }}
+                        >
+                          <CartesianGrid strokeDasharray="3 3" />
+                          <XAxis
+                            dataKey="qps"
+                            type="number"
+                            domain={['dataMin', 'dataMax']}
+                            label={{ value: 'QPS (Requests per Second)', position: 'insideBottom', offset: -10 }}
+                          />
+                          <YAxis
+                            label={{ value: 'CPU Usage (%)', angle: -90, position: 'insideLeft' }}
+                          />
+                          <ChartTooltip
+                            content={({ active, payload }) => {
+                              if (active && payload && payload.length) {
+                                const data = payload[0].payload;
+                                return (
+                                  <div className="bg-background border rounded-lg p-3 shadow-lg">
+                                    <div className="font-semibold text-sm mb-2">{data.groupId}</div>
+                                    <div className="space-y-1 text-sm">
+                                      <div>
+                                        <span className="text-muted-foreground">QPS:</span>{' '}
+                                        <span className="font-medium">{data.qps}</span>
+                                      </div>
+                                      <div>
+                                        <span className="text-muted-foreground">Mean CPU:</span>{' '}
+                                        <span className="font-medium">{data.cpuMean.toFixed(2)}%</span>
+                                      </div>
+                                      <div>
+                                        <span className="text-muted-foreground">95% CI:</span>{' '}
+                                        <span className="font-medium">
+                                          [{data.cpuConfLower.toFixed(2)}%, {data.cpuConfUpper.toFixed(2)}%]
+                                        </span>
+                                      </div>
+                                    </div>
+                                  </div>
+                                );
+                              }
+                              return null;
+                            }}
+                          />
+                          {/* Upper confidence interval line */}
+                          <Line
+                            type="monotone"
+                            dataKey="cpuConfUpper"
+                            stroke="#8884d8"
+                            strokeWidth={1}
+                            strokeDasharray="5 5"
+                            dot={false}
+                          />
+                          {/* Lower confidence interval line */}
+                          <Line
+                            type="monotone"
+                            dataKey="cpuConfLower"
+                            stroke="#8884d8"
+                            strokeWidth={1}
+                            strokeDasharray="5 5"
+                            dot={false}
+                          />
+                          {/* Mean CPU line */}
+                          <Line
+                            type="monotone"
+                            dataKey="cpuMean"
+                            stroke="#8884d8"
+                            strokeWidth={3}
+                            dot={{ fill: '#8884d8', r: 5 }}
+                          />
+                          {/* Linear reference line (origin to last point) - orange */}
+                          <Line
+                            type="linear"
+                            dataKey="linearRef"
+                            stroke="#f97316"
+                            strokeWidth={2}
+                            strokeDasharray="3 3"
+                            dot={false}
+                          />
+                        </ComposedChart>
+                      </ChartContainer>
+                      <div className="mt-4 text-sm text-muted-foreground">
+                        <div>Solid thick blue line: mean CPU usage</div>
+                        <div>Blue dashed lines: 95% confidence interval boundaries</div>
+                        <div>Orange dashed line: linear reference (origin to last point)</div>
+                      </div>
+                    </CardContent>
+                  </Card>
+                );
+              })()}
 
               {/* QPS Points with Experiments */}
               <div>

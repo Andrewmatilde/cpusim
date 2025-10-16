@@ -506,11 +506,12 @@ func convertExperimentGroupToAPI(group dashboard.ExperimentGroup) generated.Expe
 			Timeout:      group.Config.Timeout,
 			DelayBetween: group.Config.DelayBetween,
 		},
-		QpsPoints:  apiQPSPoints,
-		StartTime:  group.StartTime,
-		EndTime:    group.EndTime,
-		Status:     group.Status,
-		CurrentQPS: group.CurrentQPS,
-		CurrentRun: group.CurrentRun,
+		EnvironmentConfig: convertConfigToAPI(group.EnvironmentConfig),
+		QpsPoints:         apiQPSPoints,
+		StartTime:         group.StartTime,
+		EndTime:           group.EndTime,
+		Status:            group.Status,
+		CurrentQPS:        group.CurrentQPS,
+		CurrentRun:        group.CurrentRun,
 	}
 }

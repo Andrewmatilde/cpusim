@@ -512,14 +512,15 @@ func (s *Service) StartExperimentGroup(groupID string, description string, confi
 		}
 
 		group = &ExperimentGroup{
-			GroupID:     groupID,
-			Description: description,
-			Config:      config,
-			QPSPoints:   qpsPoints,
-			StartTime:   time.Now(),
-			Status:      "running",
-			CurrentQPS:  0,
-			CurrentRun:  0,
+			GroupID:           groupID,
+			Description:       description,
+			Config:            config,
+			EnvironmentConfig: s.config,
+			QPSPoints:         qpsPoints,
+			StartTime:         time.Now(),
+			Status:            "running",
+			CurrentQPS:        0,
+			CurrentRun:        0,
 		}
 	}
 
@@ -565,9 +566,29 @@ func (s *Service) executeExperimentGroup(groupID string, group *ExperimentGroup)
 		}
 
 		// Determine starting run (for resume)
+		// If the last experiment doesn't exist or failed, re-run it
+		// Otherwise, start from the next run
 		startRun := 1
 		if len(qpsPoint.Experiments) > 0 {
-			startRun = len(qpsPoint.Experiments) + 1
+			// Check if the last experiment actually exists and completed
+			lastExpID := qpsPoint.Experiments[len(qpsPoint.Experiments)-1]
+			lastExpData, err := s.GetExperiment(lastExpID)
+
+			// If the last experiment is missing or incomplete, re-run it
+			if err != nil || lastExpData.Status != "completed" {
+				// Remove the failed experiment from the list and re-run it
+				s.logger.Warn().
+					Str("experiment_id", lastExpID).
+					Str("group_id", groupID).
+					Msg("Last experiment failed or missing, will re-run")
+
+				// Remove last experiment from list
+				group.QPSPoints[qpsIdx].Experiments = qpsPoint.Experiments[:len(qpsPoint.Experiments)-1]
+				startRun = len(group.QPSPoints[qpsIdx].Experiments) + 1
+			} else {
+				// Last experiment completed successfully, start from next run
+				startRun = len(qpsPoint.Experiments) + 1
+			}
 		}
 
 		// Run RepeatCount experiments for this QPS

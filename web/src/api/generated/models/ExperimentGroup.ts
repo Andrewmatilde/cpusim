@@ -27,6 +27,13 @@ import {
     QPSPointToJSON,
     QPSPointToJSONTyped,
 } from './QPSPoint';
+import type { ServiceConfig } from './ServiceConfig';
+import {
+    ServiceConfigFromJSON,
+    ServiceConfigFromJSONTyped,
+    ServiceConfigToJSON,
+    ServiceConfigToJSONTyped,
+} from './ServiceConfig';
 
 /**
  * 
@@ -52,6 +59,12 @@ export interface ExperimentGroup {
      * @memberof ExperimentGroup
      */
     config?: ExperimentGroupConfig;
+    /**
+     * 
+     * @type {ServiceConfig}
+     * @memberof ExperimentGroup
+     */
+    environmentConfig?: ServiceConfig;
     /**
      * Results organized by QPS value
      * @type {Array<QPSPoint>}
@@ -110,6 +123,7 @@ export function ExperimentGroupFromJSONTyped(json: any, ignoreDiscriminator: boo
         'groupId': json['groupId'] == null ? undefined : json['groupId'],
         'description': json['description'] == null ? undefined : json['description'],
         'config': json['config'] == null ? undefined : ExperimentGroupConfigFromJSON(json['config']),
+        'environmentConfig': json['environmentConfig'] == null ? undefined : ServiceConfigFromJSON(json['environmentConfig']),
         'qpsPoints': json['qpsPoints'] == null ? undefined : ((json['qpsPoints'] as Array<any>).map(QPSPointFromJSON)),
         'startTime': json['startTime'] == null ? undefined : (new Date(json['startTime'])),
         'endTime': json['endTime'] == null ? undefined : (new Date(json['endTime'])),
@@ -133,6 +147,7 @@ export function ExperimentGroupToJSONTyped(value?: ExperimentGroup | null, ignor
         'groupId': value['groupId'],
         'description': value['description'],
         'config': ExperimentGroupConfigToJSON(value['config']),
+        'environmentConfig': ServiceConfigToJSON(value['environmentConfig']),
         'qpsPoints': value['qpsPoints'] == null ? undefined : ((value['qpsPoints'] as Array<any>).map(QPSPointToJSON)),
         'startTime': value['startTime'] == null ? undefined : ((value['startTime']).toISOString()),
         'endTime': value['endTime'] == null ? undefined : ((value['endTime']).toISOString()),
