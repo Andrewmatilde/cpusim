@@ -125,7 +125,7 @@ export function ExperimentGroupDetail() {
             {groupData.environmentConfig && (
               <div className="pt-2 border-t">
                 <div className="text-sm font-medium mb-2">Environment:</div>
-                <div className="grid grid-cols-2 gap-2 text-xs">
+                <div className="grid grid-cols-3 gap-2 text-xs">
                   <div>
                     <span className="text-muted-foreground">Client: </span>
                     <span className="font-medium">{groupData.environmentConfig.clientHost?.name}</span>
@@ -140,6 +140,13 @@ export function ExperimentGroupDetail() {
                       </span>
                     ))}
                   </div>
+                  {groupData.environmentConfig.loadBalancer && (
+                    <div>
+                      <span className="text-muted-foreground">LoadBalancer: </span>
+                      <span className="font-medium">{groupData.environmentConfig.loadBalancer.name}</span>
+                      <span className="text-muted-foreground ml-1">({groupData.environmentConfig.loadBalancer.internalIP})</span>
+                    </div>
+                  )}
                 </div>
               </div>
             )}
