@@ -1,6 +1,7 @@
 import { BrowserRouter, Routes, Route, Link, useLocation } from "react-router-dom"
 import { Dashboard } from "@/components/Dashboard"
 import { ExperimentGroups } from "@/components/ExperimentGroups"
+import { ExperimentDetail } from "@/components/ExperimentDetail"
 import { Activity, Layers } from "lucide-react"
 import { Toaster } from "@/components/ui/sonner"
 
@@ -56,6 +57,7 @@ function App() {
           <Routes>
             <Route path="/" element={<Dashboard />} />
             <Route path="/groups" element={<ExperimentGroups />} />
+            <Route path="/experiment/:experimentId" element={<ExperimentDetail />} />
           </Routes>
         </main>
       </div>
