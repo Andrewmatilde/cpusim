@@ -28,7 +28,6 @@ export function ExperimentGroupDetail() {
         setLoading(true);
         const data = await apiClient.getExperimentGroupWithDetails(groupId);
         setGroupData(data.group || null);
-        toast.success('Experiment group loaded');
       } catch (error) {
         toast.error('Failed to load experiment group');
         console.error('Load group error:', error);
