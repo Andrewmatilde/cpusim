@@ -14,7 +14,7 @@ import type {
   StartExperimentRequest,
   HostsStatusResponse
 } from '@/api/types';
-import { RefreshCw, Server, AlertCircle, Play, Square, Download, Loader2, Activity, Laptop, History, FileText } from 'lucide-react';
+import { RefreshCw, Server, AlertCircle, Play, Square, Download, Loader2, Activity, Laptop, History, FileText, Network } from 'lucide-react';
 import { toast } from 'sonner';
 
 export function Dashboard() {
@@ -145,7 +145,7 @@ export function Dashboard() {
 
         {/* Configuration Display */}
         {config && (
-          <div className="grid lg:grid-cols-2 gap-6">
+          <div className="grid lg:grid-cols-3 gap-6">
             {/* Target Hosts */}
             <Card>
               <CardHeader>
@@ -249,6 +249,41 @@ export function Dashboard() {
                 )}
               </CardContent>
             </Card>
+
+            {/* Load Balancer */}
+            {config.loadBalancer && (
+              <Card>
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2">
+                    <Network className="h-5 w-5" />
+                    Load Balancer
+                  </CardTitle>
+                  <CardDescription>
+                    Distributing traffic to target hosts
+                  </CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <div className="border rounded-lg p-3 space-y-1">
+                    <div className="font-medium">{config.loadBalancer.name}</div>
+                    {config.loadBalancer.internalIP && (
+                      <div className="text-sm text-muted-foreground">
+                        Internal IP: {config.loadBalancer.internalIP}
+                      </div>
+                    )}
+                    {config.loadBalancer.externalIP && (
+                      <div className="text-sm text-muted-foreground">
+                        External IP: {config.loadBalancer.externalIP}
+                      </div>
+                    )}
+                    {config.loadBalancer.serviceURL && (
+                      <div className="text-xs text-muted-foreground pt-1">
+                        Service: {config.loadBalancer.serviceURL}
+                      </div>
+                    )}
+                  </div>
+                </CardContent>
+              </Card>
+            )}
           </div>
         )}
 
