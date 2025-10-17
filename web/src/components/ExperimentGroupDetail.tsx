@@ -39,15 +39,25 @@ export function ExperimentGroupDetail() {
     };
 
     loadGroupData();
-    // Refresh every 5 seconds if group is running
-    const interval = setInterval(() => {
-      if (groupData?.status === 'running') {
-        loadGroupData();
+  }, [groupId, navigate]);
+
+  // Separate effect for auto-refresh
+  useEffect(() => {
+    if (!groupData || groupData.status !== 'running') {
+      return;
+    }
+
+    const interval = setInterval(async () => {
+      try {
+        const data = await apiClient.getExperimentGroupWithDetails(groupId!);
+        setGroupData(data.group || null);
+      } catch (error) {
+        console.error('Auto-refresh error:', error);
       }
     }, 5000);
 
     return () => clearInterval(interval);
-  }, [groupId, navigate, groupData?.status]);
+  }, [groupData?.status, groupId]);
 
   const formatDuration = (start: Date | string, end?: Date | string) => {
     if (!end) return 'In progress...';
