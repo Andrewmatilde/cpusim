@@ -410,105 +410,22 @@ export function Dashboard() {
         {/* Experiment Data Display */}
         {experimentData && (
           <div className="space-y-6">
-            {/* Experiment Summary */}
+            {/* Header with Close Button */}
             <Card>
               <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <Download className="h-5 w-5" />
-                  Experiment Summary
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="space-y-4">
-                  {/* Basic Info */}
-                  <div className="grid grid-cols-3 gap-4">
-                    <div>
-                      <div className="text-sm text-muted-foreground">Status</div>
-                      <Badge className="mt-1">{experimentData.status}</Badge>
-                    </div>
-                    {experimentData.duration && (
-                      <div>
-                        <div className="text-sm text-muted-foreground">Duration</div>
-                        <div className="text-lg font-medium">{experimentData.duration.toFixed(2)}s</div>
-                      </div>
-                    )}
-                    <div>
-                      <div className="text-sm text-muted-foreground">Time Range</div>
-                      <div className="text-sm">
-                        {experimentData.startTime && new Date(experimentData.startTime).toLocaleTimeString()} -
-                        {experimentData.endTime && new Date(experimentData.endTime).toLocaleTimeString()}
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Errors */}
-                  {experimentData.errors && experimentData.errors.length > 0 && (
-                    <div>
-                      <h3 className="font-semibold mb-2 text-red-500">Errors</h3>
-                      <div className="space-y-1">
-                        {experimentData.errors.map((error, idx) => (
-                          <Alert key={idx} variant="destructive">
-                            <AlertDescription>
-                              [{error.phase}] {error.message}
-                            </AlertDescription>
-                          </Alert>
-                        ))}
-                      </div>
-                    </div>
-                  )}
+                <div className="flex items-center justify-between">
+                  <CardTitle className="flex items-center gap-2">
+                    <Download className="h-5 w-5" />
+                    Experiment Data View
+                  </CardTitle>
+                  <Button onClick={() => setExperimentData(null)} variant="outline" size="sm">
+                    Close
+                  </Button>
                 </div>
-              </CardContent>
+              </CardHeader>
             </Card>
 
-            {/* Requester Statistics */}
-            {experimentData.requesterResult?.stats && (
-              <Card>
-                <CardHeader>
-                  <CardTitle className="flex items-center gap-2">
-                    <BarChart3 className="h-5 w-5" />
-                    Request Statistics
-                  </CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                    <div>
-                      <div className="text-sm text-muted-foreground">Total Requests</div>
-                      <div className="text-2xl font-bold">{experimentData.requesterResult.stats.totalRequests || 0}</div>
-                    </div>
-                    <div>
-                      <div className="text-sm text-muted-foreground">Successful</div>
-                      <div className="text-2xl font-bold text-green-600">{experimentData.requesterResult.stats.successfulRequests || 0}</div>
-                    </div>
-                    <div>
-                      <div className="text-sm text-muted-foreground">Failed</div>
-                      <div className="text-2xl font-bold text-red-600">{experimentData.requesterResult.stats.failedRequests || 0}</div>
-                    </div>
-                    <div>
-                      <div className="text-sm text-muted-foreground">QPS</div>
-                      <div className="text-2xl font-bold">{experimentData.requesterResult.stats.requestsPerSecond?.toFixed(2) || 0}</div>
-                    </div>
-                    <div>
-                      <div className="text-sm text-muted-foreground">Avg Response Time</div>
-                      <div className="text-xl font-bold">{experimentData.requesterResult.stats.averageResponseTime?.toFixed(2) || 0} ms</div>
-                    </div>
-                    <div>
-                      <div className="text-sm text-muted-foreground">P50</div>
-                      <div className="text-xl font-bold">{experimentData.requesterResult.stats.responseTimeP50?.toFixed(2) || 0} ms</div>
-                    </div>
-                    <div>
-                      <div className="text-sm text-muted-foreground">P95</div>
-                      <div className="text-xl font-bold">{experimentData.requesterResult.stats.responseTimeP95?.toFixed(2) || 0} ms</div>
-                    </div>
-                    <div>
-                      <div className="text-sm text-muted-foreground">P99</div>
-                      <div className="text-xl font-bold">{experimentData.requesterResult.stats.responseTimeP99?.toFixed(2) || 0} ms</div>
-                    </div>
-                  </div>
-                </CardContent>
-              </Card>
-            )}
-
-            {/* Collector Metrics - CPU Charts */}
+            {/* Collector Metrics - CPU Charts - MOVED TO TOP */}
             {experimentData.collectorResults && Object.entries(experimentData.collectorResults).map(([hostName, result]) => {
               if (!result.data?.metrics || result.data.metrics.length === 0) return null;
 
@@ -620,6 +537,104 @@ export function Dashboard() {
                 </Card>
               );
             })}
+
+            {/* Experiment Summary */}
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <Download className="h-5 w-5" />
+                  Experiment Summary
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="space-y-4">
+                  {/* Basic Info */}
+                  <div className="grid grid-cols-3 gap-4">
+                    <div>
+                      <div className="text-sm text-muted-foreground">Status</div>
+                      <Badge className="mt-1">{experimentData.status}</Badge>
+                    </div>
+                    {experimentData.duration && (
+                      <div>
+                        <div className="text-sm text-muted-foreground">Duration</div>
+                        <div className="text-lg font-medium">{experimentData.duration.toFixed(2)}s</div>
+                      </div>
+                    )}
+                    <div>
+                      <div className="text-sm text-muted-foreground">Time Range</div>
+                      <div className="text-sm">
+                        {experimentData.startTime && new Date(experimentData.startTime).toLocaleTimeString()} -
+                        {experimentData.endTime && new Date(experimentData.endTime).toLocaleTimeString()}
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Errors */}
+                  {experimentData.errors && experimentData.errors.length > 0 && (
+                    <div>
+                      <h3 className="font-semibold mb-2 text-red-500">Errors</h3>
+                      <div className="space-y-1">
+                        {experimentData.errors.map((error, idx) => (
+                          <Alert key={idx} variant="destructive">
+                            <AlertDescription>
+                              [{error.phase}] {error.message}
+                            </AlertDescription>
+                          </Alert>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </CardContent>
+            </Card>
+
+            {/* Requester Statistics */}
+            {experimentData.requesterResult?.stats && (
+              <Card>
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2">
+                    <BarChart3 className="h-5 w-5" />
+                    Request Statistics
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                    <div>
+                      <div className="text-sm text-muted-foreground">Total Requests</div>
+                      <div className="text-2xl font-bold">{experimentData.requesterResult.stats.totalRequests || 0}</div>
+                    </div>
+                    <div>
+                      <div className="text-sm text-muted-foreground">Successful</div>
+                      <div className="text-2xl font-bold text-green-600">{experimentData.requesterResult.stats.successfulRequests || 0}</div>
+                    </div>
+                    <div>
+                      <div className="text-sm text-muted-foreground">Failed</div>
+                      <div className="text-2xl font-bold text-red-600">{experimentData.requesterResult.stats.failedRequests || 0}</div>
+                    </div>
+                    <div>
+                      <div className="text-sm text-muted-foreground">QPS</div>
+                      <div className="text-2xl font-bold">{experimentData.requesterResult.stats.requestsPerSecond?.toFixed(2) || 0}</div>
+                    </div>
+                    <div>
+                      <div className="text-sm text-muted-foreground">Avg Response Time</div>
+                      <div className="text-xl font-bold">{experimentData.requesterResult.stats.averageResponseTime?.toFixed(2) || 0} ms</div>
+                    </div>
+                    <div>
+                      <div className="text-sm text-muted-foreground">P50</div>
+                      <div className="text-xl font-bold">{experimentData.requesterResult.stats.responseTimeP50?.toFixed(2) || 0} ms</div>
+                    </div>
+                    <div>
+                      <div className="text-sm text-muted-foreground">P95</div>
+                      <div className="text-xl font-bold">{experimentData.requesterResult.stats.responseTimeP95?.toFixed(2) || 0} ms</div>
+                    </div>
+                    <div>
+                      <div className="text-sm text-muted-foreground">P99</div>
+                      <div className="text-xl font-bold">{experimentData.requesterResult.stats.responseTimeP99?.toFixed(2) || 0} ms</div>
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+            )}
           </div>
         )}
     </div>

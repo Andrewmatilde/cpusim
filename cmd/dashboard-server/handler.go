@@ -167,14 +167,14 @@ func (h *APIHandler) GetExperimentData(c *gin.Context, experimentId string) {
 		return
 	}
 
-	// Convert ExperimentData to API response
+	// Convert ExperimentData to API response (include metrics for single experiment view)
 	response := generated.ExperimentData{
 		Config:           convertConfigToAPI(data.Config),
 		StartTime:        data.StartTime,
 		EndTime:          data.EndTime,
 		Duration:         float32(data.Duration),
 		Status:           data.Status,
-		CollectorResults: convertCollectorResultsToAPI(data.CollectorResults),
+		CollectorResults: convertCollectorResultsToAPI(data.CollectorResults, true), // Include metrics
 		RequesterResult:  convertRequesterResultToAPI(data.RequesterResult),
 		Errors:           convertErrorsToAPI(data.Errors),
 	}
@@ -372,7 +372,7 @@ func (h *APIHandler) GetExperimentGroupWithDetails(c *gin.Context, groupId strin
 			EndTime:          exp.EndTime,
 			Duration:         float32(exp.Duration),
 			Status:           exp.Status,
-			CollectorResults: convertCollectorResultsToAPI(exp.CollectorResults),
+			CollectorResults: convertCollectorResultsToAPI(exp.CollectorResults, false), // Exclude metrics for group list
 			RequesterResult:  convertRequesterResultToAPI(exp.RequesterResult),
 			Errors:           convertErrorsToAPI(exp.Errors),
 		}
@@ -418,7 +418,7 @@ func convertClientHostToAPI(host dashboard.ClientHost) generated.ClientHost {
 	}
 }
 
-func convertCollectorResultsToAPI(results map[string]dashboard.CollectorResult) map[string]generated.CollectorResult {
+func convertCollectorResultsToAPI(results map[string]dashboard.CollectorResult, includeMetrics bool) map[string]generated.CollectorResult {
 	apiResults := make(map[string]generated.CollectorResult)
 	for key, result := range results {
 		apiResult := generated.CollectorResult{
@@ -426,11 +426,17 @@ func convertCollectorResultsToAPI(results map[string]dashboard.CollectorResult) 
 			Status:   result.Status,
 			Error:    result.Error,
 		}
-		// Include experiment data but clear metrics to reduce data transfer
+		// Include experiment data
 		if result.Data != nil {
-			dataCopy := *result.Data
-			dataCopy.Metrics = nil // Clear time-series metrics
-			apiResult.Data = dataCopy
+			if includeMetrics {
+				// Keep all data including metrics for single experiment view
+				apiResult.Data = *result.Data
+			} else {
+				// Clear metrics to reduce data transfer for experiment group list
+				dataCopy := *result.Data
+				dataCopy.Metrics = nil
+				apiResult.Data = dataCopy
+			}
 		}
 		apiResults[key] = apiResult
 	}
