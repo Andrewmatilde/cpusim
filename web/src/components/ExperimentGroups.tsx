@@ -8,7 +8,6 @@ import { Label } from '@/components/ui/label';
 import { apiClient } from '@/api/client';
 import type {
   ExperimentGroupListResponse,
-  ExperimentGroupDetail,
   StartExperimentGroupRequest,
   ExperimentGroup
 } from '@/api/generated';
@@ -20,7 +19,7 @@ import { ChartContainer, ChartTooltip, ChartTooltipContent } from '@/components/
 
 export function ExperimentGroups() {
   const [groupsList, setGroupsList] = useState<ExperimentGroupListResponse | null>(null);
-  const [groupDetail, setGroupDetail] = useState<ExperimentGroupDetail | null>(null);
+  const [selectedGroup, setSelectedGroup] = useState<ExperimentGroup | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -85,15 +84,8 @@ export function ExperimentGroups() {
     }
   };
 
-  const handleViewGroup = async (gId: string) => {
-    try {
-      const detail = await apiClient.getExperimentGroupWithDetails(gId);
-      setGroupDetail(detail);
-      toast.success('Group details loaded');
-    } catch (err) {
-      toast.error('Failed to load group details');
-      console.error('Load group error:', err);
-    }
+  const handleViewGroup = (group: ExperimentGroup) => {
+    setSelectedGroup(group);
   };
 
   const handleResumeGroup = async (gId: string, e: React.MouseEvent) => {
@@ -280,7 +272,7 @@ export function ExperimentGroups() {
                 <div
                   key={group.groupId}
                   className="border rounded-lg p-4 hover:bg-accent cursor-pointer transition-colors"
-                  onClick={() => group.groupId && handleViewGroup(group.groupId)}
+                  onClick={() => handleViewGroup(group)}
                 >
                   <div className="flex items-start justify-between">
                     <div className="flex-1">
@@ -336,15 +328,15 @@ export function ExperimentGroups() {
 
 
       {/* Group Detail View */}
-      {groupDetail && (
+      {selectedGroup && (
         <Card>
           <CardHeader>
             <div className="flex items-center justify-between">
               <CardTitle className="flex items-center gap-2">
                 <Layers className="h-5 w-5" />
-                Group Details: {groupDetail.group?.groupId}
+                Group Details: {selectedGroup.groupId}
               </CardTitle>
-              <Button onClick={() => setGroupDetail(null)} variant="outline" size="sm">
+              <Button onClick={() => setSelectedGroup(null)} variant="outline" size="sm">
                 Close
               </Button>
             </div>
@@ -355,29 +347,29 @@ export function ExperimentGroups() {
               <div className="border rounded-lg p-4 space-y-2">
                 <div className="flex items-center gap-2">
                   <span className="text-sm text-muted-foreground">Status:</span>
-                  <Badge variant={groupDetail.group?.status === 'completed' ? 'default' : 'secondary'}>
-                    {groupDetail.group?.status}
+                  <Badge variant={selectedGroup.status === 'completed' ? 'default' : 'secondary'}>
+                    {selectedGroup.status}
                   </Badge>
                 </div>
-                {groupDetail.group?.description && (
+                {selectedGroup.description && (
                   <div>
                     <span className="text-sm text-muted-foreground">Description: </span>
-                    <span className="text-sm">{groupDetail.group.description}</span>
+                    <span className="text-sm">{selectedGroup.description}</span>
                   </div>
                 )}
                 {/* Environment Configuration */}
-                {groupDetail.group?.environmentConfig && (
+                {selectedGroup.environmentConfig && (
                   <div className="pt-2 border-t">
                     <div className="text-sm font-medium mb-2">Environment:</div>
                     <div className="grid grid-cols-2 gap-2 text-xs">
                       <div>
                         <span className="text-muted-foreground">Client: </span>
-                        <span className="font-medium">{groupDetail.group.environmentConfig.clientHost?.name}</span>
-                        <span className="text-muted-foreground ml-1">({groupDetail.group.environmentConfig.clientHost?.externalIP})</span>
+                        <span className="font-medium">{selectedGroup.environmentConfig.clientHost?.name}</span>
+                        <span className="text-muted-foreground ml-1">({selectedGroup.environmentConfig.clientHost?.externalIP})</span>
                       </div>
                       <div>
                         <span className="text-muted-foreground">Target: </span>
-                        {groupDetail.group.environmentConfig.targetHosts && groupDetail.group.environmentConfig.targetHosts.map((target, idx) => (
+                        {selectedGroup.environmentConfig.targetHosts && selectedGroup.environmentConfig.targetHosts.map((target, idx) => (
                           <span key={idx}>
                             <span className="font-medium">{target.name}</span>
                             <span className="text-muted-foreground ml-1">({target.externalIP})</span>
@@ -391,42 +383,42 @@ export function ExperimentGroups() {
                   <div>
                     <div className="text-sm text-muted-foreground">QPS Range</div>
                     <div className="text-lg font-medium">
-                      {groupDetail.group?.config?.qpsMin} - {groupDetail.group?.config?.qpsMax} (step {groupDetail.group?.config?.qpsStep})
+                      {selectedGroup.config?.qpsMin} - {selectedGroup.config?.qpsMax} (step {selectedGroup.config?.qpsStep})
                     </div>
                   </div>
                   <div>
                     <div className="text-sm text-muted-foreground">Duration</div>
                     <div className="text-lg font-medium">
-                      {groupDetail.group?.startTime && formatDuration(groupDetail.group.startTime, groupDetail.group.endTime)}
+                      {selectedGroup.startTime && formatDuration(selectedGroup.startTime, selectedGroup.endTime)}
                     </div>
                   </div>
                 </div>
                 <div className="grid grid-cols-3 gap-4 pt-2 text-sm">
                   <div>
                     <span className="text-muted-foreground">Timeout: </span>
-                    <span className="font-medium">{groupDetail.group?.config?.timeout}s</span>
+                    <span className="font-medium">{selectedGroup.config?.timeout}s</span>
                   </div>
                   <div>
                     <span className="text-muted-foreground">Repeat per QPS: </span>
-                    <span className="font-medium">{groupDetail.group?.config?.repeatCount}</span>
+                    <span className="font-medium">{selectedGroup.config?.repeatCount}</span>
                   </div>
                   <div>
                     <span className="text-muted-foreground">Delay: </span>
-                    <span className="font-medium">{groupDetail.group?.config?.delayBetween}s</span>
+                    <span className="font-medium">{selectedGroup.config?.delayBetween}s</span>
                   </div>
                 </div>
                 <div className="text-sm pt-2">
                   <span className="text-muted-foreground">Progress: </span>
-                  <span className="font-medium">QPS {groupDetail.group?.currentQPS}, Run {groupDetail.group?.currentRun}/{groupDetail.group?.config?.repeatCount}</span>
+                  <span className="font-medium">QPS {selectedGroup.currentQPS}, Run {selectedGroup.currentRun}/{selectedGroup.config?.repeatCount}</span>
                 </div>
               </div>
 
               {/* QPS vs CPU Chart for this Group */}
-              {groupDetail.group?.qpsPoints && groupDetail.group.qpsPoints.length > 0 && (() => {
+              {selectedGroup.qpsPoints && selectedGroup.qpsPoints.length > 0 && (() => {
                 // Extract data points from this group's QPS points
                 const dataPoints: Array<{qps: number; cpuMean: number; cpuConfLower: number; cpuConfUpper: number; groupId: string; linearRef?: number}> = [];
 
-                groupDetail.group.qpsPoints.forEach((qpsPoint: any) => {
+                selectedGroup.qpsPoints.forEach((qpsPoint: any) => {
                   if (qpsPoint.statistics && Object.keys(qpsPoint.statistics).length > 0) {
                     const hostName = Object.keys(qpsPoint.statistics)[0]; // Get first host
                     const stats = qpsPoint.statistics[hostName];
@@ -589,7 +581,7 @@ export function ExperimentGroups() {
               <div>
                 <h3 className="font-semibold mb-3">QPS Points and Experiments</h3>
                 <div className="space-y-4">
-                  {groupDetail.group?.qpsPoints?.map((qpsPoint: any, qpsIdx) => (
+                  {selectedGroup.qpsPoints?.map((qpsPoint: any, qpsIdx) => (
                     <div key={qpsIdx} className="border rounded-lg p-4">
                       <div className="flex items-center justify-between mb-3">
                         <h4 className="font-semibold">QPS: {qpsPoint.qps}</h4>
@@ -611,187 +603,21 @@ export function ExperimentGroups() {
                         </div>
                       )}
 
-                      {/* Experiments for this QPS */}
-                      <div className="space-y-2">
-                        {qpsPoint.experiments?.map((expId: string) => {
-                          const expData = groupDetail.experimentDetails?.find((exp: any) =>
-                            groupDetail.experimentDetails?.indexOf(exp) ===
-                            groupDetail.experimentDetails?.findIndex((e: any) => {
-                              // Match experiment IDs from group
-                              const allExpIds: string[] = [];
-                              groupDetail.group?.qpsPoints?.forEach((qp: any) => {
-                                qp.experiments?.forEach((id: string) => allExpIds.push(id));
-                              });
-                              return allExpIds[groupDetail.experimentDetails?.indexOf(exp) || 0] === expId;
-                            })
-                          );
-
-                          return (
-                            <div key={expId} className="border rounded p-2 text-sm">
-                              <div className="flex items-center justify-between">
-                                <span className="font-medium text-xs">{expId}</span>
-                                {expData && (
-                                  <Badge variant={expData.status === 'completed' ? 'default' : 'secondary'} className="text-xs">
-                                    {expData.status}
-                                  </Badge>
-                                )}
-                              </div>
-                              {expData && (
-                                <div className="grid grid-cols-3 gap-2 mt-1 text-xs">
-                                  <div>
-                                    <span className="text-muted-foreground">Duration: </span>
-                                    <span>{expData.duration?.toFixed(2)}s</span>
-                                  </div>
-                                  {expData.requesterResult?.stats && (
-                                    <>
-                                      <div>
-                                        <span className="text-muted-foreground">Requests: </span>
-                                        <span>{expData.requesterResult.stats.totalRequests}</span>
-                                      </div>
-                                      <div>
-                                        <span className="text-muted-foreground">Avg RT: </span>
-                                        <span>{expData.requesterResult.stats.averageResponseTime?.toFixed(2)}ms</span>
-                                      </div>
-                                    </>
-                                  )}
-                                </div>
-                              )}
-                            </div>
-                          );
-                        })}
+                      {/* Experiments list for this QPS */}
+                      <div className="space-y-1">
+                        <div className="text-xs text-muted-foreground">Experiments ({qpsPoint.experiments?.length || 0}):</div>
+                        <div className="flex flex-wrap gap-1">
+                          {qpsPoint.experiments?.map((expId: string) => (
+                            <Badge key={expId} variant="outline" className="text-xs">
+                              {expId}
+                            </Badge>
+                          ))}
+                        </div>
                       </div>
                     </div>
                   ))}
                 </div>
               </div>
-
-              {/* Aggregated CPU Chart */}
-              {groupDetail.experimentDetails && groupDetail.experimentDetails.length > 0 && (() => {
-                // Process all experiments and aggregate CPU data
-                // Collect all data points with relative timestamps
-                const experimentSeriesData: { [expId: string]: Array<{ relativeTime: number; cpuUsage: number }> } = {};
-                let maxDuration = 0;
-
-                // Build array of all experiment IDs from qpsPoints
-                const allExpIds: string[] = [];
-                groupDetail.group?.qpsPoints?.forEach((qp: any) => {
-                  qp.experiments?.forEach((id: string) => allExpIds.push(id));
-                });
-
-                groupDetail.experimentDetails.forEach((expData, idx) => {
-                  const expId = allExpIds[idx];
-                  if (!expId) return;
-                  if (!expData.collectorResults) return;
-
-                  // Get first target host's data
-                  const hostResults = Object.values(expData.collectorResults)[0];
-                  if (!hostResults?.data?.metrics || hostResults.data.metrics.length === 0) return;
-
-                  const startTime = new Date(hostResults.data.startTime).getTime();
-                  const dataPoints = hostResults.data.metrics.map((metric: any) => {
-                    const timestamp = new Date(metric.timestamp).getTime();
-                    const relativeTime = (timestamp - startTime) / 1000; // Convert to seconds
-                    return {
-                      relativeTime,
-                      cpuUsage: metric.systemMetrics?.cpuUsagePercent || 0
-                    };
-                  });
-
-                  experimentSeriesData[expId] = dataPoints;
-                  const expDuration = Math.max(...dataPoints.map(p => p.relativeTime));
-                  if (expDuration > maxDuration) maxDuration = expDuration;
-                });
-
-                // Create unified time points (every 0.5 seconds)
-                const timePoints: number[] = [];
-                for (let t = 0; t <= Math.ceil(maxDuration) + 1; t += 0.5) {
-                  timePoints.push(t);
-                }
-
-                // Build chart data
-                const chartData = timePoints.map(time => {
-                  const point: any = { time: time.toFixed(1) };
-                  Object.keys(experimentSeriesData).forEach((expId, idx) => {
-                    const dataPoints = experimentSeriesData[expId];
-                    // Find closest data point
-                    let closestPoint = dataPoints[0];
-                    let minDiff = Math.abs(dataPoints[0].relativeTime - time);
-
-                    for (const dp of dataPoints) {
-                      const diff = Math.abs(dp.relativeTime - time);
-                      if (diff < minDiff) {
-                        minDiff = diff;
-                        closestPoint = dp;
-                      }
-                    }
-
-                    if (minDiff <= 1.0) { // Only include if within 1 second
-                      point[`run${idx + 1}`] = closestPoint.cpuUsage;
-                    }
-                  });
-                  return point;
-                });
-
-                // Build chart config dynamically using CSS variables
-                const chartConfig: ChartConfig = {};
-                Object.keys(experimentSeriesData).forEach((expId, idx) => {
-                  const runKey = `run${idx + 1}`;
-                  const chartColorVar = `var(--chart-${(idx % 10) + 1})`;
-                  chartConfig[runKey] = {
-                    label: `Run ${idx + 1}`,
-                    color: chartColorVar
-                  };
-                });
-
-                return (
-                  <Card>
-                    <CardHeader>
-                      <CardTitle>Aggregated CPU Usage Comparison</CardTitle>
-                      <CardDescription>
-                        Comparing CPU usage across {Object.keys(experimentSeriesData).length} experiment runs
-                      </CardDescription>
-                    </CardHeader>
-                    <CardContent>
-                      <ChartContainer config={chartConfig}>
-                        <LineChart
-                          accessibilityLayer
-                          data={chartData}
-                          margin={{
-                            left: 12,
-                            right: 12,
-                          }}
-                        >
-                          <CartesianGrid vertical={false} />
-                          <XAxis
-                            dataKey="time"
-                            tickLine={false}
-                            axisLine={false}
-                            tickMargin={8}
-                            tickFormatter={(value) => value}
-                          />
-                          <ChartTooltip
-                            cursor={false}
-                            content={<ChartTooltipContent indicator="line" />}
-                          />
-                          {Object.keys(experimentSeriesData).map((expId, idx) => {
-                            const runKey = `run${idx + 1}`;
-                            return (
-                              <Line
-                                key={expId}
-                                dataKey={runKey}
-                                type="natural"
-                                stroke={`var(--color-${runKey})`}
-                                strokeWidth={2}
-                                dot={false}
-                              />
-                            );
-                          })}
-                        </LineChart>
-                      </ChartContainer>
-                    </CardContent>
-                  </Card>
-                );
-              })()}
 
             </div>
           </CardContent>
