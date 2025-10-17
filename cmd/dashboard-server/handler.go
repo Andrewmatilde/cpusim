@@ -426,9 +426,11 @@ func convertCollectorResultsToAPI(results map[string]dashboard.CollectorResult) 
 			Status:   result.Status,
 			Error:    result.Error,
 		}
-		// Include complete experiment data if available
+		// Include experiment data but clear metrics to reduce data transfer
 		if result.Data != nil {
-			apiResult.Data = *result.Data
+			dataCopy := *result.Data
+			dataCopy.Metrics = nil // Clear time-series metrics
+			apiResult.Data = dataCopy
 		}
 		apiResults[key] = apiResult
 	}
