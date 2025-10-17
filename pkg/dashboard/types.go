@@ -16,6 +16,9 @@ type Config struct {
 
 	// Client host configuration
 	ClientHost ClientHost `json:"client_host"`
+
+	// Load balancer configuration (optional)
+	LoadBalancer *LoadBalancer `json:"load_balancer,omitempty"`
 }
 
 // TargetHost represents a target server to collect metrics from
@@ -37,6 +40,16 @@ type ClientHost struct {
 
 	// Service URL
 	RequesterServiceURL string `json:"requester_service_url"`
+}
+
+// LoadBalancer represents the load balancer between client and target hosts
+type LoadBalancer struct {
+	Name       string `json:"name"`
+	ExternalIP string `json:"external_ip"`
+	InternalIP string `json:"internal_ip"`
+
+	// Service URL (if LB provides metrics/status endpoint)
+	ServiceURL string `json:"service_url,omitempty"`
 }
 
 // ExperimentData contains the complete dashboard experiment result

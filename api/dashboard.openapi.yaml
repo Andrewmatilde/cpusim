@@ -269,6 +269,8 @@ components:
             $ref: '#/components/schemas/TargetHost'
         clientHost:
           $ref: '#/components/schemas/ClientHost'
+        loadBalancer:
+          $ref: '#/components/schemas/LoadBalancer'
 
     TargetHost:
       type: object
@@ -294,6 +296,18 @@ components:
         internalIP:
           type: string
         requesterServiceURL:
+          type: string
+
+    LoadBalancer:
+      type: object
+      properties:
+        name:
+          type: string
+        externalIP:
+          type: string
+        internalIP:
+          type: string
+        serviceURL:
           type: string
 
     StartExperimentRequest:

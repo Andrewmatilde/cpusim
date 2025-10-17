@@ -17,6 +17,7 @@ export * from './ExperimentListResponse';
 export * from './ExperimentResponse';
 export * from './HealthResponse';
 export * from './HostsStatusResponse';
+export * from './LoadBalancer';
 export * from './MetricDataPoint';
 export * from './NetworkIO';
 export * from './QPSPoint';

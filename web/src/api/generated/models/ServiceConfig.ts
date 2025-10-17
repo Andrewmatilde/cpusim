@@ -27,6 +27,13 @@ import {
     TargetHostToJSON,
     TargetHostToJSONTyped,
 } from './TargetHost';
+import type { LoadBalancer } from './LoadBalancer';
+import {
+    LoadBalancerFromJSON,
+    LoadBalancerFromJSONTyped,
+    LoadBalancerToJSON,
+    LoadBalancerToJSONTyped,
+} from './LoadBalancer';
 
 /**
  * Dashboard service configuration (only service URLs)
@@ -46,6 +53,12 @@ export interface ServiceConfig {
      * @memberof ServiceConfig
      */
     clientHost?: ClientHost;
+    /**
+     * 
+     * @type {LoadBalancer}
+     * @memberof ServiceConfig
+     */
+    loadBalancer?: LoadBalancer;
 }
 
 /**
@@ -67,6 +80,7 @@ export function ServiceConfigFromJSONTyped(json: any, ignoreDiscriminator: boole
         
         'targetHosts': json['targetHosts'] == null ? undefined : ((json['targetHosts'] as Array<any>).map(TargetHostFromJSON)),
         'clientHost': json['clientHost'] == null ? undefined : ClientHostFromJSON(json['clientHost']),
+        'loadBalancer': json['loadBalancer'] == null ? undefined : LoadBalancerFromJSON(json['loadBalancer']),
     };
 }
 
@@ -83,6 +97,7 @@ export function ServiceConfigToJSONTyped(value?: ServiceConfig | null, ignoreDis
         
         'targetHosts': value['targetHosts'] == null ? undefined : ((value['targetHosts'] as Array<any>).map(TargetHostToJSON)),
         'clientHost': ClientHostToJSON(value['clientHost']),
+        'loadBalancer': LoadBalancerToJSON(value['loadBalancer']),
     };
 }
 

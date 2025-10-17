@@ -21,8 +21,9 @@ type APIHandler struct {
 // GetServiceConfig implements getting the service configuration
 func (h *APIHandler) GetServiceConfig(c *gin.Context) {
 	response := generated.ServiceConfig{
-		TargetHosts: convertTargetHostsToAPI(h.config.TargetHosts),
-		ClientHost:  convertClientHostToAPI(h.config.ClientHost),
+		TargetHosts:  convertTargetHostsToAPI(h.config.TargetHosts),
+		ClientHost:   convertClientHostToAPI(h.config.ClientHost),
+		LoadBalancer: convertLoadBalancerToAPI(h.config.LoadBalancer),
 	}
 	c.JSON(http.StatusOK, response)
 }
@@ -390,8 +391,9 @@ func (h *APIHandler) GetExperimentGroupWithDetails(c *gin.Context, groupId strin
 
 func convertConfigToAPI(cfg dashboard.Config) generated.ServiceConfig {
 	return generated.ServiceConfig{
-		TargetHosts: convertTargetHostsToAPI(cfg.TargetHosts),
-		ClientHost:  convertClientHostToAPI(cfg.ClientHost),
+		TargetHosts:  convertTargetHostsToAPI(cfg.TargetHosts),
+		ClientHost:   convertClientHostToAPI(cfg.ClientHost),
+		LoadBalancer: convertLoadBalancerToAPI(cfg.LoadBalancer),
 	}
 }
 
@@ -415,6 +417,18 @@ func convertClientHostToAPI(host dashboard.ClientHost) generated.ClientHost {
 		ExternalIP:          host.ExternalIP,
 		InternalIP:          host.InternalIP,
 		RequesterServiceURL: host.RequesterServiceURL,
+	}
+}
+
+func convertLoadBalancerToAPI(lb *dashboard.LoadBalancer) generated.LoadBalancer {
+	if lb == nil {
+		return generated.LoadBalancer{}
+	}
+	return generated.LoadBalancer{
+		Name:       lb.Name,
+		ExternalIP: lb.ExternalIP,
+		InternalIP: lb.InternalIP,
+		ServiceURL: lb.ServiceURL,
 	}
 }
 

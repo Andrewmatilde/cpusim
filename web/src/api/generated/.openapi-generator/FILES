@@ -18,6 +18,7 @@ models/ExperimentListResponse.ts
 models/ExperimentResponse.ts
 models/HealthResponse.ts
 models/HostsStatusResponse.ts
+models/LoadBalancer.ts
 models/MetricDataPoint.ts
 models/NetworkIO.ts
 models/QPSPoint.ts
