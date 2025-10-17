@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -13,13 +14,10 @@ import type {
 } from '@/api/generated';
 import { RefreshCw, AlertCircle, Play, Loader2, Layers, FileText, BarChart3, Clock, RotateCw } from 'lucide-react';
 import { toast } from 'sonner';
-import { LineChart, Line, XAxis, YAxis, CartesianGrid, Area, ComposedChart } from 'recharts';
-import type { ChartConfig } from '@/components/ui/chart';
-import { ChartContainer, ChartTooltip, ChartTooltipContent } from '@/components/ui/chart';
 
 export function ExperimentGroups() {
+  const navigate = useNavigate();
   const [groupsList, setGroupsList] = useState<ExperimentGroupListResponse | null>(null);
-  const [selectedGroup, setSelectedGroup] = useState<ExperimentGroup | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -84,8 +82,8 @@ export function ExperimentGroups() {
     }
   };
 
-  const handleViewGroup = (group: ExperimentGroup) => {
-    setSelectedGroup(group);
+  const handleViewGroup = (groupId: string) => {
+    navigate(`/groups/${groupId}`);
   };
 
   const handleResumeGroup = async (gId: string, e: React.MouseEvent) => {
@@ -272,7 +270,7 @@ export function ExperimentGroups() {
                 <div
                   key={group.groupId}
                   className="border rounded-lg p-4 hover:bg-accent cursor-pointer transition-colors"
-                  onClick={() => handleViewGroup(group)}
+                  onClick={() => group.groupId && handleViewGroup(group.groupId)}
                 >
                   <div className="flex items-start justify-between">
                     <div className="flex-1">
@@ -321,304 +319,6 @@ export function ExperimentGroups() {
                   </div>
                 </div>
               ))}
-            </div>
-          </CardContent>
-        </Card>
-      )}
-
-
-      {/* Group Detail View */}
-      {selectedGroup && (
-        <Card>
-          <CardHeader>
-            <div className="flex items-center justify-between">
-              <CardTitle className="flex items-center gap-2">
-                <Layers className="h-5 w-5" />
-                Group Details: {selectedGroup.groupId}
-              </CardTitle>
-              <Button onClick={() => setSelectedGroup(null)} variant="outline" size="sm">
-                Close
-              </Button>
-            </div>
-          </CardHeader>
-          <CardContent>
-            <div className="space-y-4">
-              {/* Group Info */}
-              <div className="border rounded-lg p-4 space-y-2">
-                <div className="flex items-center gap-2">
-                  <span className="text-sm text-muted-foreground">Status:</span>
-                  <Badge variant={selectedGroup.status === 'completed' ? 'default' : 'secondary'}>
-                    {selectedGroup.status}
-                  </Badge>
-                </div>
-                {selectedGroup.description && (
-                  <div>
-                    <span className="text-sm text-muted-foreground">Description: </span>
-                    <span className="text-sm">{selectedGroup.description}</span>
-                  </div>
-                )}
-                {/* Environment Configuration */}
-                {selectedGroup.environmentConfig && (
-                  <div className="pt-2 border-t">
-                    <div className="text-sm font-medium mb-2">Environment:</div>
-                    <div className="grid grid-cols-2 gap-2 text-xs">
-                      <div>
-                        <span className="text-muted-foreground">Client: </span>
-                        <span className="font-medium">{selectedGroup.environmentConfig.clientHost?.name}</span>
-                        <span className="text-muted-foreground ml-1">({selectedGroup.environmentConfig.clientHost?.externalIP})</span>
-                      </div>
-                      <div>
-                        <span className="text-muted-foreground">Target: </span>
-                        {selectedGroup.environmentConfig.targetHosts && selectedGroup.environmentConfig.targetHosts.map((target, idx) => (
-                          <span key={idx}>
-                            <span className="font-medium">{target.name}</span>
-                            <span className="text-muted-foreground ml-1">({target.externalIP})</span>
-                          </span>
-                        ))}
-                      </div>
-                    </div>
-                  </div>
-                )}
-                <div className="grid grid-cols-2 gap-4 pt-2">
-                  <div>
-                    <div className="text-sm text-muted-foreground">QPS Range</div>
-                    <div className="text-lg font-medium">
-                      {selectedGroup.config?.qpsMin} - {selectedGroup.config?.qpsMax} (step {selectedGroup.config?.qpsStep})
-                    </div>
-                  </div>
-                  <div>
-                    <div className="text-sm text-muted-foreground">Duration</div>
-                    <div className="text-lg font-medium">
-                      {selectedGroup.startTime && formatDuration(selectedGroup.startTime, selectedGroup.endTime)}
-                    </div>
-                  </div>
-                </div>
-                <div className="grid grid-cols-3 gap-4 pt-2 text-sm">
-                  <div>
-                    <span className="text-muted-foreground">Timeout: </span>
-                    <span className="font-medium">{selectedGroup.config?.timeout}s</span>
-                  </div>
-                  <div>
-                    <span className="text-muted-foreground">Repeat per QPS: </span>
-                    <span className="font-medium">{selectedGroup.config?.repeatCount}</span>
-                  </div>
-                  <div>
-                    <span className="text-muted-foreground">Delay: </span>
-                    <span className="font-medium">{selectedGroup.config?.delayBetween}s</span>
-                  </div>
-                </div>
-                <div className="text-sm pt-2">
-                  <span className="text-muted-foreground">Progress: </span>
-                  <span className="font-medium">QPS {selectedGroup.currentQPS}, Run {selectedGroup.currentRun}/{selectedGroup.config?.repeatCount}</span>
-                </div>
-              </div>
-
-              {/* QPS vs CPU Chart for this Group */}
-              {selectedGroup.qpsPoints && selectedGroup.qpsPoints.length > 0 && (() => {
-                // Extract data points from this group's QPS points
-                const dataPoints: Array<{qps: number; cpuMean: number; cpuConfLower: number; cpuConfUpper: number; groupId: string; linearRef?: number}> = [];
-
-                selectedGroup.qpsPoints.forEach((qpsPoint: any) => {
-                  if (qpsPoint.statistics && Object.keys(qpsPoint.statistics).length > 0) {
-                    const hostName = Object.keys(qpsPoint.statistics)[0]; // Get first host
-                    const stats = qpsPoint.statistics[hostName];
-
-                    dataPoints.push({
-                      qps: qpsPoint.qps || 0,
-                      cpuMean: stats?.cpuMean || 0,
-                      cpuConfLower: stats?.cpuConfLower || 0,
-                      cpuConfUpper: stats?.cpuConfUpper || 0,
-                      groupId: `qps-${qpsPoint.qps}`,
-                    });
-                  }
-                });
-
-                if (dataPoints.length === 0) return null;
-
-                // Sort by QPS
-                const chartData = dataPoints.sort((a, b) => a.qps - b.qps);
-
-                // Add origin point (0,0)
-                chartData.unshift({
-                  qps: 0,
-                  cpuMean: 0,
-                  cpuConfLower: 0,
-                  cpuConfUpper: 0,
-                  groupId: 'origin',
-                });
-
-                // Calculate linear reference line from origin (0,0) to last point
-                if (chartData.length >= 2) {
-                  const lastPoint = chartData[chartData.length - 1];
-                  const slope = lastPoint.cpuMean / lastPoint.qps;
-
-                  chartData.forEach(point => {
-                    point.linearRef = slope * point.qps;
-                  });
-                }
-
-                const chartConfig: ChartConfig = {
-                  cpuMean: {
-                    label: "Mean CPU Usage",
-                    color: "hsl(var(--chart-1))",
-                  },
-                  cpuConfLower: {
-                    label: "95% CI Lower",
-                    color: "hsl(var(--chart-1))",
-                  },
-                  cpuConfUpper: {
-                    label: "95% CI Upper",
-                    color: "hsl(var(--chart-1))",
-                  },
-                };
-
-                return (
-                  <Card className="mb-4">
-                    <CardHeader>
-                      <CardTitle>QPS vs CPU Usage Analysis</CardTitle>
-                      <CardDescription>
-                        Average CPU usage across different QPS levels with 95% confidence interval boundaries
-                      </CardDescription>
-                    </CardHeader>
-                    <CardContent>
-                      <ChartContainer config={chartConfig}>
-                        <ComposedChart
-                          data={chartData}
-                          margin={{
-                            top: 20,
-                            right: 20,
-                            bottom: 40,
-                            left: 20,
-                          }}
-                        >
-                          <CartesianGrid strokeDasharray="3 3" />
-                          <XAxis
-                            dataKey="qps"
-                            type="number"
-                            domain={['dataMin', 'dataMax']}
-                            label={{ value: 'QPS (Requests per Second)', position: 'insideBottom', offset: -10 }}
-                          />
-                          <YAxis
-                            label={{ value: 'CPU Usage (%)', angle: -90, position: 'insideLeft' }}
-                          />
-                          <ChartTooltip
-                            content={({ active, payload }) => {
-                              if (active && payload && payload.length) {
-                                const data = payload[0].payload;
-                                return (
-                                  <div className="bg-background border rounded-lg p-3 shadow-lg">
-                                    <div className="font-semibold text-sm mb-2">{data.groupId}</div>
-                                    <div className="space-y-1 text-sm">
-                                      <div>
-                                        <span className="text-muted-foreground">QPS:</span>{' '}
-                                        <span className="font-medium">{data.qps}</span>
-                                      </div>
-                                      <div>
-                                        <span className="text-muted-foreground">Mean CPU:</span>{' '}
-                                        <span className="font-medium">{data.cpuMean.toFixed(2)}%</span>
-                                      </div>
-                                      <div>
-                                        <span className="text-muted-foreground">95% CI:</span>{' '}
-                                        <span className="font-medium">
-                                          [{data.cpuConfLower.toFixed(2)}%, {data.cpuConfUpper.toFixed(2)}%]
-                                        </span>
-                                      </div>
-                                    </div>
-                                  </div>
-                                );
-                              }
-                              return null;
-                            }}
-                          />
-                          {/* Upper confidence interval line */}
-                          <Line
-                            type="monotone"
-                            dataKey="cpuConfUpper"
-                            stroke="#8884d8"
-                            strokeWidth={1}
-                            strokeDasharray="5 5"
-                            dot={false}
-                          />
-                          {/* Lower confidence interval line */}
-                          <Line
-                            type="monotone"
-                            dataKey="cpuConfLower"
-                            stroke="#8884d8"
-                            strokeWidth={1}
-                            strokeDasharray="5 5"
-                            dot={false}
-                          />
-                          {/* Mean CPU line */}
-                          <Line
-                            type="monotone"
-                            dataKey="cpuMean"
-                            stroke="#8884d8"
-                            strokeWidth={3}
-                            dot={{ fill: '#8884d8', r: 5 }}
-                          />
-                          {/* Linear reference line (origin to last point) - orange */}
-                          <Line
-                            type="linear"
-                            dataKey="linearRef"
-                            stroke="#f97316"
-                            strokeWidth={2}
-                            strokeDasharray="3 3"
-                            dot={false}
-                          />
-                        </ComposedChart>
-                      </ChartContainer>
-                      <div className="mt-4 text-sm text-muted-foreground">
-                        <div>Solid thick blue line: mean CPU usage</div>
-                        <div>Blue dashed lines: 95% confidence interval boundaries</div>
-                        <div>Orange dashed line: linear reference (origin to last point)</div>
-                      </div>
-                    </CardContent>
-                  </Card>
-                );
-              })()}
-
-              {/* QPS Points with Experiments */}
-              <div>
-                <h3 className="font-semibold mb-3">QPS Points and Experiments</h3>
-                <div className="space-y-4">
-                  {selectedGroup.qpsPoints?.map((qpsPoint: any, qpsIdx) => (
-                    <div key={qpsIdx} className="border rounded-lg p-4">
-                      <div className="flex items-center justify-between mb-3">
-                        <h4 className="font-semibold">QPS: {qpsPoint.qps}</h4>
-                        <Badge variant={qpsPoint.status === 'completed' ? 'default' : qpsPoint.status === 'running' ? 'secondary' : 'outline'}>
-                          {qpsPoint.status}
-                        </Badge>
-                      </div>
-
-                      {/* Statistics for this QPS */}
-                      {qpsPoint.statistics && Object.keys(qpsPoint.statistics).length > 0 && (
-                        <div className="mb-3 p-2 bg-muted rounded">
-                          {Object.entries(qpsPoint.statistics).map(([hostName, stats]: [string, any]) => (
-                            <div key={hostName} className="text-sm">
-                              <span className="text-muted-foreground">{hostName}: </span>
-                              <span className="font-medium">Mean CPU: {stats.cpuMean?.toFixed(2)}%</span>
-                              <span className="text-muted-foreground ml-2">95% CI: [{stats.cpuConfLower?.toFixed(2)}%, {stats.cpuConfUpper?.toFixed(2)}%]</span>
-                            </div>
-                          ))}
-                        </div>
-                      )}
-
-                      {/* Experiments list for this QPS */}
-                      <div className="space-y-1">
-                        <div className="text-xs text-muted-foreground">Experiments ({qpsPoint.experiments?.length || 0}):</div>
-                        <div className="flex flex-wrap gap-1">
-                          {qpsPoint.experiments?.map((expId: string) => (
-                            <Badge key={expId} variant="outline" className="text-xs">
-                              {expId}
-                            </Badge>
-                          ))}
-                        </div>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-
             </div>
           </CardContent>
         </Card>
