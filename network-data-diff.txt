@@ -1,0 +1,87 @@
+========================================
+Network Data Comparison
+Data 1: network-baseline-data.txt (baseline)
+Data 2: network-data-2.txt (new)
+Time between samples: ~few minutes
+========================================
+
+[Icmp]
+  InEchos: 131075 -> 131131 (diff: +56)
+  InMsgs: 131266 -> 131322 (diff: +56)
+  OutEchoReps: 131080 -> 131136 (diff: +56)
+  OutMsgs: 131080 -> 131136 (diff: +56)
+
+[IcmpMsg]
+  InType8: 131075 -> 131131 (diff: +56)
+  OutType0: 131080 -> 131136 (diff: +56)
+
+[Ip]
+  InDelivers: 77631550 -> 77758184 (diff: +126634)
+  InReceives: 77631571 -> 77758205 (diff: +126634)
+  OutRequests: 91604331 -> 91735047 (diff: +130716)
+  OutTransmits: 91604331 -> 91735047 (diff: +130716)
+
+[IpExt]
+  InECT0Pkts: 2335 -> 2336 (diff: +1)
+  InNoECTPkts: 77807980 -> 77934620 (diff: +126640)
+  InOctets: 11938452351 -> 11962174862 (diff: +23722511)
+  OutOctets: 13089868345 -> 13115051768 (diff: +25183423)
+
+[Tcp]
+  ActiveOpens: 6553267 -> 6553290 (diff: +23)
+  CurrEstab: 2 -> 19 (diff: +17)
+  EstabResets: 23405 -> 23430 (diff: +25)
+  InSegs: 77499731 -> 77626309 (diff: +126578)
+  OutRsts: 1872186 -> 1872197 (diff: +11)
+  OutSegs: 86980835 -> 87111495 (diff: +130660)
+  PassiveOpens: 69786 -> 69830 (diff: +44)
+  RetransSegs: 4530372 -> 4530378 (diff: +6)
+
+[TcpExt]
+  DelayedACKLost: 7962 -> 7963 (diff: +1)
+  DelayedACKs: 934138 -> 936222 (diff: +2084)
+  TCPAbortOnData: 17906 -> 17912 (diff: +6)
+  TCPDSACKOldSent: 7973 -> 7974 (diff: +1)
+  TCPDelivered: 64581188 -> 64707136 (diff: +125948)
+  TCPFastRetrans: 46304 -> 46305 (diff: +1)
+  TCPHPAcks: 39329814 -> 39448857 (diff: +119043)
+  TCPHPHits: 36226137 -> 36345001 (diff: +118864)
+  TCPKeepAlive: 205252 -> 205352 (diff: +100)
+  TCPLossProbes: 265400 -> 265401 (diff: +1)
+  TCPOFOQueue: 7960 -> 7962 (diff: +2)
+  TCPOrigDataSent: 58135685 -> 58261614 (diff: +125929)
+  TCPPureAcks: 8988208 -> 8988431 (diff: +223)
+  TCPRcvCoalesce: 71539 -> 71580 (diff: +41)
+  TCPSACKReorder: 175 -> 176 (diff: +1)
+  TCPSackRecovery: 46354 -> 46355 (diff: +1)
+  TCPSackShiftFallback: 47389 -> 47391 (diff: +2)
+  TCPSynRetrans: 3519474 -> 3519479 (diff: +5)
+  TCPTimeouts: 4256045 -> 4256051 (diff: +6)
+
+========================================
+Summary of Activity Between Samples
+========================================
+
+Network Traffic:
+  - Packets In: +126,634
+  - Packets Out: +130,716
+  - Bytes In: +23.7 MB
+  - Bytes Out: +25.2 MB
+
+TCP Connections:
+  - New Active Opens: +23
+  - New Passive Opens: +44
+  - Current Established: 2 -> 19 (+17)
+  - Resets: +25
+
+TCP Issues:
+  - Retransmissions: +6
+  - Timeouts: +6
+  - Aborted Connections: +6
+  - SYN Retransmits: +5
+
+ICMP:
+  - Ping requests/replies: +56
+
+Note: These are cumulative counters since boot.
+Differences show activity between the two samples.

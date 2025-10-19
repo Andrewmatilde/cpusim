@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -188,58 +188,85 @@ export function ExperimentGroupDetail() {
 
       {/* QPS vs CPU Chart */}
       {groupData.qpsPoints && groupData.qpsPoints.length > 0 && (() => {
-        const dataPoints: Array<{qps: number; cpuMean: number; cpuConfLower: number; cpuConfUpper: number; groupId: string; linearRef?: number}> = [];
-
+        // Collect all unique host names
+        const allHostNames = new Set<string>();
         groupData.qpsPoints.forEach((qpsPoint: any) => {
-          if (qpsPoint.statistics && Object.keys(qpsPoint.statistics).length > 0) {
-            const hostName = Object.keys(qpsPoint.statistics)[0];
-            const stats = qpsPoint.statistics[hostName];
-
-            dataPoints.push({
-              qps: qpsPoint.qps || 0,
-              cpuMean: stats?.cpuMean || 0,
-              cpuConfLower: stats?.cpuConfLower || 0,
-              cpuConfUpper: stats?.cpuConfUpper || 0,
-              groupId: `qps-${qpsPoint.qps}`,
-            });
+          if (qpsPoint.statistics) {
+            Object.keys(qpsPoint.statistics).forEach(hostName => allHostNames.add(hostName));
           }
         });
 
-        if (dataPoints.length === 0) return null;
+        const hostNamesArray = Array.from(allHostNames);
+        if (hostNamesArray.length === 0) return null;
 
-        const chartData = dataPoints.sort((a, b) => a.qps - b.qps);
+        // Build data points with all hosts' data
+        const chartData: any[] = [];
+        groupData.qpsPoints.forEach((qpsPoint: any) => {
+          const point: any = { qps: qpsPoint.qps || 0 };
 
-        chartData.unshift({
-          qps: 0,
-          cpuMean: 0,
-          cpuConfLower: 0,
-          cpuConfUpper: 0,
-          groupId: 'origin',
+          if (qpsPoint.statistics) {
+            Object.entries(qpsPoint.statistics).forEach(([hostName, stats]: [string, any]) => {
+              point[`${hostName}_cpuMean`] = stats?.cpuMean || 0;
+              point[`${hostName}_cpuConfLower`] = stats?.cpuConfLower || 0;
+              point[`${hostName}_cpuConfUpper`] = stats?.cpuConfUpper || 0;
+            });
+          }
+
+          chartData.push(point);
         });
 
+        // Sort by QPS
+        chartData.sort((a, b) => a.qps - b.qps);
+
+        // Add origin point
+        const originPoint: any = { qps: 0 };
+        hostNamesArray.forEach(hostName => {
+          originPoint[`${hostName}_cpuMean`] = 0;
+          originPoint[`${hostName}_cpuConfLower`] = 0;
+          originPoint[`${hostName}_cpuConfUpper`] = 0;
+        });
+        chartData.unshift(originPoint);
+
+        // Calculate linear reference for each host
         if (chartData.length >= 2) {
           const lastPoint = chartData[chartData.length - 1];
-          const slope = lastPoint.cpuMean / lastPoint.qps;
-
-          chartData.forEach(point => {
-            point.linearRef = slope * point.qps;
+          hostNamesArray.forEach(hostName => {
+            const cpuMean = lastPoint[`${hostName}_cpuMean`];
+            if (cpuMean && lastPoint.qps) {
+              const slope = cpuMean / lastPoint.qps;
+              chartData.forEach(point => {
+                point[`${hostName}_linearRef`] = slope * point.qps;
+              });
+            }
           });
         }
 
-        const chartConfig: ChartConfig = {
-          cpuMean: {
-            label: "Mean CPU Usage",
-            color: "hsl(var(--chart-1))",
-          },
-          cpuConfLower: {
-            label: "95% CI Lower",
-            color: "hsl(var(--chart-1))",
-          },
-          cpuConfUpper: {
-            label: "95% CI Upper",
-            color: "hsl(var(--chart-1))",
-          },
-        };
+        // Define colors for different hosts
+        const colors = [
+          '#8884d8',  // blue
+          '#82ca9d',  // green
+          '#ffc658',  // yellow
+          '#ff7c7c',  // red
+          '#a28dff',  // purple
+        ];
+
+        const linearRefColors = [
+          '#f97316',  // orange
+          '#10b981',  // emerald
+          '#f59e0b',  // amber
+          '#ef4444',  // red
+          '#8b5cf6',  // violet
+        ];
+
+        // Build chart config dynamically
+        const chartConfig: ChartConfig = {};
+        hostNamesArray.forEach((hostName, index) => {
+          const color = colors[index % colors.length];
+          chartConfig[`${hostName}_cpuMean`] = {
+            label: `${hostName} Mean CPU`,
+            color: color,
+          };
+        });
 
         return (
           <Card>
@@ -276,22 +303,33 @@ export function ExperimentGroupDetail() {
                         const data = payload[0].payload;
                         return (
                           <div className="bg-background border rounded-lg p-3 shadow-lg">
-                            <div className="font-semibold text-sm mb-2">{data.groupId}</div>
-                            <div className="space-y-1 text-sm">
-                              <div>
-                                <span className="text-muted-foreground">QPS:</span>{' '}
-                                <span className="font-medium">{data.qps}</span>
-                              </div>
-                              <div>
-                                <span className="text-muted-foreground">Mean CPU:</span>{' '}
-                                <span className="font-medium">{data.cpuMean.toFixed(2)}%</span>
-                              </div>
-                              <div>
-                                <span className="text-muted-foreground">95% CI:</span>{' '}
-                                <span className="font-medium">
-                                  [{data.cpuConfLower.toFixed(2)}%, {data.cpuConfUpper.toFixed(2)}%]
-                                </span>
-                              </div>
+                            <div className="font-semibold text-sm mb-2">QPS: {data.qps}</div>
+                            <div className="space-y-2 text-sm">
+                              {hostNamesArray.map(hostName => {
+                                const mean = data[`${hostName}_cpuMean`];
+                                const lower = data[`${hostName}_cpuConfLower`];
+                                const upper = data[`${hostName}_cpuConfUpper`];
+                                if (mean !== undefined) {
+                                  return (
+                                    <div key={hostName} className="border-t pt-1 first:border-t-0 first:pt-0">
+                                      <div className="font-medium">{hostName}</div>
+                                      <div>
+                                        <span className="text-muted-foreground">Mean CPU:</span>{' '}
+                                        <span className="font-medium">{mean.toFixed(2)}%</span>
+                                      </div>
+                                      {lower !== undefined && upper !== undefined && (
+                                        <div>
+                                          <span className="text-muted-foreground">95% CI:</span>{' '}
+                                          <span className="font-medium">
+                                            [{lower.toFixed(2)}%, {upper.toFixed(2)}%]
+                                          </span>
+                                        </div>
+                                      )}
+                                    </div>
+                                  );
+                                }
+                                return null;
+                              })}
                             </div>
                           </div>
                         );
@@ -299,43 +337,70 @@ export function ExperimentGroupDetail() {
                       return null;
                     }}
                   />
-                  <Line
-                    type="monotone"
-                    dataKey="cpuConfUpper"
-                    stroke="#8884d8"
-                    strokeWidth={1}
-                    strokeDasharray="5 5"
-                    dot={false}
-                  />
-                  <Line
-                    type="monotone"
-                    dataKey="cpuConfLower"
-                    stroke="#8884d8"
-                    strokeWidth={1}
-                    strokeDasharray="5 5"
-                    dot={false}
-                  />
-                  <Line
-                    type="monotone"
-                    dataKey="cpuMean"
-                    stroke="#8884d8"
-                    strokeWidth={3}
-                    dot={{ fill: '#8884d8', r: 5 }}
-                  />
-                  <Line
-                    type="linear"
-                    dataKey="linearRef"
-                    stroke="#f97316"
-                    strokeWidth={2}
-                    strokeDasharray="3 3"
-                    dot={false}
-                  />
+                  {/* Render lines for each host */}
+                  {hostNamesArray.map((hostName, index) => {
+                    const color = colors[index % colors.length];
+                    const linearColor = linearRefColors[index % linearRefColors.length];
+                    return (
+                      <React.Fragment key={hostName}>
+                        {/* Confidence interval upper bound */}
+                        <Line
+                          type="monotone"
+                          dataKey={`${hostName}_cpuConfUpper`}
+                          stroke={color}
+                          strokeWidth={1}
+                          strokeDasharray="5 5"
+                          dot={false}
+                          opacity={0.5}
+                        />
+                        {/* Confidence interval lower bound */}
+                        <Line
+                          type="monotone"
+                          dataKey={`${hostName}_cpuConfLower`}
+                          stroke={color}
+                          strokeWidth={1}
+                          strokeDasharray="5 5"
+                          dot={false}
+                          opacity={0.5}
+                        />
+                        {/* Mean CPU */}
+                        <Line
+                          type="monotone"
+                          dataKey={`${hostName}_cpuMean`}
+                          stroke={color}
+                          strokeWidth={3}
+                          dot={{ fill: color, r: 5 }}
+                        />
+                        {/* Linear reference */}
+                        <Line
+                          type="linear"
+                          dataKey={`${hostName}_linearRef`}
+                          stroke={linearColor}
+                          strokeWidth={2}
+                          strokeDasharray="3 3"
+                          dot={false}
+                          opacity={0.6}
+                        />
+                      </React.Fragment>
+                    );
+                  })}
                 </ComposedChart>
               </ChartContainer>
-              <div className="mt-4 text-sm text-muted-foreground">
-                <div>Solid thick blue line: mean CPU usage</div>
-                <div>Blue dashed lines: 95% confidence interval boundaries</div>
-                <div>Orange dashed line: linear reference (origin to last point)</div>
+              <div className="mt-4 text-sm text-muted-foreground space-y-1">
+                <div className="font-medium mb-2">Legend:</div>
+                {hostNamesArray.map((hostName, index) => {
+                  const color = colors[index % colors.length];
+                  const linearColor = linearRefColors[index % linearRefColors.length];
+                  return (
+                    <div key={hostName} className="flex items-center gap-2">
+                      <div style={{ backgroundColor: color }} className="w-3 h-3 rounded-full"></div>
+                      <span className="font-medium">{hostName}:</span>
+                      <span>thick line = mean CPU, dashed lines = 95% CI</span>
+                      <div style={{ backgroundColor: linearColor }} className="w-3 h-3 rounded-full ml-2"></div>
+                      <span>linear reference</span>
+                    </div>
+                  );
+                })}
               </div>
             </CardContent>
           </Card>
