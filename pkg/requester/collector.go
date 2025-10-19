@@ -66,34 +66,49 @@ func (c *Collector) Run(ctx context.Context) (*RequestData, error) {
 	if qps <= 0 {
 		qps = 1
 	}
-	interval := time.Second / time.Duration(qps)
-	ticker := time.NewTicker(interval)
-	defer ticker.Stop()
 
 	targetURL := fmt.Sprintf("http://%s:%d/calculate", c.config.TargetIP, c.config.TargetPort)
 
-	// Use WaitGroup to track in-flight requests
+	// Use WaitGroup to track worker goroutines
 	var wg sync.WaitGroup
 
-	// Request sending loop
-	for {
-		select {
-		case <-ctx.Done():
-			// Wait for all in-flight requests to complete
-			wg.Wait()
-
-			// Calculate final statistics
-			endTime := time.Now()
-			return c.buildResultData(startTime, endTime), nil
-
-		case <-ticker.C:
-			wg.Add(1)
-			go func() {
-				defer wg.Done()
-				c.sendRequest(ctx, targetURL)
-			}()
-		}
+	// Create 16 parallel worker goroutines for better performance
+	numWorkers := 16
+	qpsPerWorker := qps / numWorkers
+	if qpsPerWorker <= 0 {
+		qpsPerWorker = 1
 	}
+
+	// Start worker goroutines
+	for i := 0; i < numWorkers; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+
+			interval := time.Second / time.Duration(qpsPerWorker)
+			ticker := time.NewTicker(interval)
+			defer ticker.Stop()
+
+			for {
+				select {
+				case <-ctx.Done():
+					return
+				case <-ticker.C:
+					c.sendRequest(ctx, targetURL)
+				}
+			}
+		}()
+	}
+
+	// Wait for context cancellation
+	<-ctx.Done()
+
+	// Wait for all workers to finish
+	wg.Wait()
+
+	// Calculate final statistics
+	endTime := time.Now()
+	return c.buildResultData(startTime, endTime), nil
 }
 
 // sendRequest sends a single HTTP request and records statistics
