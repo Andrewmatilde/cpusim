@@ -57,10 +57,15 @@ func NewCollector(config Config) *Collector {
 	}
 }
 
+// workerStats holds statistics for a single worker
+type workerStats struct {
+	startTime time.Time
+	endTime   time.Time
+	requests  int64
+}
+
 // Run executes the request sending loop and returns collected data
 func (c *Collector) Run(ctx context.Context) (*RequestData, error) {
-	startTime := time.Now()
-
 	// Calculate QPS interval
 	qps := c.config.QPS
 	if qps <= 0 {
@@ -74,10 +79,9 @@ func (c *Collector) Run(ctx context.Context) (*RequestData, error) {
 
 	// Create 16 parallel worker goroutines for better performance
 	numWorkers := 16
-	qpsPerWorker := qps / numWorkers
-	if qpsPerWorker <= 0 {
-		qpsPerWorker = 1
-	}
+
+	// Channel to collect worker statistics
+	statsChan := make(chan workerStats, numWorkers)
 
 	// Start worker goroutines
 	for i := 0; i < numWorkers; i++ {
@@ -85,16 +89,39 @@ func (c *Collector) Run(ctx context.Context) (*RequestData, error) {
 		go func() {
 			defer wg.Done()
 
-			interval := time.Second / time.Duration(qpsPerWorker)
+			var workerStart time.Time
+			var requestCount int64
+
+			// Calculate interval: multiply first to avoid integer division precision loss
+			// interval = (1 second * numWorkers) / qps
+			interval := (time.Second * time.Duration(numWorkers)) / time.Duration(qps)
+			if interval <= 0 {
+				interval = time.Microsecond
+			}
+
 			ticker := time.NewTicker(interval)
 			defer ticker.Stop()
 
 			for {
 				select {
 				case <-ctx.Done():
+					// Record worker end time
+					workerEnd := time.Now()
+					if requestCount > 0 {
+						statsChan <- workerStats{
+							startTime: workerStart,
+							endTime:   workerEnd,
+							requests:  requestCount,
+						}
+					}
 					return
 				case <-ticker.C:
+					// Record first request time
+					if requestCount == 0 {
+						workerStart = time.Now()
+					}
 					c.sendRequest(ctx, targetURL)
+					requestCount++
 				}
 			}
 		}()
@@ -105,10 +132,38 @@ func (c *Collector) Run(ctx context.Context) (*RequestData, error) {
 
 	// Wait for all workers to finish
 	wg.Wait()
+	close(statsChan)
 
-	// Calculate final statistics
-	endTime := time.Now()
-	return c.buildResultData(startTime, endTime), nil
+	// Collect worker statistics and calculate average
+	var totalDuration time.Duration
+	var totalQPS float64
+	workerCount := 0
+
+	overallStart := time.Now()
+	overallEnd := time.Time{}
+
+	for stats := range statsChan {
+		duration := stats.endTime.Sub(stats.startTime)
+		totalDuration += duration
+
+		if duration.Seconds() > 0 {
+			workerQPS := float64(stats.requests) / duration.Seconds()
+			totalQPS += workerQPS
+		}
+
+		// Track overall start and end
+		if workerCount == 0 || stats.startTime.Before(overallStart) {
+			overallStart = stats.startTime
+		}
+		if stats.endTime.After(overallEnd) {
+			overallEnd = stats.endTime
+		}
+
+		workerCount++
+	}
+
+	// Use overall start and end time for result
+	return c.buildResultData(overallStart, overallEnd), nil
 }
 
 // sendRequest sends a single HTTP request and records statistics
