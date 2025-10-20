@@ -169,8 +169,8 @@ func (c *Collector) Run(ctx context.Context) (*RequestData, error) {
 		workerCount++
 	}
 
-	// Use overall start and end time for result
-	return c.buildResultData(overallStart, overallEnd), nil
+	// Use overall start and end time for result, but with accurate QPS from workers
+	return c.buildResultData(overallStart, overallEnd, totalQPS), nil
 }
 
 // sendRequest sends a single HTTP request and records statistics
@@ -244,7 +244,7 @@ func (c *Collector) recordFailure(timestamp time.Time, err error, workerID int) 
 }
 
 // buildResultData constructs the final RequestData from collected statistics
-func (c *Collector) buildResultData(startTime, endTime time.Time) *RequestData {
+func (c *Collector) buildResultData(startTime, endTime time.Time, actualQPS float64) *RequestData {
 	duration := endTime.Sub(startTime).Seconds()
 
 	totalReqs := c.totalRequests.Load()
@@ -252,7 +252,8 @@ func (c *Collector) buildResultData(startTime, endTime time.Time) *RequestData {
 	failed := c.failed.Load()
 
 	// Calculate statistics (will merge worker response times internally)
-	stats := c.calculateStats(duration, totalReqs, failed)
+	// Use actualQPS from per-worker timing instead of overall duration
+	stats := c.calculateStats(duration, totalReqs, failed, actualQPS)
 
 	// Merge all worker samples for response time snapshots
 	var allSamples []ResponseTimeSnapshot
@@ -274,7 +275,7 @@ func (c *Collector) buildResultData(startTime, endTime time.Time) *RequestData {
 }
 
 // calculateStats calculates statistical metrics from response times
-func (c *Collector) calculateStats(duration float64, totalReqs, failed int64) RequestStats {
+func (c *Collector) calculateStats(duration float64, totalReqs, failed int64, actualQPS float64) RequestStats {
 	stats := RequestStats{}
 
 	// Merge all worker response times into a single slice
@@ -285,9 +286,8 @@ func (c *Collector) calculateStats(duration float64, totalReqs, failed int64) Re
 
 	if len(allResponseTimes) == 0 {
 		stats.ErrorRate = 100.0
-		if duration > 0 {
-			stats.ActualQPS = float64(totalReqs) / duration
-		}
+		// Use accurate QPS from per-worker timing
+		stats.ActualQPS = actualQPS
 		return stats
 	}
 
@@ -315,10 +315,9 @@ func (c *Collector) calculateStats(duration float64, totalReqs, failed int64) Re
 		stats.ErrorRate = float64(failed) / float64(totalReqs) * 100
 	}
 
-	// Actual QPS
-	if duration > 0 {
-		stats.ActualQPS = float64(totalReqs) / duration
-	}
+	// Use accurate QPS from per-worker timing (sum of all workers' QPS)
+	// This avoids precision loss from overall start/end time differences
+	stats.ActualQPS = actualQPS
 
 	return stats
 }
