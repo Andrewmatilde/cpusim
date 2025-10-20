@@ -97,6 +97,7 @@ func (c *Collector) Run(ctx context.Context) (*RequestData, error) {
 			defer wg.Done()
 
 			var workerStart time.Time
+			var workerEnd time.Time
 			var requestCount int64
 
 			// Calculate interval: multiply first to avoid integer division precision loss
@@ -112,8 +113,7 @@ func (c *Collector) Run(ctx context.Context) (*RequestData, error) {
 			for {
 				select {
 				case <-ctx.Done():
-					// Record worker end time
-					workerEnd := time.Now()
+					// Send worker stats (using last request time, not context cancel time)
 					if requestCount > 0 {
 						statsChan <- workerStats{
 							startTime: workerStart,
@@ -123,10 +123,12 @@ func (c *Collector) Run(ctx context.Context) (*RequestData, error) {
 					}
 					return
 				case <-ticker.C:
-					// Record first request time
+					// Record request time
+					requestTime := time.Now()
 					if requestCount == 0 {
-						workerStart = time.Now()
+						workerStart = requestTime
 					}
+					workerEnd = requestTime
 					c.sendRequest(ctx, targetURL, workerID)
 					requestCount++
 				}
