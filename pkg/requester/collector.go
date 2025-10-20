@@ -23,22 +23,21 @@ type Collector struct {
 	successful    atomic.Int64
 	failed        atomic.Int64
 
-	// Response times for statistics calculation
-	responseTimes []float64
-	rtMu          sync.Mutex
-
-	// Detailed samples (limited to avoid memory issues)
-	samples    []ResponseTimeSnapshot
-	samplesMu  sync.Mutex
-	maxSamples int
+	// Per-worker response time collection (lock-free during collection)
+	workerResponseTimes [][]float64
+	workerSamples       [][]ResponseTimeSnapshot
+	maxSamples          int
 }
 
 // NewCollector creates a new request collector
 func NewCollector(config Config) *Collector {
+	numWorkers := 16
+
 	// Configure HTTP transport for high concurrency
+	// Increased connection pool size to handle 1800+ QPS
 	transport := &http.Transport{
-		MaxIdleConns:        100,
-		MaxIdleConnsPerHost: 100,
+		MaxIdleConns:        500,
+		MaxIdleConnsPerHost: 500,
 		IdleConnTimeout:     90 * time.Second,
 		DisableKeepAlives:   false,
 	}
@@ -48,12 +47,20 @@ func NewCollector(config Config) *Collector {
 		Timeout:   5 * time.Second,
 	}
 
+	// Pre-allocate per-worker slices to avoid lock contention
+	workerResponseTimes := make([][]float64, numWorkers)
+	workerSamples := make([][]ResponseTimeSnapshot, numWorkers)
+	for i := 0; i < numWorkers; i++ {
+		workerResponseTimes[i] = make([]float64, 0, 10000/numWorkers)
+		workerSamples[i] = make([]ResponseTimeSnapshot, 0, 1000/numWorkers)
+	}
+
 	return &Collector{
-		config:        config,
-		httpClient:    httpClient,
-		responseTimes: make([]float64, 0, 10000),
-		samples:       make([]ResponseTimeSnapshot, 0, 1000),
-		maxSamples:    1000,
+		config:              config,
+		httpClient:          httpClient,
+		workerResponseTimes: workerResponseTimes,
+		workerSamples:       workerSamples,
+		maxSamples:          1000,
 	}
 }
 
@@ -86,7 +93,7 @@ func (c *Collector) Run(ctx context.Context) (*RequestData, error) {
 	// Start worker goroutines
 	for i := 0; i < numWorkers; i++ {
 		wg.Add(1)
-		go func() {
+		go func(workerID int) {
 			defer wg.Done()
 
 			var workerStart time.Time
@@ -120,11 +127,11 @@ func (c *Collector) Run(ctx context.Context) (*RequestData, error) {
 					if requestCount == 0 {
 						workerStart = time.Now()
 					}
-					c.sendRequest(ctx, targetURL)
+					c.sendRequest(ctx, targetURL, workerID)
 					requestCount++
 				}
 			}
-		}()
+		}(i)
 	}
 
 	// Wait for context cancellation
@@ -167,13 +174,13 @@ func (c *Collector) Run(ctx context.Context) (*RequestData, error) {
 }
 
 // sendRequest sends a single HTTP request and records statistics
-func (c *Collector) sendRequest(ctx context.Context, targetURL string) {
+func (c *Collector) sendRequest(ctx context.Context, targetURL string, workerID int) {
 	startTime := time.Now()
 
 	// Create request with empty JSON body
 	req, err := http.NewRequestWithContext(ctx, "POST", targetURL, bytes.NewBufferString("{}"))
 	if err != nil {
-		c.recordFailure(startTime, err)
+		c.recordFailure(startTime, err, workerID)
 		return
 	}
 
@@ -184,7 +191,7 @@ func (c *Collector) sendRequest(ctx context.Context, targetURL string) {
 	responseTime := time.Since(startTime)
 
 	if err != nil {
-		c.recordFailure(startTime, err)
+		c.recordFailure(startTime, err, workerID)
 		return
 	}
 	defer resp.Body.Close()
@@ -195,51 +202,45 @@ func (c *Collector) sendRequest(ctx context.Context, targetURL string) {
 
 	// Check status code
 	if resp.StatusCode >= 200 && resp.StatusCode < 300 {
-		c.recordSuccess(startTime, responseTime)
+		c.recordSuccess(startTime, responseTime, workerID)
 	} else {
-		c.recordFailure(startTime, fmt.Errorf("HTTP %d", resp.StatusCode))
+		c.recordFailure(startTime, fmt.Errorf("HTTP %d", resp.StatusCode), workerID)
 	}
 }
 
-// recordSuccess records a successful request
-func (c *Collector) recordSuccess(timestamp time.Time, responseTime time.Duration) {
+// recordSuccess records a successful request (lock-free per-worker collection)
+func (c *Collector) recordSuccess(timestamp time.Time, responseTime time.Duration, workerID int) {
 	c.totalRequests.Add(1)
 	c.successful.Add(1)
 
 	rtMs := float64(responseTime.Nanoseconds()) / 1e6
 
-	// Store response time for statistics
-	c.rtMu.Lock()
-	c.responseTimes = append(c.responseTimes, rtMs)
-	c.rtMu.Unlock()
+	// Store response time in worker-specific slice (no lock needed)
+	c.workerResponseTimes[workerID] = append(c.workerResponseTimes[workerID], rtMs)
 
-	// Store sample (limited)
-	c.samplesMu.Lock()
-	if len(c.samples) < c.maxSamples {
-		c.samples = append(c.samples, ResponseTimeSnapshot{
+	// Store sample in worker-specific slice (limited, no lock needed)
+	if len(c.workerSamples[workerID]) < c.maxSamples/16 {
+		c.workerSamples[workerID] = append(c.workerSamples[workerID], ResponseTimeSnapshot{
 			Timestamp:    timestamp,
 			ResponseTime: rtMs,
 			Success:      true,
 		})
 	}
-	c.samplesMu.Unlock()
 }
 
-// recordFailure records a failed request
-func (c *Collector) recordFailure(timestamp time.Time, err error) {
+// recordFailure records a failed request (lock-free per-worker collection)
+func (c *Collector) recordFailure(timestamp time.Time, err error, workerID int) {
 	c.totalRequests.Add(1)
 	c.failed.Add(1)
 
-	// Store sample (limited)
-	c.samplesMu.Lock()
-	if len(c.samples) < c.maxSamples {
-		c.samples = append(c.samples, ResponseTimeSnapshot{
+	// Store sample in worker-specific slice (limited, no lock needed)
+	if len(c.workerSamples[workerID]) < c.maxSamples/16 {
+		c.workerSamples[workerID] = append(c.workerSamples[workerID], ResponseTimeSnapshot{
 			Timestamp:    timestamp,
 			ResponseTime: 0,
 			Success:      false,
 		})
 	}
-	c.samplesMu.Unlock()
 }
 
 // buildResultData constructs the final RequestData from collected statistics
@@ -250,8 +251,14 @@ func (c *Collector) buildResultData(startTime, endTime time.Time) *RequestData {
 	successful := c.successful.Load()
 	failed := c.failed.Load()
 
-	// Calculate statistics
+	// Calculate statistics (will merge worker response times internally)
 	stats := c.calculateStats(duration, totalReqs, failed)
+
+	// Merge all worker samples for response time snapshots
+	var allSamples []ResponseTimeSnapshot
+	for _, workerSamples := range c.workerSamples {
+		allSamples = append(allSamples, workerSamples...)
+	}
 
 	return &RequestData{
 		Config:        c.config,
@@ -262,18 +269,21 @@ func (c *Collector) buildResultData(startTime, endTime time.Time) *RequestData {
 		Successful:    successful,
 		Failed:        failed,
 		Stats:         stats,
-		ResponseTimes: c.samples,
+		ResponseTimes: allSamples,
 	}
 }
 
 // calculateStats calculates statistical metrics from response times
 func (c *Collector) calculateStats(duration float64, totalReqs, failed int64) RequestStats {
-	c.rtMu.Lock()
-	defer c.rtMu.Unlock()
-
 	stats := RequestStats{}
 
-	if len(c.responseTimes) == 0 {
+	// Merge all worker response times into a single slice
+	var allResponseTimes []float64
+	for _, workerTimes := range c.workerResponseTimes {
+		allResponseTimes = append(allResponseTimes, workerTimes...)
+	}
+
+	if len(allResponseTimes) == 0 {
 		stats.ErrorRate = 100.0
 		if duration > 0 {
 			stats.ActualQPS = float64(totalReqs) / duration
@@ -282,25 +292,23 @@ func (c *Collector) calculateStats(duration float64, totalReqs, failed int64) Re
 	}
 
 	// Sort for percentile calculation
-	sorted := make([]float64, len(c.responseTimes))
-	copy(sorted, c.responseTimes)
-	sort.Float64s(sorted)
+	sort.Float64s(allResponseTimes)
 
 	// Calculate average
 	var sum float64
-	for _, rt := range sorted {
+	for _, rt := range allResponseTimes {
 		sum += rt
 	}
-	stats.AvgResponseTime = sum / float64(len(sorted))
+	stats.AvgResponseTime = sum / float64(len(allResponseTimes))
 
 	// Min and Max
-	stats.MinResponseTime = sorted[0]
-	stats.MaxResponseTime = sorted[len(sorted)-1]
+	stats.MinResponseTime = allResponseTimes[0]
+	stats.MaxResponseTime = allResponseTimes[len(allResponseTimes)-1]
 
 	// Percentiles
-	stats.P50 = percentile(sorted, 0.5)
-	stats.P95 = percentile(sorted, 0.95)
-	stats.P99 = percentile(sorted, 0.99)
+	stats.P50 = percentile(allResponseTimes, 0.5)
+	stats.P95 = percentile(allResponseTimes, 0.95)
+	stats.P99 = percentile(allResponseTimes, 0.99)
 
 	// Error rate
 	if totalReqs > 0 {
