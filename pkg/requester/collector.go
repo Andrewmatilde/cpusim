@@ -123,14 +123,16 @@ func (c *Collector) Run(ctx context.Context) (*RequestData, error) {
 					}
 					return
 				case <-ticker.C:
-					// Record request time
+					// Record request time and launch request asynchronously
 					requestTime := time.Now()
 					if requestCount == 0 {
 						workerStart = requestTime
 					}
 					workerEnd = requestTime
-					c.sendRequest(ctx, targetURL, workerID)
 					requestCount++
+
+					// Send request asynchronously to avoid blocking ticker
+					go c.sendRequest(ctx, targetURL, workerID)
 				}
 			}
 		}(i)
