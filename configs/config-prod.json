@@ -1,0 +1,29 @@
+{
+  "target_hosts": [
+    {
+      "name": "target-1",
+      "external_ip": "128.1.40.151",
+      "internal_ip": "10.35.176.245",
+      "cpu_service_url": "http://128.1.40.151:80",
+      "collector_service_url": "http://128.1.40.151:8080"
+    },
+    {
+      "name": "target-2",
+      "external_ip": "107.155.56.199",
+      "internal_ip": "10.35.65.212",
+      "cpu_service_url": "http://107.155.56.199:80",
+      "collector_service_url": "http://107.155.56.199:8080"
+    }
+  ],
+  "client_host": {
+    "name": "client-1",
+    "external_ip": "45.43.63.88",
+    "internal_ip": "10.35.104.26",
+    "requester_service_url": "http://45.43.63.88:80"
+  },
+  "load_balancer": {
+     "name": "lb-1",
+     "external_ip": "",
+     "internal_ip": "10.35.55.87"
+  }
+}
