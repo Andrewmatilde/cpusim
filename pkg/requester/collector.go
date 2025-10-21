@@ -91,7 +91,36 @@ func (c *Collector) Run(ctx context.Context) (*RequestData, error) {
 	// Channel to collect worker statistics
 	statsChan := make(chan workerStats, numWorkers)
 
-	// Start worker goroutines
+	// OPTIMIZATION: Use buffered channel as request queue to avoid creating goroutines on every tick
+	// Each worker will have its own queue to maintain rate limiting per worker
+	// Buffer must be large enough to hold all requests for the duration of the experiment
+	// At 1400 QPS for 60s = 84000 total / 16 workers = 5250 per worker
+	// Use 10000 to be safe and handle bursts
+	requestQueues := make([]chan struct{}, numWorkers)
+	for i := 0; i < numWorkers; i++ {
+		requestQueues[i] = make(chan struct{}, 10000)
+	}
+
+	// Start request sender goroutines (one per worker, reused for all requests)
+	for i := 0; i < numWorkers; i++ {
+		wg.Add(1)
+		go func(workerID int) {
+			defer wg.Done()
+			queue := requestQueues[workerID]
+
+			for {
+				select {
+				case <-ctx.Done():
+					return
+				case <-queue:
+					// Send request synchronously in this dedicated goroutine
+					c.sendRequest(ctx, targetURL, workerID)
+				}
+			}
+		}(i)
+	}
+
+	// Start ticker goroutines (one per worker, controls rate)
 	for i := 0; i < numWorkers; i++ {
 		wg.Add(1)
 		go func(workerID int) {
@@ -111,6 +140,8 @@ func (c *Collector) Run(ctx context.Context) (*RequestData, error) {
 			ticker := time.NewTicker(interval)
 			defer ticker.Stop()
 
+			queue := requestQueues[workerID]
+
 			for {
 				select {
 				case <-ctx.Done():
@@ -124,7 +155,7 @@ func (c *Collector) Run(ctx context.Context) (*RequestData, error) {
 					}
 					return
 				case <-ticker.C:
-					// Record request time and launch request asynchronously
+					// Record request time and queue request
 					requestTime := time.Now()
 					if requestCount == 0 {
 						workerStart = requestTime
@@ -132,8 +163,14 @@ func (c *Collector) Run(ctx context.Context) (*RequestData, error) {
 					workerEnd = requestTime
 					requestCount++
 
-					// Send request asynchronously to avoid blocking ticker
-					go c.sendRequest(ctx, targetURL, workerID)
+					// Send to queue with context check to prevent blocking forever
+					select {
+					case queue <- struct{}{}:
+						// Queued successfully
+					case <-ctx.Done():
+						// Context cancelled while trying to queue
+						return
+					}
 				}
 			}
 		}(i)
