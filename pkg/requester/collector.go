@@ -33,13 +33,14 @@ type Collector struct {
 func NewCollector(config Config) *Collector {
 	numWorkers := 16
 
-	// Configure HTTP transport for high concurrency
-	// Increased connection pool size to handle 1800+ QPS
+	// Configure HTTP transport for load balancing
+	// DisableKeepAlives is set to true to avoid connection reuse,
+	// which helps load balancers distribute requests more evenly
 	transport := &http.Transport{
-		MaxIdleConns:        500,
-		MaxIdleConnsPerHost: 500,
-		IdleConnTimeout:     90 * time.Second,
-		DisableKeepAlives:   false,
+		MaxIdleConns:        100, // Reduced since we're not reusing connections
+		MaxIdleConnsPerHost: 100,
+		IdleConnTimeout:     30 * time.Second,
+		DisableKeepAlives:   true, // Disable connection reuse for better load balancing
 	}
 
 	httpClient := &http.Client{
