@@ -33,16 +33,14 @@ type Collector struct {
 func NewCollector(config Config) *Collector {
 	numWorkers := 16
 
-	// Configure HTTP transport with limited connection pooling
-	// Use small connection pool (10 per host) to balance between:
-	// - Reducing TIME_WAIT connections (avoid 72k+ TIME_WAIT)
-	// - Maintaining load balancing via Layer 4 LB (10 connections distribute across backends)
+	// Configure HTTP transport for short connections
+	// Client-side close: client actively closes connections after each request
+	// Combined with tcp_tw_reuse to avoid port exhaustion
 	transport := &http.Transport{
-		MaxIdleConns:        100,
-		MaxIdleConnsPerHost: 10,  // Limited pool: only 10 idle connections per backend
-		MaxConnsPerHost:     50,  // Max 50 total connections per backend
-		IdleConnTimeout:     30 * time.Second,
-		DisableKeepAlives:   false, // Enable keep-alive with limited pool
+		MaxIdleConns:        0,
+		MaxIdleConnsPerHost: 0,
+		DisableKeepAlives:   true, // Client closes connection after each request
+		// Note: tcp_tw_reuse must be enabled on client to reuse TIME_WAIT ports
 	}
 
 	httpClient := &http.Client{

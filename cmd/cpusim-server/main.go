@@ -72,19 +72,8 @@ func runServerMode(port int) {
 
 	addr := fmt.Sprintf(":%d", port)
 	log.Printf("Server模式: 监听端口 %s", addr)
-	log.Printf("HTTP Keep-Alive: 已禁用 (短连接模式)")
 
-	// Create custom server with Keep-Alive disabled
-	server := &http.Server{
-		Addr:    addr,
-		Handler: nil, // Use DefaultServeMux
-	}
-
-	// Disable HTTP Keep-Alive to force short connections
-	// This ensures load balancer can distribute requests evenly
-	server.SetKeepAlivesEnabled(false)
-
-	if err := server.ListenAndServe(); err != nil {
+	if err := http.ListenAndServe(addr, nil); err != nil {
 		log.Fatalf("服务启动失败: %v", err)
 	}
 }
