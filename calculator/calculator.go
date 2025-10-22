@@ -28,19 +28,27 @@ func New() *Calculator {
 }
 
 // GCD 计算预定义大整数的最大公约数
+// 为了增加计算开销，计算 5 次以屏蔽网络波动的影响
 func (c *Calculator) GCD() *big.Int {
-	// 使用固定的大整数进行计算
-	x := new(big.Int).Set(c.fixedA)
-	y := new(big.Int).Set(c.fixedB)
+	var result *big.Int
 
-	for y.Sign() != 0 {
-		temp := new(big.Int)
-		temp.Mod(x, y)
-		x = y
-		y = temp
+	// 计算 5 次，增加 5 倍计算开销
+	for i := 0; i < 5; i++ {
+		// 使用固定的大整数进行计算
+		x := new(big.Int).Set(c.fixedA)
+		y := new(big.Int).Set(c.fixedB)
+
+		for y.Sign() != 0 {
+			temp := new(big.Int)
+			temp.Mod(x, y)
+			x = y
+			y = temp
+		}
+
+		result = x
 	}
 
-	return x
+	return result
 }
 
 // GetFixedNumbers 返回当前使用的固定大整数
