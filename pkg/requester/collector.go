@@ -33,14 +33,14 @@ type Collector struct {
 func NewCollector(config Config) *Collector {
 	numWorkers := 16
 
-	// Configure HTTP transport for short connections
-	// Client-side close: client actively closes connections after each request
-	// Combined with tcp_tw_reuse to avoid port exhaustion
+	// Configure HTTP transport for connection pooling with keep-alive
+	// Uses persistent connections to reduce connection overhead
 	transport := &http.Transport{
-		MaxIdleConns:        0,
-		MaxIdleConnsPerHost: 0,
-		DisableKeepAlives:   true, // Client closes connection after each request
-		// Note: tcp_tw_reuse must be enabled on client to reuse TIME_WAIT ports
+		MaxIdleConns:        200,  // Maximum idle connections across all hosts
+		MaxIdleConnsPerHost: 100,  // Maximum idle connections per host
+		MaxConnsPerHost:     200,  // Maximum connections per host (including active)
+		IdleConnTimeout:     90 * time.Second, // Keep idle connections alive
+		DisableKeepAlives:   false, // Enable HTTP keep-alive for connection reuse
 	}
 
 	httpClient := &http.Client{
