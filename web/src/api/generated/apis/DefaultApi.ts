@@ -66,6 +66,13 @@ export interface GetExperimentGroupWithDetailsRequest {
     groupId: string;
 }
 
+export interface ListExperimentsRequest {
+    page?: number;
+    pageSize?: number;
+    sortBy?: ListExperimentsSortByEnum;
+    sortOrder?: ListExperimentsSortOrderEnum;
+}
+
 export interface ResumeExperimentGroupRequest {
     groupId: string;
 }
@@ -313,11 +320,27 @@ export class DefaultApi extends runtime.BaseAPI {
     }
 
     /**
-     * Returns a list of all experiments with metadata
+     * Returns a paginated list of all experiments with metadata
      * List all stored experiments
      */
-    async listExperimentsRaw(initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<runtime.ApiResponse<ExperimentListResponse>> {
+    async listExperimentsRaw(requestParameters: ListExperimentsRequest, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<runtime.ApiResponse<ExperimentListResponse>> {
         const queryParameters: any = {};
+
+        if (requestParameters['page'] != null) {
+            queryParameters['page'] = requestParameters['page'];
+        }
+
+        if (requestParameters['pageSize'] != null) {
+            queryParameters['pageSize'] = requestParameters['pageSize'];
+        }
+
+        if (requestParameters['sortBy'] != null) {
+            queryParameters['sortBy'] = requestParameters['sortBy'];
+        }
+
+        if (requestParameters['sortOrder'] != null) {
+            queryParameters['sortOrder'] = requestParameters['sortOrder'];
+        }
 
         const headerParameters: runtime.HTTPHeaders = {};
 
@@ -335,11 +358,11 @@ export class DefaultApi extends runtime.BaseAPI {
     }
 
     /**
-     * Returns a list of all experiments with metadata
+     * Returns a paginated list of all experiments with metadata
      * List all stored experiments
      */
-    async listExperiments(initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<ExperimentListResponse> {
-        const response = await this.listExperimentsRaw(initOverrides);
+    async listExperiments(requestParameters: ListExperimentsRequest = {}, initOverrides?: RequestInit | runtime.InitOverrideFunction): Promise<ExperimentListResponse> {
+        const response = await this.listExperimentsRaw(requestParameters, initOverrides);
         return await response.value();
     }
 
@@ -502,3 +525,21 @@ export class DefaultApi extends runtime.BaseAPI {
     }
 
 }
+
+/**
+ * @export
+ */
+export const ListExperimentsSortByEnum = {
+    CreatedAt: 'createdAt',
+    ModifiedAt: 'modifiedAt',
+    Id: 'id'
+} as const;
+export type ListExperimentsSortByEnum = typeof ListExperimentsSortByEnum[keyof typeof ListExperimentsSortByEnum];
+/**
+ * @export
+ */
+export const ListExperimentsSortOrderEnum = {
+    Asc: 'asc',
+    Desc: 'desc'
+} as const;
+export type ListExperimentsSortOrderEnum = typeof ListExperimentsSortOrderEnum[keyof typeof ListExperimentsSortOrderEnum];

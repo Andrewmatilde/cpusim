@@ -61,8 +61,21 @@ export class DashboardAPIClient {
   }
 
   // Experiment Management
-  async listExperiments(): Promise<ExperimentListResponse> {
-    return this.request<ExperimentListResponse>('/experiments');
+  async listExperiments(params?: {
+    page?: number;
+    pageSize?: number;
+    sortBy?: 'createdAt' | 'modifiedAt' | 'id';
+    sortOrder?: 'asc' | 'desc';
+  }): Promise<ExperimentListResponse> {
+    const queryParams = new URLSearchParams();
+    if (params?.page) queryParams.append('page', params.page.toString());
+    if (params?.pageSize) queryParams.append('pageSize', params.pageSize.toString());
+    if (params?.sortBy) queryParams.append('sortBy', params.sortBy);
+    if (params?.sortOrder) queryParams.append('sortOrder', params.sortOrder);
+
+    const queryString = queryParams.toString();
+    const path = queryString ? `/experiments?${queryString}` : '/experiments';
+    return this.request<ExperimentListResponse>(path);
   }
 
   async startExperiment(data: StartExperimentRequest): Promise<ExperimentResponse> {

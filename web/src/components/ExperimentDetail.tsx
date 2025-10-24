@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -13,8 +13,12 @@ import { toast } from 'sonner';
 export function ExperimentDetail() {
   const { experimentId } = useParams<{ experimentId: string }>();
   const navigate = useNavigate();
+  const location = useLocation();
   const [experimentData, setExperimentData] = useState<ExperimentData | null>(null);
   const [loading, setLoading] = useState(true);
+
+  // Get the previous location from navigation state, default to '/'
+  const fromLocation = (location.state as { from?: string })?.from || '/';
 
   useEffect(() => {
     if (!experimentId) {
@@ -66,7 +70,7 @@ export function ExperimentDetail() {
               <Download className="h-5 w-5" />
               Experiment: {experimentId}
             </CardTitle>
-            <Button onClick={() => navigate('/')} variant="outline" size="sm">
+            <Button onClick={() => navigate(fromLocation)} variant="outline" size="sm">
               <ArrowLeft className="h-4 w-4 mr-2" />
               Back to Dashboard
             </Button>

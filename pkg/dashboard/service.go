@@ -5,6 +5,7 @@ import (
 	collectorAPI "cpusim/collector/api/generated"
 	requesterAPI "cpusim/requester/api/generated"
 	"fmt"
+	"sort"
 	"time"
 
 	"cpusim/pkg/exp"
@@ -191,6 +192,46 @@ func (s *Service) GetExperiment(id string) (*ExperimentData, error) {
 // ListExperiments lists all stored experiments
 func (s *Service) ListExperiments() ([]exp.ExperimentInfo, error) {
 	return s.Manager.ListExperiments()
+}
+
+// ListExperimentsPaginated lists experiments with pagination and sorting
+func (s *Service) ListExperimentsPaginated(page, pageSize int, sortBy string, sortOrder string) ([]exp.ExperimentInfo, int, error) {
+	// Get all experiments
+	allExperiments, err := s.Manager.ListExperiments()
+	if err != nil {
+		return nil, 0, err
+	}
+
+	total := len(allExperiments)
+
+	// Sort experiments
+	sortExperiments(allExperiments, sortBy, sortOrder)
+
+	// Apply pagination
+	// Validate page and pageSize
+	if page < 1 {
+		page = 1
+	}
+	if pageSize < 1 {
+		pageSize = 10
+	}
+	if pageSize > 100 {
+		pageSize = 100
+	}
+
+	// Calculate offsets
+	startIdx := (page - 1) * pageSize
+	endIdx := startIdx + pageSize
+
+	// Handle out-of-range
+	if startIdx >= total {
+		return []exp.ExperimentInfo{}, total, nil
+	}
+	if endIdx > total {
+		endIdx = total
+	}
+
+	return allExperiments[startIdx:endIdx], total, nil
 }
 
 // HostStatus represents the status of a host
@@ -976,4 +1017,27 @@ func sqrt(x float64) float64 {
 		z = z - (z*z-x)/(2*z)
 	}
 	return z
+}
+
+// sortExperiments sorts experiment list by the specified field and order
+func sortExperiments(experiments []exp.ExperimentInfo, sortBy string, sortOrder string) {
+	sort.Slice(experiments, func(i, j int) bool {
+		var less bool
+		switch sortBy {
+		case "id":
+			less = experiments[i].ID < experiments[j].ID
+		case "modifiedAt":
+			less = experiments[i].ModifiedAt.Before(experiments[j].ModifiedAt)
+		case "createdAt":
+			fallthrough
+		default:
+			less = experiments[i].CreatedAt.Before(experiments[j].CreatedAt)
+		}
+
+		// Reverse for descending order
+		if sortOrder == "desc" {
+			return !less
+		}
+		return less
+	})
 }

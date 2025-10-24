@@ -40,6 +40,24 @@ export interface ExperimentListResponse {
      */
     total?: number;
     /**
+     * Current page number
+     * @type {number}
+     * @memberof ExperimentListResponse
+     */
+    page?: number;
+    /**
+     * Number of items per page
+     * @type {number}
+     * @memberof ExperimentListResponse
+     */
+    pageSize?: number;
+    /**
+     * Total number of pages
+     * @type {number}
+     * @memberof ExperimentListResponse
+     */
+    totalPages?: number;
+    /**
      * 
      * @type {Date}
      * @memberof ExperimentListResponse
@@ -66,6 +84,9 @@ export function ExperimentListResponseFromJSONTyped(json: any, ignoreDiscriminat
         
         'experiments': json['experiments'] == null ? undefined : ((json['experiments'] as Array<any>).map(ExperimentInfoFromJSON)),
         'total': json['total'] == null ? undefined : json['total'],
+        'page': json['page'] == null ? undefined : json['page'],
+        'pageSize': json['pageSize'] == null ? undefined : json['pageSize'],
+        'totalPages': json['totalPages'] == null ? undefined : json['totalPages'],
         'timestamp': json['timestamp'] == null ? undefined : (new Date(json['timestamp'])),
     };
 }
@@ -83,6 +104,9 @@ export function ExperimentListResponseToJSONTyped(value?: ExperimentListResponse
         
         'experiments': value['experiments'] == null ? undefined : ((value['experiments'] as Array<any>).map(ExperimentInfoToJSON)),
         'total': value['total'],
+        'page': value['page'],
+        'pageSize': value['pageSize'],
+        'totalPages': value['totalPages'],
         'timestamp': value['timestamp'] == null ? undefined : ((value['timestamp']).toISOString()),
     };
 }

@@ -80,9 +80,30 @@ func (h *APIHandler) StartExperiment(c *gin.Context) {
 	c.JSON(http.StatusOK, response)
 }
 
-// ListExperiments implements listing all stored experiments
-func (h *APIHandler) ListExperiments(c *gin.Context) {
-	experiments, err := h.service.ListExperiments()
+// ListExperiments implements listing all stored experiments with pagination
+func (h *APIHandler) ListExperiments(c *gin.Context, params generated.ListExperimentsParams) {
+	// Set defaults for pagination parameters
+	page := params.Page
+	if page == 0 {
+		page = 1
+	}
+	pageSize := params.PageSize
+	if pageSize == 0 {
+		pageSize = 10
+	}
+
+	// Set defaults for sorting parameters
+	sortBy := string(params.SortBy)
+	if sortBy == "" {
+		sortBy = "createdAt"
+	}
+	sortOrder := string(params.SortOrder)
+	if sortOrder == "" {
+		sortOrder = "desc"
+	}
+
+	// Get paginated experiments
+	experiments, total, err := h.service.ListExperimentsPaginated(page, pageSize, sortBy, sortOrder)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, generated.ErrorResponse{
 			Error:     "internal_error",
@@ -103,9 +124,18 @@ func (h *APIHandler) ListExperiments(c *gin.Context) {
 		}
 	}
 
+	// Calculate total pages
+	totalPages := (total + pageSize - 1) / pageSize
+	if totalPages == 0 {
+		totalPages = 1
+	}
+
 	response := generated.ExperimentListResponse{
 		Experiments: apiExperiments,
-		Total:       len(apiExperiments),
+		Total:       total,
+		Page:        page,
+		PageSize:    pageSize,
+		TotalPages:  totalPages,
 		Timestamp:   time.Now(),
 	}
 

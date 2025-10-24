@@ -10,19 +10,18 @@ import { apiClient } from '@/api/client';
 import type {
   ServiceConfig,
   StatusResponse,
-  ExperimentListResponse,
   StartExperimentRequest,
   HostsStatusResponse
 } from '@/api/types';
-import { RefreshCw, Server, AlertCircle, Play, Square, Download, Loader2, Activity, Laptop, History, FileText, Network } from 'lucide-react';
+import { RefreshCw, Server, AlertCircle, Play, Square, Download, Loader2, Activity, Laptop, Network } from 'lucide-react';
 import { toast } from 'sonner';
+import { ExperimentsList } from './ExperimentsList';
 
 export function Dashboard() {
   const navigate = useNavigate();
   const [config, setConfig] = useState<ServiceConfig | null>(null);
   const [status, setStatus] = useState<StatusResponse | null>(null);
   const [hostsStatus, setHostsStatus] = useState<HostsStatusResponse | null>(null);
-  const [experimentsList, setExperimentsList] = useState<ExperimentListResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [experimentId, setExperimentId] = useState(`exp-${Date.now()}`);
@@ -35,16 +34,14 @@ export function Dashboard() {
     try {
       setLoading(true);
       setError(null);
-      const [configData, statusData, hostsStatusData, experimentsData] = await Promise.all([
+      const [configData, statusData, hostsStatusData] = await Promise.all([
         apiClient.getConfig(),
         apiClient.getStatus(),
-        apiClient.getHostsStatus(),
-        apiClient.listExperiments()
+        apiClient.getHostsStatus()
       ]);
       setConfig(configData);
       setStatus(statusData);
       setHostsStatus(hostsStatusData);
-      setExperimentsList(experimentsData);
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : 'Failed to fetch data';
       setError(errorMessage);
@@ -55,7 +52,7 @@ export function Dashboard() {
 
   useEffect(() => {
     fetchData();
-    const interval = setInterval(fetchData, 5000); // Refresh every 5s
+    const interval = setInterval(fetchData, 5000);
     return () => clearInterval(interval);
   }, []);
 
@@ -95,10 +92,9 @@ export function Dashboard() {
     }
   };
 
-  const handleViewData = (expId?: string) => {
-    const idToLoad = expId || experimentId;
-    if (!idToLoad) return;
-    navigate(`/experiment/${idToLoad}`);
+  const handleViewData = () => {
+    if (!experimentId) return;
+    navigate(`/experiment/${experimentId}`);
   };
 
   const isRunning = status?.status === 'Running';
@@ -390,48 +386,8 @@ export function Dashboard() {
           </CardContent>
         </Card>
 
-        {/* Stored Experiments List */}
-        {experimentsList && experimentsList.experiments && experimentsList.experiments.length > 0 && (
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <History className="h-5 w-5" />
-                Stored Experiments ({experimentsList.total})
-              </CardTitle>
-              <CardDescription>
-                Past experiment results stored on disk
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              <div className="space-y-2">
-                {experimentsList.experiments
-                  .sort((a, b) => new Date(b.modifiedAt || 0).getTime() - new Date(a.modifiedAt || 0).getTime())
-                  .map((exp) => (
-                    <div
-                      key={exp.id}
-                      className="border rounded-lg p-3 hover:bg-accent cursor-pointer transition-colors"
-                      onClick={() => {
-                        handleViewData(exp.id || '');
-                      }}
-                    >
-                      <div className="flex items-center justify-between">
-                        <div className="flex items-center gap-2">
-                          <FileText className="h-4 w-4 text-muted-foreground" />
-                          <span className="font-medium">{exp.id}</span>
-                        </div>
-                        <div className="text-xs text-muted-foreground">
-                          {exp.fileSizeKB} KB
-                        </div>
-                      </div>
-                      <div className="text-xs text-muted-foreground mt-1">
-                        Modified: {exp.modifiedAt ? new Date(exp.modifiedAt).toLocaleString() : 'Unknown'}
-                      </div>
-                    </div>
-                  ))}
-              </div>
-            </CardContent>
-          </Card>
-        )}
+        {/* Experiments List with Pagination */}
+        <ExperimentsList />
     </div>
   );
 }
