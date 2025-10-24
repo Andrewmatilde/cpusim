@@ -193,7 +193,7 @@ export function ExperimentsList() {
         </div>
 
         {/* Pagination */}
-        {data && data.total > 0 && (
+        {data && data.total !== undefined && data.total > 0 && (
           <Pagination
             currentPage={currentPage}
             totalPages={data.totalPages || 1}
