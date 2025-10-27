@@ -925,8 +925,8 @@ func (s *Service) calculateSteadyStateStats(experiments []*ExperimentData) map[s
 			if stats.ResponseTimeP99 > 0 {
 				latencyMetrics.p99Values = append(latencyMetrics.p99Values, float64(stats.ResponseTimeP99))
 			}
-			if stats.AvgResponseTime > 0 {
-				latencyMetrics.meanValues = append(latencyMetrics.meanValues, float64(stats.AvgResponseTime))
+			if stats.AverageResponseTime > 0 {
+				latencyMetrics.meanValues = append(latencyMetrics.meanValues, float64(stats.AverageResponseTime))
 			}
 			if stats.MinResponseTime > 0 {
 				latencyMetrics.minValues = append(latencyMetrics.minValues, float64(stats.MinResponseTime))
