@@ -718,6 +718,36 @@ components:
         cpuMax:
           type: number
           description: Maximum CPU value observed
+        latencyP50:
+          type: number
+          description: Median latency in milliseconds
+        latencyP90:
+          type: number
+          description: 90th percentile latency in milliseconds
+        latencyP95:
+          type: number
+          description: 95th percentile latency in milliseconds
+        latencyP99:
+          type: number
+          description: 99th percentile latency in milliseconds
+        latencyMean:
+          type: number
+          description: Mean latency in milliseconds
+        latencyMin:
+          type: number
+          description: Minimum latency in milliseconds
+        latencyMax:
+          type: number
+          description: Maximum latency in milliseconds
+        throughput:
+          type: number
+          description: Successful requests per second
+        errorRate:
+          type: number
+          description: Error rate percentage
+        utilization:
+          type: number
+          description: Server utilization (lambda/mu)
         sampleSize:
           type: integer
           description: Number of experiments used in calculation

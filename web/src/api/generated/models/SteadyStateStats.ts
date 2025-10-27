@@ -56,6 +56,66 @@ export interface SteadyStateStats {
      */
     cpuMax?: number;
     /**
+     * Median latency in milliseconds
+     * @type {number}
+     * @memberof SteadyStateStats
+     */
+    latencyP50?: number;
+    /**
+     * 90th percentile latency in milliseconds
+     * @type {number}
+     * @memberof SteadyStateStats
+     */
+    latencyP90?: number;
+    /**
+     * 95th percentile latency in milliseconds
+     * @type {number}
+     * @memberof SteadyStateStats
+     */
+    latencyP95?: number;
+    /**
+     * 99th percentile latency in milliseconds
+     * @type {number}
+     * @memberof SteadyStateStats
+     */
+    latencyP99?: number;
+    /**
+     * Mean latency in milliseconds
+     * @type {number}
+     * @memberof SteadyStateStats
+     */
+    latencyMean?: number;
+    /**
+     * Minimum latency in milliseconds
+     * @type {number}
+     * @memberof SteadyStateStats
+     */
+    latencyMin?: number;
+    /**
+     * Maximum latency in milliseconds
+     * @type {number}
+     * @memberof SteadyStateStats
+     */
+    latencyMax?: number;
+    /**
+     * Successful requests per second
+     * @type {number}
+     * @memberof SteadyStateStats
+     */
+    throughput?: number;
+    /**
+     * Error rate percentage
+     * @type {number}
+     * @memberof SteadyStateStats
+     */
+    errorRate?: number;
+    /**
+     * Server utilization (lambda/mu)
+     * @type {number}
+     * @memberof SteadyStateStats
+     */
+    utilization?: number;
+    /**
      * Number of experiments used in calculation
      * @type {number}
      * @memberof SteadyStateStats
@@ -92,6 +152,16 @@ export function SteadyStateStatsFromJSONTyped(json: any, ignoreDiscriminator: bo
         'cpuConfUpper': json['cpuConfUpper'] == null ? undefined : json['cpuConfUpper'],
         'cpuMin': json['cpuMin'] == null ? undefined : json['cpuMin'],
         'cpuMax': json['cpuMax'] == null ? undefined : json['cpuMax'],
+        'latencyP50': json['latencyP50'] == null ? undefined : json['latencyP50'],
+        'latencyP90': json['latencyP90'] == null ? undefined : json['latencyP90'],
+        'latencyP95': json['latencyP95'] == null ? undefined : json['latencyP95'],
+        'latencyP99': json['latencyP99'] == null ? undefined : json['latencyP99'],
+        'latencyMean': json['latencyMean'] == null ? undefined : json['latencyMean'],
+        'latencyMin': json['latencyMin'] == null ? undefined : json['latencyMin'],
+        'latencyMax': json['latencyMax'] == null ? undefined : json['latencyMax'],
+        'throughput': json['throughput'] == null ? undefined : json['throughput'],
+        'errorRate': json['errorRate'] == null ? undefined : json['errorRate'],
+        'utilization': json['utilization'] == null ? undefined : json['utilization'],
         'sampleSize': json['sampleSize'] == null ? undefined : json['sampleSize'],
         'confidenceLevel': json['confidenceLevel'] == null ? undefined : json['confidenceLevel'],
     };
@@ -114,6 +184,16 @@ export function SteadyStateStatsToJSONTyped(value?: SteadyStateStats | null, ign
         'cpuConfUpper': value['cpuConfUpper'],
         'cpuMin': value['cpuMin'],
         'cpuMax': value['cpuMax'],
+        'latencyP50': value['latencyP50'],
+        'latencyP90': value['latencyP90'],
+        'latencyP95': value['latencyP95'],
+        'latencyP99': value['latencyP99'],
+        'latencyMean': value['latencyMean'],
+        'latencyMin': value['latencyMin'],
+        'latencyMax': value['latencyMax'],
+        'throughput': value['throughput'],
+        'errorRate': value['errorRate'],
+        'utilization': value['utilization'],
         'sampleSize': value['sampleSize'],
         'confidenceLevel': value['confidenceLevel'],
     };

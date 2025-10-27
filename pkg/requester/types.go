@@ -5,12 +5,23 @@ import (
 	"time"
 )
 
+// ArrivalPattern represents the request arrival pattern
+type ArrivalPattern string
+
+const (
+	// ArrivalPatternUniform represents uniform arrival (fixed interval)
+	ArrivalPatternUniform ArrivalPattern = "uniform"
+	// ArrivalPatternPoisson represents Poisson arrival (exponential inter-arrival times)
+	ArrivalPatternPoisson ArrivalPattern = "poisson"
+)
+
 // Config represents the configuration for a request experiment
 type Config struct {
-	TargetIP   string `json:"target_ip"`
-	TargetPort int    `json:"target_port"`
-	QPS        int    `json:"qps"`
-	Timeout    int    `json:"timeout"` // in seconds
+	TargetIP       string         `json:"target_ip"`
+	TargetPort     int            `json:"target_port"`
+	QPS            int            `json:"qps"`
+	Timeout        int            `json:"timeout"`         // in seconds
+	ArrivalPattern ArrivalPattern `json:"arrival_pattern"` // "uniform" or "poisson", defaults to "uniform"
 }
 
 // RequestData represents the collected data from a request experiment
@@ -32,10 +43,16 @@ type RequestStats struct {
 	MinResponseTime float64 `json:"min_response_time"` // in milliseconds
 	MaxResponseTime float64 `json:"max_response_time"` // in milliseconds
 	P50             float64 `json:"p50"`               // 50th percentile
+	P90             float64 `json:"p90"`               // 90th percentile
 	P95             float64 `json:"p95"`               // 95th percentile
 	P99             float64 `json:"p99"`               // 99th percentile
 	ErrorRate       float64 `json:"error_rate"`        // percentage
 	ActualQPS       float64 `json:"actual_qps"`        // actual requests per second
+
+	// Queueing theory metrics
+	LatencyBuckets map[string]int64 `json:"latency_buckets"` // histogram buckets for latency distribution
+	Throughput     float64          `json:"throughput"`      // successful requests per second
+	Utilization    float64          `json:"utilization"`     // server utilization (λ/μ)
 }
 
 // ResponseTimeSnapshot represents a sample of response time at a specific time

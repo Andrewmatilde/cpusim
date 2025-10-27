@@ -138,6 +138,18 @@ type SteadyStateStats struct {
 	CPUMin       float64 `json:"cpu_min"`        // Minimum value
 	CPUMax       float64 `json:"cpu_max"`        // Maximum value
 
+	// Latency statistics (from requester)
+	LatencyP50   float64 `json:"latency_p50"`    // Median latency in milliseconds
+	LatencyP90   float64 `json:"latency_p90"`    // 90th percentile latency
+	LatencyP95   float64 `json:"latency_p95"`    // 95th percentile latency
+	LatencyP99   float64 `json:"latency_p99"`    // 99th percentile latency
+	LatencyMean  float64 `json:"latency_mean"`   // Mean latency
+	LatencyMin   float64 `json:"latency_min"`    // Min latency
+	LatencyMax   float64 `json:"latency_max"`    // Max latency
+	Throughput   float64 `json:"throughput"`     // Successful requests per second
+	ErrorRate    float64 `json:"error_rate"`     // Error rate percentage
+	Utilization  float64 `json:"utilization"`    // Server utilization (λ/μ)
+
 	SampleSize      int     `json:"sample_size"`      // Number of experiments used
 	ConfidenceLevel float64 `json:"confidence_level"` // Confidence level (e.g., 0.95)
 }

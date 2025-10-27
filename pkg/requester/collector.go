@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"math"
+	"math/rand"
 	"net/http"
 	"sort"
 	"sync"
@@ -121,6 +122,7 @@ func (c *Collector) Run(ctx context.Context) (*RequestData, error) {
 	}
 
 	// Start ticker goroutines (one per worker, controls rate)
+	// Support both uniform and Poisson arrival patterns
 	for i := 0; i < numWorkers; i++ {
 		wg.Add(1)
 		go func(workerID int) {
@@ -130,46 +132,106 @@ func (c *Collector) Run(ctx context.Context) (*RequestData, error) {
 			var workerEnd time.Time
 			var requestCount int64
 
-			// Calculate interval: multiply first to avoid integer division precision loss
+			// Calculate base interval for this worker
 			// interval = (1 second * numWorkers) / qps
-			interval := (time.Second * time.Duration(numWorkers)) / time.Duration(qps)
-			if interval <= 0 {
-				interval = time.Microsecond
+			baseInterval := (time.Second * time.Duration(numWorkers)) / time.Duration(qps)
+			if baseInterval <= 0 {
+				baseInterval = time.Microsecond
 			}
-
-			ticker := time.NewTicker(interval)
-			defer ticker.Stop()
 
 			queue := requestQueues[workerID]
 
+			// Use Poisson arrival if configured, otherwise uniform
+			usePoisson := c.config.ArrivalPattern == ArrivalPatternPoisson
+
+			// For Poisson: lambda (rate parameter) per worker
+			lambda := float64(qps) / float64(numWorkers)
+
+			// Initialize random source for Poisson process (per-worker to avoid lock contention)
+			rng := rand.New(rand.NewSource(time.Now().UnixNano() + int64(workerID)))
+
+			var ticker *time.Ticker
+			var nextEventTime time.Time
+
+			if !usePoisson {
+				// Uniform: use ticker
+				ticker = time.NewTicker(baseInterval)
+				defer ticker.Stop()
+			} else {
+				// Poisson: calculate first event time
+				nextEventTime = time.Now().Add(c.exponentialDelay(lambda, rng))
+			}
+
 			for {
-				select {
-				case <-ctx.Done():
-					// Send worker stats (using last request time, not context cancel time)
-					if requestCount > 0 {
-						statsChan <- workerStats{
-							startTime: workerStart,
-							endTime:   workerEnd,
-							requests:  requestCount,
+				if usePoisson {
+					// Poisson arrival: use timer instead of ticker
+					waitDuration := time.Until(nextEventTime)
+					if waitDuration < 0 {
+						waitDuration = 0
+					}
+
+					timer := time.NewTimer(waitDuration)
+
+					select {
+					case <-ctx.Done():
+						timer.Stop()
+						if requestCount > 0 {
+							statsChan <- workerStats{
+								startTime: workerStart,
+								endTime:   workerEnd,
+								requests:  requestCount,
+							}
+						}
+						return
+					case <-timer.C:
+						// Record request time and queue request
+						requestTime := time.Now()
+						if requestCount == 0 {
+							workerStart = requestTime
+						}
+						workerEnd = requestTime
+						requestCount++
+
+						// Calculate next event time using exponential distribution
+						nextEventTime = requestTime.Add(c.exponentialDelay(lambda, rng))
+
+						// Send to queue
+						select {
+						case queue <- struct{}{}:
+							// Queued successfully
+						case <-ctx.Done():
+							return
 						}
 					}
-					return
-				case <-ticker.C:
-					// Record request time and queue request
-					requestTime := time.Now()
-					if requestCount == 0 {
-						workerStart = requestTime
-					}
-					workerEnd = requestTime
-					requestCount++
-
-					// Send to queue with context check to prevent blocking forever
+				} else {
+					// Uniform arrival: use ticker
 					select {
-					case queue <- struct{}{}:
-						// Queued successfully
 					case <-ctx.Done():
-						// Context cancelled while trying to queue
+						if requestCount > 0 {
+							statsChan <- workerStats{
+								startTime: workerStart,
+								endTime:   workerEnd,
+								requests:  requestCount,
+							}
+						}
 						return
+					case <-ticker.C:
+						// Record request time and queue request
+						requestTime := time.Now()
+						if requestCount == 0 {
+							workerStart = requestTime
+						}
+						workerEnd = requestTime
+						requestCount++
+
+						// Send to queue with context check to prevent blocking forever
+						select {
+						case queue <- struct{}{}:
+							// Queued successfully
+						case <-ctx.Done():
+							// Context cancelled while trying to queue
+							return
+						}
 					}
 				}
 			}
@@ -349,6 +411,7 @@ func (c *Collector) calculateStats(duration float64, totalReqs, failed int64, ac
 
 	// Percentiles
 	stats.P50 = percentile(allResponseTimes, 0.5)
+	stats.P90 = percentile(allResponseTimes, 0.90)
 	stats.P95 = percentile(allResponseTimes, 0.95)
 	stats.P99 = percentile(allResponseTimes, 0.99)
 
@@ -360,6 +423,26 @@ func (c *Collector) calculateStats(duration float64, totalReqs, failed int64, ac
 	// Use accurate QPS from per-worker timing (sum of all workers' QPS)
 	// This avoids precision loss from overall start/end time differences
 	stats.ActualQPS = actualQPS
+
+	// Calculate latency buckets (histogram)
+	stats.LatencyBuckets = c.calculateLatencyBuckets(allResponseTimes)
+
+	// Calculate queueing theory metrics
+	successfulReqs := totalReqs - failed
+	if successfulReqs > 0 && duration > 0 {
+		// Throughput: successful requests per second
+		stats.Throughput = float64(successfulReqs) / duration
+
+		// Utilization: λ/μ where λ is arrival rate and μ is service rate
+		// λ (lambda) = actual QPS (arrival rate)
+		// μ (mu) = 1 / average response time (service rate)
+		// Average response time in seconds
+		avgResponseTimeSec := stats.AvgResponseTime / 1000.0
+		if avgResponseTimeSec > 0 {
+			serviceRate := 1.0 / avgResponseTimeSec // μ
+			stats.Utilization = actualQPS / serviceRate
+		}
+	}
 
 	return stats
 }
@@ -381,4 +464,57 @@ func percentile(sorted []float64, p float64) float64 {
 	// Linear interpolation
 	weight := index - float64(lower)
 	return sorted[lower]*(1-weight) + sorted[upper]*weight
+}
+
+// exponentialDelay generates a random delay following exponential distribution
+// for Poisson arrival process. Lambda is the arrival rate (events per second).
+// Returns inter-arrival time as duration.
+func (c *Collector) exponentialDelay(lambda float64, rng *rand.Rand) time.Duration {
+	// For Poisson process, inter-arrival times follow exponential distribution
+	// E[X] = 1/lambda (mean inter-arrival time)
+	// Using inverse transform: X = -ln(U)/lambda where U ~ Uniform(0,1)
+	u := rng.Float64()
+	if u == 0 {
+		u = 1e-10 // Avoid log(0)
+	}
+	delaySeconds := -math.Log(u) / lambda
+	return time.Duration(delaySeconds * float64(time.Second))
+}
+
+// calculateLatencyBuckets creates a histogram of latency distribution
+// Buckets: <10ms, 10-50ms, 50-100ms, 100-200ms, 200-500ms, 500ms-1s, 1s-2s, >2s
+func (c *Collector) calculateLatencyBuckets(responseTimes []float64) map[string]int64 {
+	buckets := map[string]int64{
+		"<10ms":      0,
+		"10-50ms":    0,
+		"50-100ms":   0,
+		"100-200ms":  0,
+		"200-500ms":  0,
+		"500ms-1s":   0,
+		"1s-2s":      0,
+		">2s":        0,
+	}
+
+	for _, rt := range responseTimes {
+		switch {
+		case rt < 10:
+			buckets["<10ms"]++
+		case rt < 50:
+			buckets["10-50ms"]++
+		case rt < 100:
+			buckets["50-100ms"]++
+		case rt < 200:
+			buckets["100-200ms"]++
+		case rt < 500:
+			buckets["200-500ms"]++
+		case rt < 1000:
+			buckets["500ms-1s"]++
+		case rt < 2000:
+			buckets["1s-2s"]++
+		default:
+			buckets[">2s"]++
+		}
+	}
+
+	return buckets
 }

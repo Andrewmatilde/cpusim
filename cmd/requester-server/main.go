@@ -18,12 +18,13 @@ import (
 )
 
 const (
-	defaultPort       = "80"
-	defaultTargetIP   = "localhost"
-	defaultTargetPort = "8080"
-	defaultQPS        = "10"
-	defaultTimeout    = "30"
-	defaultStoragePath = "./data/requester"
+	defaultPort           = "80"
+	defaultTargetIP       = "localhost"
+	defaultTargetPort     = "8080"
+	defaultQPS            = "10"
+	defaultTimeout        = "30"
+	defaultStoragePath    = "./data/requester"
+	defaultArrivalPattern = "uniform" // "uniform" or "poisson"
 )
 
 func main() {
@@ -37,12 +38,22 @@ func main() {
 	targetPort, _ := strconv.Atoi(getEnv("TARGET_PORT", defaultTargetPort))
 	qps, _ := strconv.Atoi(getEnv("QPS", defaultQPS))
 	timeout, _ := strconv.Atoi(getEnv("TIMEOUT", defaultTimeout))
+	arrivalPatternStr := getEnv("ARRIVAL_PATTERN", defaultArrivalPattern)
+
+	// Parse arrival pattern
+	var arrivalPattern requester.ArrivalPattern
+	if arrivalPatternStr == "poisson" {
+		arrivalPattern = requester.ArrivalPatternPoisson
+	} else {
+		arrivalPattern = requester.ArrivalPatternUniform
+	}
 
 	config := requester.Config{
-		TargetIP:   getEnv("TARGET_IP", defaultTargetIP),
-		TargetPort: targetPort,
-		QPS:        qps,
-		Timeout:    timeout,
+		TargetIP:       getEnv("TARGET_IP", defaultTargetIP),
+		TargetPort:     targetPort,
+		QPS:            qps,
+		Timeout:        timeout,
+		ArrivalPattern: arrivalPattern,
 	}
 
 	storagePath := getEnv("STORAGE_PATH", defaultStoragePath)

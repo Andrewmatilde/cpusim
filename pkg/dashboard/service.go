@@ -840,7 +840,22 @@ func (s *Service) calculateSteadyStateStats(experiments []*ExperimentData) map[s
 	// Group metrics by host
 	hostMetrics := make(map[string][]float64) // key: host name, value: steady-state mean CPU for each experiment
 
+	// Collect latency metrics from requester results
+	latencyMetrics := struct {
+		p50Values   []float64
+		p90Values   []float64
+		p95Values   []float64
+		p99Values   []float64
+		meanValues  []float64
+		minValues   []float64
+		maxValues   []float64
+		throughputs []float64
+		errorRates  []float64
+		utilizations []float64
+	}{}
+
 	for expIdx, exp := range experiments {
+		// Collect CPU metrics
 		if exp.CollectorResults == nil {
 			s.logger.Warn().Int("exp_idx", expIdx).Msg("Experiment has nil CollectorResults")
 			continue
@@ -894,6 +909,41 @@ func (s *Service) calculateSteadyStateStats(experiments []*ExperimentData) map[s
 				hostMetrics[hostName] = append(hostMetrics[hostName], steadyStateMean)
 			}
 		}
+
+		// Collect latency metrics from requester
+		if exp.RequesterResult != nil && exp.RequesterResult.Stats != nil {
+			stats := exp.RequesterResult.Stats
+			if stats.ResponseTimeP50 != nil {
+				latencyMetrics.p50Values = append(latencyMetrics.p50Values, *stats.ResponseTimeP50)
+			}
+			if stats.ResponseTimeP90 != nil {
+				latencyMetrics.p90Values = append(latencyMetrics.p90Values, *stats.ResponseTimeP90)
+			}
+			if stats.ResponseTimeP95 != nil {
+				latencyMetrics.p95Values = append(latencyMetrics.p95Values, *stats.ResponseTimeP95)
+			}
+			if stats.ResponseTimeP99 != nil {
+				latencyMetrics.p99Values = append(latencyMetrics.p99Values, *stats.ResponseTimeP99)
+			}
+			if stats.AvgResponseTime != nil {
+				latencyMetrics.meanValues = append(latencyMetrics.meanValues, *stats.AvgResponseTime)
+			}
+			if stats.MinResponseTime != nil {
+				latencyMetrics.minValues = append(latencyMetrics.minValues, *stats.MinResponseTime)
+			}
+			if stats.MaxResponseTime != nil {
+				latencyMetrics.maxValues = append(latencyMetrics.maxValues, *stats.MaxResponseTime)
+			}
+			if stats.Throughput != nil {
+				latencyMetrics.throughputs = append(latencyMetrics.throughputs, *stats.Throughput)
+			}
+			if stats.ErrorRate != nil {
+				latencyMetrics.errorRates = append(latencyMetrics.errorRates, *stats.ErrorRate)
+			}
+			if stats.Utilization != nil {
+				latencyMetrics.utilizations = append(latencyMetrics.utilizations, *stats.Utilization)
+			}
+		}
 	}
 
 	s.logger.Info().Int("host_count", len(hostMetrics)).Msg("Grouped metrics by host")
@@ -909,11 +959,63 @@ func (s *Service) calculateSteadyStateStats(experiments []*ExperimentData) map[s
 			Int("sample_size", len(cpuValues)).
 			Msg("Calculating confidence interval")
 		stats[hostName] = calculateConfidenceInterval(cpuValues, 0.95)
+
+		// Add latency metrics to stats (same for all hosts since it's from requester)
+		if len(latencyMetrics.p50Values) > 0 {
+			stats[hostName].LatencyP50 = average(latencyMetrics.p50Values)
+			stats[hostName].LatencyP90 = average(latencyMetrics.p90Values)
+			stats[hostName].LatencyP95 = average(latencyMetrics.p95Values)
+			stats[hostName].LatencyP99 = average(latencyMetrics.p99Values)
+			stats[hostName].LatencyMean = average(latencyMetrics.meanValues)
+			stats[hostName].LatencyMin = min(latencyMetrics.minValues)
+			stats[hostName].LatencyMax = max(latencyMetrics.maxValues)
+			stats[hostName].Throughput = average(latencyMetrics.throughputs)
+			stats[hostName].ErrorRate = average(latencyMetrics.errorRates)
+			stats[hostName].Utilization = average(latencyMetrics.utilizations)
+		}
 	}
 
 	s.logger.Info().Int("stats_count", len(stats)).Msg("Calculated steady-state statistics")
 
 	return stats
+}
+
+// Helper functions for latency metrics
+func average(values []float64) float64 {
+	if len(values) == 0 {
+		return 0
+	}
+	var sum float64
+	for _, v := range values {
+		sum += v
+	}
+	return sum / float64(len(values))
+}
+
+func min(values []float64) float64 {
+	if len(values) == 0 {
+		return 0
+	}
+	minVal := values[0]
+	for _, v := range values {
+		if v < minVal {
+			minVal = v
+		}
+	}
+	return minVal
+}
+
+func max(values []float64) float64 {
+	if len(values) == 0 {
+		return 0
+	}
+	maxVal := values[0]
+	for _, v := range values {
+		if v > maxVal {
+			maxVal = v
+		}
+	}
+	return maxVal
 }
 
 // calculateConfidenceInterval calculates statistics and confidence interval for a set of values
