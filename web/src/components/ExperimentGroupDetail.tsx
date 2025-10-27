@@ -337,42 +337,51 @@ export function ExperimentGroupDetail() {
                       return null;
                     }}
                   />
-                  {/* Hardcoded lines for each potential host - Recharts doesn't support dynamic Line generation via map() or conditional rendering */}
-                  {/* Target 1 */}
-                  <Line type="monotone" dataKey="target-1_cpuConfUpper" stroke={colors[0]} strokeWidth={1} strokeDasharray="5 5" dot={false} strokeOpacity={0.5} />
-                  <Line type="monotone" dataKey="target-1_cpuConfLower" stroke={colors[0]} strokeWidth={1} strokeDasharray="5 5" dot={false} strokeOpacity={0.5} />
-                  <Line type="monotone" dataKey="target-1_cpuMean" stroke={colors[0]} strokeWidth={3} dot={{ fill: colors[0], r: 5 }} />
-                  <Line type="linear" dataKey="target-1_linearRef" stroke={linearRefColors[0]} strokeWidth={2} strokeDasharray="3 3" dot={false} strokeOpacity={0.6} />
-                  {/* Target 2 */}
-                  <Line type="monotone" dataKey="target-2_cpuConfUpper" stroke={colors[1]} strokeWidth={1} strokeDasharray="5 5" dot={false} strokeOpacity={0.5} />
-                  <Line type="monotone" dataKey="target-2_cpuConfLower" stroke={colors[1]} strokeWidth={1} strokeDasharray="5 5" dot={false} strokeOpacity={0.5} />
-                  <Line type="monotone" dataKey="target-2_cpuMean" stroke={colors[1]} strokeWidth={3} dot={{ fill: colors[1], r: 5 }} />
-                  <Line type="linear" dataKey="target-2_linearRef" stroke={linearRefColors[1]} strokeWidth={2} strokeDasharray="3 3" dot={false} strokeOpacity={0.6} />
-                  {/* Target 3 */}
-                  <Line type="monotone" dataKey="target-3_cpuConfUpper" stroke={colors[2]} strokeWidth={1} strokeDasharray="5 5" dot={false} strokeOpacity={0.5} />
-                  <Line type="monotone" dataKey="target-3_cpuConfLower" stroke={colors[2]} strokeWidth={1} strokeDasharray="5 5" dot={false} strokeOpacity={0.5} />
-                  <Line type="monotone" dataKey="target-3_cpuMean" stroke={colors[2]} strokeWidth={3} dot={{ fill: colors[2], r: 5 }} />
-                  <Line type="linear" dataKey="target-3_linearRef" stroke={linearRefColors[2]} strokeWidth={2} strokeDasharray="3 3" dot={false} strokeOpacity={0.6} />
-                  {/* Target 4 */}
-                  <Line type="monotone" dataKey="target-4_cpuConfUpper" stroke={colors[3]} strokeWidth={1} strokeDasharray="5 5" dot={false} strokeOpacity={0.5} />
-                  <Line type="monotone" dataKey="target-4_cpuConfLower" stroke={colors[3]} strokeWidth={1} strokeDasharray="5 5" dot={false} strokeOpacity={0.5} />
-                  <Line type="monotone" dataKey="target-4_cpuMean" stroke={colors[3]} strokeWidth={3} dot={{ fill: colors[3], r: 5 }} />
-                  <Line type="linear" dataKey="target-4_linearRef" stroke={linearRefColors[3]} strokeWidth={2} strokeDasharray="3 3" dot={false} strokeOpacity={0.6} />
-                  {/* Target 5 */}
-                  <Line type="monotone" dataKey="target-5_cpuConfUpper" stroke={colors[4]} strokeWidth={1} strokeDasharray="5 5" dot={false} strokeOpacity={0.5} />
-                  <Line type="monotone" dataKey="target-5_cpuConfLower" stroke={colors[4]} strokeWidth={1} strokeDasharray="5 5" dot={false} strokeOpacity={0.5} />
-                  <Line type="monotone" dataKey="target-5_cpuMean" stroke={colors[4]} strokeWidth={3} dot={{ fill: colors[4], r: 5 }} />
-                  <Line type="linear" dataKey="target-5_linearRef" stroke={linearRefColors[4]} strokeWidth={2} strokeDasharray="3 3" dot={false} strokeOpacity={0.6} />
-                  {/* Target 6 */}
-                  <Line type="monotone" dataKey="target-6_cpuConfUpper" stroke={colors[5 % colors.length]} strokeWidth={1} strokeDasharray="5 5" dot={false} strokeOpacity={0.5} />
-                  <Line type="monotone" dataKey="target-6_cpuConfLower" stroke={colors[5 % colors.length]} strokeWidth={1} strokeDasharray="5 5" dot={false} strokeOpacity={0.5} />
-                  <Line type="monotone" dataKey="target-6_cpuMean" stroke={colors[5 % colors.length]} strokeWidth={3} dot={{ fill: colors[5 % colors.length], r: 5 }} />
-                  <Line type="linear" dataKey="target-6_linearRef" stroke={linearRefColors[5 % linearRefColors.length]} strokeWidth={2} strokeDasharray="3 3" dot={false} strokeOpacity={0.6} />
-                  {/* Target 7 */}
-                  <Line type="monotone" dataKey="target-7_cpuConfUpper" stroke={colors[6 % colors.length]} strokeWidth={1} strokeDasharray="5 5" dot={false} strokeOpacity={0.5} />
-                  <Line type="monotone" dataKey="target-7_cpuConfLower" stroke={colors[6 % colors.length]} strokeWidth={1} strokeDasharray="5 5" dot={false} strokeOpacity={0.5} />
-                  <Line type="monotone" dataKey="target-7_cpuMean" stroke={colors[6 % colors.length]} strokeWidth={3} dot={{ fill: colors[6 % colors.length], r: 5 }} />
-                  <Line type="linear" dataKey="target-7_linearRef" stroke={linearRefColors[6 % linearRefColors.length]} strokeWidth={2} strokeDasharray="3 3" dot={false} strokeOpacity={0.6} />
+                  {/* Dynamically render lines for each host */}
+                  {hostNamesArray.map((hostName, index) => {
+                    const meanColor = colors[index % colors.length];
+                    const linearColor = linearRefColors[index % linearRefColors.length];
+                    return [
+                      <Line
+                        key={`${hostName}_cpuConfUpper`}
+                        type="monotone"
+                        dataKey={`${hostName}_cpuConfUpper`}
+                        stroke={meanColor}
+                        strokeWidth={1}
+                        strokeDasharray="5 5"
+                        dot={false}
+                        strokeOpacity={0.5}
+                      />,
+                      <Line
+                        key={`${hostName}_cpuConfLower`}
+                        type="monotone"
+                        dataKey={`${hostName}_cpuConfLower`}
+                        stroke={meanColor}
+                        strokeWidth={1}
+                        strokeDasharray="5 5"
+                        dot={false}
+                        strokeOpacity={0.5}
+                      />,
+                      <Line
+                        key={`${hostName}_cpuMean`}
+                        type="monotone"
+                        dataKey={`${hostName}_cpuMean`}
+                        stroke={meanColor}
+                        strokeWidth={3}
+                        dot={{ fill: meanColor, r: 5 }}
+                      />,
+                      <Line
+                        key={`${hostName}_linearRef`}
+                        type="linear"
+                        dataKey={`${hostName}_linearRef`}
+                        stroke={linearColor}
+                        strokeWidth={2}
+                        strokeDasharray="3 3"
+                        dot={false}
+                        strokeOpacity={0.6}
+                      />
+                    ];
+                  })}
                 </ComposedChart>
               </ChartContainer>
               <div className="mt-4 text-sm text-muted-foreground space-y-1">
