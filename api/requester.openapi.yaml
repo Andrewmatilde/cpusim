@@ -354,6 +354,10 @@ components:
           type: number
           format: float
           description: 50%分位响应时间（毫秒）
+        responseTimeP90:
+          type: number
+          format: float
+          description: 90%分位响应时间（毫秒）
         responseTimeP95:
           type: number
           format: float
@@ -362,6 +366,14 @@ components:
           type: number
           format: float
           description: 99%分位响应时间（毫秒）
+        throughput:
+          type: number
+          format: float
+          description: 成功请求吞吐量（请求/秒）
+        utilization:
+          type: number
+          format: float
+          description: 服务器利用率（lambda/mu）
         startTime:
           type: string
           format: date-time

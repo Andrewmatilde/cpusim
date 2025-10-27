@@ -913,35 +913,35 @@ func (s *Service) calculateSteadyStateStats(experiments []*ExperimentData) map[s
 		// Collect latency metrics from requester
 		if exp.RequesterResult != nil && exp.RequesterResult.Stats != nil {
 			stats := exp.RequesterResult.Stats
-			if stats.ResponseTimeP50 != nil {
-				latencyMetrics.p50Values = append(latencyMetrics.p50Values, *stats.ResponseTimeP50)
+			if stats.ResponseTimeP50 > 0 {
+				latencyMetrics.p50Values = append(latencyMetrics.p50Values, float64(stats.ResponseTimeP50))
 			}
-			if stats.ResponseTimeP90 != nil {
-				latencyMetrics.p90Values = append(latencyMetrics.p90Values, *stats.ResponseTimeP90)
+			if stats.ResponseTimeP90 > 0 {
+				latencyMetrics.p90Values = append(latencyMetrics.p90Values, float64(stats.ResponseTimeP90))
 			}
-			if stats.ResponseTimeP95 != nil {
-				latencyMetrics.p95Values = append(latencyMetrics.p95Values, *stats.ResponseTimeP95)
+			if stats.ResponseTimeP95 > 0 {
+				latencyMetrics.p95Values = append(latencyMetrics.p95Values, float64(stats.ResponseTimeP95))
 			}
-			if stats.ResponseTimeP99 != nil {
-				latencyMetrics.p99Values = append(latencyMetrics.p99Values, *stats.ResponseTimeP99)
+			if stats.ResponseTimeP99 > 0 {
+				latencyMetrics.p99Values = append(latencyMetrics.p99Values, float64(stats.ResponseTimeP99))
 			}
-			if stats.AvgResponseTime != nil {
-				latencyMetrics.meanValues = append(latencyMetrics.meanValues, *stats.AvgResponseTime)
+			if stats.AvgResponseTime > 0 {
+				latencyMetrics.meanValues = append(latencyMetrics.meanValues, float64(stats.AvgResponseTime))
 			}
-			if stats.MinResponseTime != nil {
-				latencyMetrics.minValues = append(latencyMetrics.minValues, *stats.MinResponseTime)
+			if stats.MinResponseTime > 0 {
+				latencyMetrics.minValues = append(latencyMetrics.minValues, float64(stats.MinResponseTime))
 			}
-			if stats.MaxResponseTime != nil {
-				latencyMetrics.maxValues = append(latencyMetrics.maxValues, *stats.MaxResponseTime)
+			if stats.MaxResponseTime > 0 {
+				latencyMetrics.maxValues = append(latencyMetrics.maxValues, float64(stats.MaxResponseTime))
 			}
-			if stats.Throughput != nil {
-				latencyMetrics.throughputs = append(latencyMetrics.throughputs, *stats.Throughput)
+			if stats.Throughput > 0 {
+				latencyMetrics.throughputs = append(latencyMetrics.throughputs, float64(stats.Throughput))
 			}
-			if stats.ErrorRate != nil {
-				latencyMetrics.errorRates = append(latencyMetrics.errorRates, *stats.ErrorRate)
+			if stats.ErrorRate >= 0 {
+				latencyMetrics.errorRates = append(latencyMetrics.errorRates, float64(stats.ErrorRate))
 			}
-			if stats.Utilization != nil {
-				latencyMetrics.utilizations = append(latencyMetrics.utilizations, *stats.Utilization)
+			if stats.Utilization > 0 {
+				latencyMetrics.utilizations = append(latencyMetrics.utilizations, float64(stats.Utilization))
 			}
 		}
 	}
