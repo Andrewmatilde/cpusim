@@ -4,7 +4,7 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/com
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Layers, ArrowLeft } from 'lucide-react';
-import { LineChart, Line, XAxis, YAxis, CartesianGrid, ComposedChart } from 'recharts';
+import { Line, XAxis, YAxis, CartesianGrid, ComposedChart } from 'recharts';
 import type { ChartConfig } from '@/components/ui/chart';
 import { ChartContainer, ChartTooltip } from '@/components/ui/chart';
 import { apiClient } from '@/api/client';
@@ -337,94 +337,71 @@ export function ExperimentGroupDetail() {
                       return null;
                     }}
                   />
-                  {/* Target 1 lines */}
-                  <Line
-                    type="monotone"
-                    dataKey="target-1_cpuConfUpper"
-                    stroke="#8884d8"
-                    strokeWidth={1}
-                    strokeDasharray="5 5"
-                    dot={false}
-                    strokeOpacity={0.5}
-                  />
-                  <Line
-                    type="monotone"
-                    dataKey="target-1_cpuConfLower"
-                    stroke="#8884d8"
-                    strokeWidth={1}
-                    strokeDasharray="5 5"
-                    dot={false}
-                    strokeOpacity={0.5}
-                  />
-                  <Line
-                    type="monotone"
-                    dataKey="target-1_cpuMean"
-                    stroke="#8884d8"
-                    strokeWidth={3}
-                    dot={{ fill: '#8884d8', r: 5 }}
-                  />
-                  <Line
-                    type="linear"
-                    dataKey="target-1_linearRef"
-                    stroke="#f97316"
-                    strokeWidth={2}
-                    strokeDasharray="3 3"
-                    dot={false}
-                    strokeOpacity={0.6}
-                  />
-                  {/* Target 2 lines */}
-                  <Line
-                    type="monotone"
-                    dataKey="target-2_cpuConfUpper"
-                    stroke="#82ca9d"
-                    strokeWidth={1}
-                    strokeDasharray="5 5"
-                    dot={false}
-                    strokeOpacity={0.5}
-                  />
-                  <Line
-                    type="monotone"
-                    dataKey="target-2_cpuConfLower"
-                    stroke="#82ca9d"
-                    strokeWidth={1}
-                    strokeDasharray="5 5"
-                    dot={false}
-                    strokeOpacity={0.5}
-                  />
-                  <Line
-                    type="monotone"
-                    dataKey="target-2_cpuMean"
-                    stroke="#82ca9d"
-                    strokeWidth={3}
-                    dot={{ fill: '#82ca9d', r: 5 }}
-                  />
-                  <Line
-                    type="linear"
-                    dataKey="target-2_linearRef"
-                    stroke="#10b981"
-                    strokeWidth={2}
-                    strokeDasharray="3 3"
-                    dot={false}
-                    strokeOpacity={0.6}
-                  />
+                  {/* Dynamically render lines for all hosts */}
+                  {hostNamesArray.map((hostName, index) => {
+                    const meanColor = colors[index % colors.length];
+                    const linearColor = linearRefColors[index % linearRefColors.length];
+
+                    return (
+                      <React.Fragment key={hostName}>
+                        {/* Upper confidence interval */}
+                        <Line
+                          type="monotone"
+                          dataKey={`${hostName}_cpuConfUpper`}
+                          stroke={meanColor}
+                          strokeWidth={1}
+                          strokeDasharray="5 5"
+                          dot={false}
+                          strokeOpacity={0.5}
+                        />
+                        {/* Lower confidence interval */}
+                        <Line
+                          type="monotone"
+                          dataKey={`${hostName}_cpuConfLower`}
+                          stroke={meanColor}
+                          strokeWidth={1}
+                          strokeDasharray="5 5"
+                          dot={false}
+                          strokeOpacity={0.5}
+                        />
+                        {/* Mean CPU line */}
+                        <Line
+                          type="monotone"
+                          dataKey={`${hostName}_cpuMean`}
+                          stroke={meanColor}
+                          strokeWidth={3}
+                          dot={{ fill: meanColor, r: 5 }}
+                        />
+                        {/* Linear reference line */}
+                        <Line
+                          type="linear"
+                          dataKey={`${hostName}_linearRef`}
+                          stroke={linearColor}
+                          strokeWidth={2}
+                          strokeDasharray="3 3"
+                          dot={false}
+                          strokeOpacity={0.6}
+                        />
+                      </React.Fragment>
+                    );
+                  })}
                 </ComposedChart>
               </ChartContainer>
               <div className="mt-4 text-sm text-muted-foreground space-y-1">
                 <div className="font-medium mb-2">Legend:</div>
-                <div className="flex items-center gap-2">
-                  <div style={{ backgroundColor: '#8884d8' }} className="w-3 h-3 rounded-full"></div>
-                  <span className="font-medium">target-1:</span>
-                  <span>thick line = mean CPU, dashed lines = 95% CI</span>
-                  <div style={{ backgroundColor: '#f97316' }} className="w-3 h-3 rounded-full ml-2"></div>
-                  <span>linear reference</span>
-                </div>
-                <div className="flex items-center gap-2">
-                  <div style={{ backgroundColor: '#82ca9d' }} className="w-3 h-3 rounded-full"></div>
-                  <span className="font-medium">target-2:</span>
-                  <span>thick line = mean CPU, dashed lines = 95% CI</span>
-                  <div style={{ backgroundColor: '#10b981' }} className="w-3 h-3 rounded-full ml-2"></div>
-                  <span>linear reference</span>
-                </div>
+                {hostNamesArray.map((hostName, index) => {
+                  const meanColor = colors[index % colors.length];
+                  const linearColor = linearRefColors[index % linearRefColors.length];
+                  return (
+                    <div key={hostName} className="flex items-center gap-2">
+                      <div style={{ backgroundColor: meanColor }} className="w-3 h-3 rounded-full"></div>
+                      <span className="font-medium">{hostName}:</span>
+                      <span>thick line = mean CPU, dashed lines = 95% CI</span>
+                      <div style={{ backgroundColor: linearColor }} className="w-3 h-3 rounded-full ml-2"></div>
+                      <span>linear reference</span>
+                    </div>
+                  );
+                })}
               </div>
             </CardContent>
           </Card>

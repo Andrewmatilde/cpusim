@@ -59,6 +59,26 @@ The GitHub Actions workflow automatically:
 - Creates a GitHub Release with all artifacts
 - Uploads binaries and frontend package to the release
 
+**Note**: If the "Create Release" step fails due to credential issues, but all build artifacts are created successfully, you can manually create the release and upload artifacts:
+
+```bash
+# Create the release manually
+gh release create v0.X.X --title "Release v0.X.X - Description" --notes "Release notes here"
+
+# Download artifacts from the workflow run
+mkdir -p /tmp/v0.X.X-artifacts
+gh run download <run-id> -D /tmp/v0.X.X-artifacts -R Andrewmatilde/cpusim
+
+# Upload artifacts to the release
+cd /tmp/v0.X.X-artifacts
+for dir in */; do
+  file="${dir%/}/${dir%/}"
+  if [ -f "$file" ]; then
+    gh release upload v0.X.X "$file" -R Andrewmatilde/cpusim
+  fi
+done
+```
+
 ### Manual Release Trigger
 
 To manually trigger the release workflow:
