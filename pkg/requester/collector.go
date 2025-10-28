@@ -489,13 +489,30 @@ func percentile(sorted []float64, p float64) float64 {
 func (c *Collector) exponentialDelay(lambda float64, rng *rand.Rand) time.Duration {
 	// For Poisson process, inter-arrival times follow exponential distribution
 	// E[X] = 1/lambda (mean inter-arrival time)
-	// Using inverse transform: X = -ln(U)/lambda where U ~ Uniform(0,1)
-	u := rng.Float64()
-	if u == 0 {
-		u = 1e-10 // Avoid log(0)
+
+	// Handle invalid lambda
+	if lambda <= 0 {
+		return 0
 	}
-	delaySeconds := -math.Log(u) / lambda
-	return time.Duration(delaySeconds * float64(time.Second))
+
+	// Use ExpFloat64() which returns Exp(1) with mean 1
+	// Divide by lambda to get Exp(lambda) with mean 1/lambda
+	sec := rng.ExpFloat64() / lambda
+
+	// Ensure minimum delay to avoid exact 0 (though probability is 0 in continuous domain)
+	if sec < 1e-9 {
+		sec = 1e-9 // 1 nanosecond minimum
+	}
+
+	// Convert to nanoseconds with rounding to avoid systematic truncation bias
+	ns := math.Round(sec * float64(time.Second))
+
+	// Prevent overflow of time.Duration (int64 nanoseconds)
+	if ns > float64(math.MaxInt64) {
+		ns = float64(math.MaxInt64)
+	}
+
+	return time.Duration(int64(ns))
 }
 
 // calculateLatencyBuckets creates a histogram of latency distribution
