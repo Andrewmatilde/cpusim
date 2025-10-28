@@ -151,6 +151,7 @@ func (c *Collector) Run(ctx context.Context) (*RequestData, error) {
 			rng := rand.New(rand.NewSource(time.Now().UnixNano() + int64(workerID)))
 
 			var ticker *time.Ticker
+			var timer *time.Timer
 			var nextEventTime time.Time
 
 			if !usePoisson {
@@ -158,23 +159,41 @@ func (c *Collector) Run(ctx context.Context) (*RequestData, error) {
 				ticker = time.NewTicker(baseInterval)
 				defer ticker.Stop()
 			} else {
-				// Poisson: calculate first event time
-				nextEventTime = time.Now().Add(c.exponentialDelay(lambda, rng))
+				// Poisson: start from current time
+				nextEventTime = time.Now()
 			}
 
 			for {
 				if usePoisson {
-					// Poisson arrival: use timer instead of ticker
+					// Poisson arrival: base next event on planned time, not actual time
+					// This prevents "catch-up" bursts after blocking/GC pauses
+					nextEventTime = nextEventTime.Add(c.exponentialDelay(lambda, rng))
 					waitDuration := time.Until(nextEventTime)
 					if waitDuration < 0 {
-						waitDuration = 0
+						waitDuration = 0 // Allow slight jitter but don't accumulate multiple events
 					}
 
-					timer := time.NewTimer(waitDuration)
+					// Reuse timer to reduce allocations
+					if timer == nil {
+						timer = time.NewTimer(waitDuration)
+					} else {
+						if !timer.Stop() {
+							select {
+							case <-timer.C:
+							default:
+							}
+						}
+						timer.Reset(waitDuration)
+					}
 
 					select {
 					case <-ctx.Done():
-						timer.Stop()
+						if timer != nil && !timer.Stop() {
+							select {
+							case <-timer.C:
+							default:
+							}
+						}
 						if requestCount > 0 {
 							statsChan <- workerStats{
 								startTime: workerStart,
@@ -183,17 +202,15 @@ func (c *Collector) Run(ctx context.Context) (*RequestData, error) {
 							}
 						}
 						return
-					case <-timer.C:
-						// Record request time and queue request
-						requestTime := time.Now()
-						if requestCount == 0 {
-							workerStart = requestTime
-						}
-						workerEnd = requestTime
-						requestCount++
 
-						// Calculate next event time using exponential distribution
-						nextEventTime = requestTime.Add(c.exponentialDelay(lambda, rng))
+					case <-timer.C:
+						// Record arrival time (for arrival process statistics)
+						now := time.Now()
+						if requestCount == 0 {
+							workerStart = now
+						}
+						workerEnd = now
+						requestCount++
 
 						// Send to queue
 						select {
