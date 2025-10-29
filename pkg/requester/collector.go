@@ -95,11 +95,11 @@ func (c *Collector) Run(ctx context.Context) (*RequestData, error) {
 	// OPTIMIZATION: Use buffered channel as request queue to avoid creating goroutines on every tick
 	// Each worker will have its own queue to maintain rate limiting per worker
 	// Buffer must be large enough to hold all requests for the duration of the experiment
-	// At 1400 QPS for 60s = 84000 total / 16 workers = 5250 per worker
-	// Use 10000 to be safe and handle bursts
+	// For high QPS scenarios (e.g., 20000 QPS for 60s = 1.2M total / 16 workers = 75000 per worker)
+	// Use 100000 per worker to handle very high QPS experiments
 	requestQueues := make([]chan struct{}, numWorkers)
 	for i := 0; i < numWorkers; i++ {
-		requestQueues[i] = make(chan struct{}, 10000)
+		requestQueues[i] = make(chan struct{}, 100000)
 	}
 
 	// Start request sender goroutines (one per worker, reused for all requests)
