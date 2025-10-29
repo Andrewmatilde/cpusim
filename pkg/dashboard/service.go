@@ -726,6 +726,14 @@ func (s *Service) executeExperimentGroup(groupID string, group *ExperimentGroup)
 			Int("qps", qps).
 			Int("completed_runs", len(group.QPSPoints[qpsIdx].Experiments)).
 			Msg("QPS point completed")
+
+		// Add delay between QPS points to ensure all services have stopped
+		if qpsIdx < len(group.QPSPoints)-1 && config.DelayBetween > 0 {
+			s.logger.Info().
+				Int("delay_seconds", config.DelayBetween).
+				Msg("Waiting before next QPS point")
+			time.Sleep(time.Duration(config.DelayBetween) * time.Second)
+		}
 	}
 
 	// Mark group as completed
