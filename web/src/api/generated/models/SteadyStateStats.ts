@@ -14,7 +14,7 @@
 
 import { mapValues } from '../runtime';
 /**
- * Steady-state performance statistics with confidence intervals
+ * [DEPRECATED] Use CPUStats and LatencyStats instead. Steady-state performance statistics with confidence intervals
  * @export
  * @interface SteadyStateStats
  */

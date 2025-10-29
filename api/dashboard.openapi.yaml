@@ -667,9 +667,12 @@ components:
             type: string
         statistics:
           type: object
-          description: Steady-state statistics per host for this QPS
+          description: CPU statistics per host for this QPS
           additionalProperties:
-            $ref: '#/components/schemas/SteadyStateStats'
+            $ref: '#/components/schemas/CPUStats'
+        latencyStats:
+          $ref: '#/components/schemas/LatencyStats'
+          description: Global latency statistics for this QPS (client-side measurements)
         status:
           type: string
           description: running, completed, failed
@@ -696,9 +699,77 @@ components:
           type: integer
           description: Delay between experiments in seconds
 
+    CPUStats:
+      type: object
+      description: CPU performance statistics per host with confidence intervals
+      properties:
+        cpuMean:
+          type: number
+          description: Mean CPU usage across all experiments (steady-state)
+        cpuStdDev:
+          type: number
+          description: Standard deviation of CPU usage
+        cpuConfLower:
+          type: number
+          description: Lower bound of 95% confidence interval
+        cpuConfUpper:
+          type: number
+          description: Upper bound of 95% confidence interval
+        cpuMin:
+          type: number
+          description: Minimum CPU value observed
+        cpuMax:
+          type: number
+          description: Maximum CPU value observed
+        sampleSize:
+          type: integer
+          description: Number of experiments used in calculation
+        confidenceLevel:
+          type: number
+          description: Confidence level (e.g., 0.95 for 95%)
+
+    LatencyStats:
+      type: object
+      description: Global latency statistics from client-side measurements
+      properties:
+        latencyP50:
+          type: number
+          description: Median latency in milliseconds
+        latencyP90:
+          type: number
+          description: 90th percentile latency in milliseconds
+        latencyP95:
+          type: number
+          description: 95th percentile latency in milliseconds
+        latencyP99:
+          type: number
+          description: 99th percentile latency in milliseconds
+        latencyMean:
+          type: number
+          description: Mean latency in milliseconds
+        latencyMin:
+          type: number
+          description: Minimum latency in milliseconds
+        latencyMax:
+          type: number
+          description: Maximum latency in milliseconds
+        throughput:
+          type: number
+          description: Successful requests per second
+        errorRate:
+          type: number
+          description: Error rate percentage
+        utilization:
+          type: number
+          description: Server utilization (lambda/mu)
+        sampleSize:
+          type: integer
+          description: Number of experiments used in calculation
+
     SteadyStateStats:
       type: object
-      description: Steady-state performance statistics with confidence intervals
+      deprecated: true
+      description: '[DEPRECATED] Use CPUStats and LatencyStats instead. Steady-state performance statistics with confidence intervals'
       properties:
         cpuMean:
           type: number

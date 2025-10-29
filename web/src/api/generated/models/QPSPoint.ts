@@ -13,13 +13,20 @@
  */
 
 import { mapValues } from '../runtime';
-import type { SteadyStateStats } from './SteadyStateStats';
+import type { CPUStats } from './CPUStats';
 import {
-    SteadyStateStatsFromJSON,
-    SteadyStateStatsFromJSONTyped,
-    SteadyStateStatsToJSON,
-    SteadyStateStatsToJSONTyped,
-} from './SteadyStateStats';
+    CPUStatsFromJSON,
+    CPUStatsFromJSONTyped,
+    CPUStatsToJSON,
+    CPUStatsToJSONTyped,
+} from './CPUStats';
+import type { LatencyStats } from './LatencyStats';
+import {
+    LatencyStatsFromJSON,
+    LatencyStatsFromJSONTyped,
+    LatencyStatsToJSON,
+    LatencyStatsToJSONTyped,
+} from './LatencyStats';
 
 /**
  * Results for a specific QPS value
@@ -40,11 +47,17 @@ export interface QPSPoint {
      */
     experiments?: Array<string>;
     /**
-     * Steady-state statistics per host for this QPS
-     * @type {{ [key: string]: SteadyStateStats; }}
+     * CPU statistics per host for this QPS
+     * @type {{ [key: string]: CPUStats; }}
      * @memberof QPSPoint
      */
-    statistics?: { [key: string]: SteadyStateStats; };
+    statistics?: { [key: string]: CPUStats; };
+    /**
+     * 
+     * @type {LatencyStats}
+     * @memberof QPSPoint
+     */
+    latencyStats?: LatencyStats;
     /**
      * running, completed, failed
      * @type {string}
@@ -72,7 +85,8 @@ export function QPSPointFromJSONTyped(json: any, ignoreDiscriminator: boolean): 
         
         'qps': json['qps'] == null ? undefined : json['qps'],
         'experiments': json['experiments'] == null ? undefined : json['experiments'],
-        'statistics': json['statistics'] == null ? undefined : (mapValues(json['statistics'], SteadyStateStatsFromJSON)),
+        'statistics': json['statistics'] == null ? undefined : (mapValues(json['statistics'], CPUStatsFromJSON)),
+        'latencyStats': json['latencyStats'] == null ? undefined : LatencyStatsFromJSON(json['latencyStats']),
         'status': json['status'] == null ? undefined : json['status'],
     };
 }
@@ -90,7 +104,8 @@ export function QPSPointToJSONTyped(value?: QPSPoint | null, ignoreDiscriminator
         
         'qps': value['qps'],
         'experiments': value['experiments'],
-        'statistics': value['statistics'] == null ? undefined : (mapValues(value['statistics'], SteadyStateStatsToJSON)),
+        'statistics': value['statistics'] == null ? undefined : (mapValues(value['statistics'], CPUStatsToJSON)),
+        'latencyStats': LatencyStatsToJSON(value['latencyStats']),
         'status': value['status'],
     };
 }

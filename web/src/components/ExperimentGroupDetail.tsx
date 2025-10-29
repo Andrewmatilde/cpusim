@@ -405,23 +405,22 @@ export function ExperimentGroupDetail() {
         );
       })()}
 
-      {/* QPS vs Latency Chart (P90, P95, P99) */}
+      {/* QPS vs Latency Chart (P50, P90, P95, P99, Mean) */}
       {groupData.qpsPoints && groupData.qpsPoints.length > 0 && (() => {
         // Build latency data points
         const latencyData: any[] = [];
         groupData.qpsPoints.forEach((qpsPoint: any) => {
-          if (qpsPoint.statistics) {
-            // Take first host's latency stats (same for all hosts since from requester)
-            const firstHostStats = Object.values(qpsPoint.statistics)[0] as any;
-            if (firstHostStats && firstHostStats.latencyP90) {
-              latencyData.push({
-                qps: qpsPoint.qps || 0,
-                p90: firstHostStats.latencyP90 || 0,
-                p95: firstHostStats.latencyP95 || 0,
-                p99: firstHostStats.latencyP99 || 0,
-                mean: firstHostStats.latencyMean || 0,
-              });
-            }
+          if (qpsPoint.latencyStats && qpsPoint.latencyStats.latencyP50 !== undefined) {
+            latencyData.push({
+              qps: qpsPoint.qps || 0,
+              p50: qpsPoint.latencyStats.latencyP50 || 0,
+              p90: qpsPoint.latencyStats.latencyP90 || 0,
+              p95: qpsPoint.latencyStats.latencyP95 || 0,
+              p99: qpsPoint.latencyStats.latencyP99 || 0,
+              mean: qpsPoint.latencyStats.latencyMean || 0,
+              min: qpsPoint.latencyStats.latencyMin || 0,
+              max: qpsPoint.latencyStats.latencyMax || 0,
+            });
           }
         });
 
@@ -431,13 +430,16 @@ export function ExperimentGroupDetail() {
         if (latencyData.length === 0) return null;
 
         // Add origin point
-        latencyData.unshift({ qps: 0, p90: 0, p95: 0, p99: 0, mean: 0 });
+        latencyData.unshift({ qps: 0, p50: 0, p90: 0, p95: 0, p99: 0, mean: 0, min: 0, max: 0 });
 
         const latencyChartConfig = {
-          p90: { label: "P90", color: "#8884d8" },
-          p95: { label: "P95", color: "#82ca9d" },
-          p99: { label: "P99", color: "#ffc658" },
-          mean: { label: "Mean", color: "#ff7c7c" },
+          min: { label: "Min", color: "#d1d5db" },
+          p50: { label: "P50", color: "#06b6d4" },
+          mean: { label: "Mean", color: "#10b981" },
+          p90: { label: "P90", color: "#f59e0b" },
+          p95: { label: "P95", color: "#f97316" },
+          p99: { label: "P99", color: "#ef4444" },
+          max: { label: "Max", color: "#9ca3af" },
         } satisfies ChartConfig;
 
         return (
@@ -445,7 +447,7 @@ export function ExperimentGroupDetail() {
             <CardHeader>
               <CardTitle>QPS vs Latency</CardTitle>
               <CardDescription>
-                Response time percentiles (P90, P95, P99) and mean across different load levels
+                Response time percentiles (P50, P90, P95, P99), mean, and range across different load levels
               </CardDescription>
             </CardHeader>
             <CardContent>
@@ -460,12 +462,42 @@ export function ExperimentGroupDetail() {
                     label={{ value: 'Latency (ms)', angle: -90, position: 'insideLeft' }}
                   />
                   <ChartTooltip />
+                  {/* Min/Max as reference lines */}
+                  <Line
+                    type="monotone"
+                    dataKey="min"
+                    stroke={latencyChartConfig.min.color}
+                    strokeWidth={1}
+                    strokeDasharray="3 3"
+                    dot={false}
+                    strokeOpacity={0.5}
+                    name="Min"
+                  />
+                  <Line
+                    type="monotone"
+                    dataKey="max"
+                    stroke={latencyChartConfig.max.color}
+                    strokeWidth={1}
+                    strokeDasharray="3 3"
+                    dot={false}
+                    strokeOpacity={0.5}
+                    name="Max"
+                  />
+                  {/* Main percentile lines */}
+                  <Line
+                    type="monotone"
+                    dataKey="p50"
+                    stroke={latencyChartConfig.p50.color}
+                    strokeWidth={2}
+                    dot={{ r: 4 }}
+                    name="P50 (Median)"
+                  />
                   <Line
                     type="monotone"
                     dataKey="mean"
                     stroke={latencyChartConfig.mean.color}
-                    strokeWidth={1}
-                    dot={{ r: 3 }}
+                    strokeWidth={2}
+                    dot={{ r: 4 }}
                     name="Mean"
                   />
                   <Line
@@ -480,7 +512,7 @@ export function ExperimentGroupDetail() {
                     type="monotone"
                     dataKey="p95"
                     stroke={latencyChartConfig.p95.color}
-                    strokeWidth={2}
+                    strokeWidth={2.5}
                     dot={{ r: 4 }}
                     name="P95"
                   />
@@ -494,24 +526,32 @@ export function ExperimentGroupDetail() {
                   />
                 </ComposedChart>
               </ChartContainer>
-              <div className="mt-4 text-sm text-muted-foreground space-y-1">
-                <div className="font-medium mb-2">Latency Percentiles:</div>
-                <div className="flex items-center gap-4">
+              <div className="mt-4 text-sm text-muted-foreground space-y-2">
+                <div className="font-medium mb-2">Latency Metrics:</div>
+                <div className="grid grid-cols-2 gap-2">
+                  <div className="flex items-center gap-2">
+                    <div style={{ backgroundColor: latencyChartConfig.p50.color }} className="w-3 h-3 rounded-full"></div>
+                    <span><strong>P50 (Median):</strong> 50% of requests faster</span>
+                  </div>
                   <div className="flex items-center gap-2">
                     <div style={{ backgroundColor: latencyChartConfig.mean.color }} className="w-3 h-3 rounded-full"></div>
-                    <span>Mean: Average response time</span>
+                    <span><strong>Mean:</strong> Average response time</span>
                   </div>
                   <div className="flex items-center gap-2">
                     <div style={{ backgroundColor: latencyChartConfig.p90.color }} className="w-3 h-3 rounded-full"></div>
-                    <span>P90: 90% of requests faster than this</span>
+                    <span><strong>P90:</strong> 90% of requests faster</span>
                   </div>
                   <div className="flex items-center gap-2">
                     <div style={{ backgroundColor: latencyChartConfig.p95.color }} className="w-3 h-3 rounded-full"></div>
-                    <span>P95: 95% of requests faster than this</span>
+                    <span><strong>P95:</strong> 95% of requests faster</span>
                   </div>
                   <div className="flex items-center gap-2">
                     <div style={{ backgroundColor: latencyChartConfig.p99.color }} className="w-3 h-3 rounded-full"></div>
-                    <span>P99: 99% of requests faster than this</span>
+                    <span><strong>P99:</strong> 99% of requests faster</span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <div style={{ backgroundColor: latencyChartConfig.min.color }} className="w-3 h-3 rounded-full opacity-50"></div>
+                    <span className="text-xs"><strong>Min/Max:</strong> Response time range (dashed)</span>
                   </div>
                 </div>
               </div>

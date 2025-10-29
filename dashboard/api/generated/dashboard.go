@@ -38,6 +38,33 @@ const (
 	Desc ListExperimentsParamsSortOrder = "desc"
 )
 
+// CPUStats CPU performance statistics per host with confidence intervals
+type CPUStats struct {
+	// ConfidenceLevel Confidence level (e.g., 0.95 for 95%)
+	ConfidenceLevel float32 `json:"confidenceLevel,omitempty"`
+
+	// CpuConfLower Lower bound of 95% confidence interval
+	CpuConfLower float32 `json:"cpuConfLower,omitempty"`
+
+	// CpuConfUpper Upper bound of 95% confidence interval
+	CpuConfUpper float32 `json:"cpuConfUpper,omitempty"`
+
+	// CpuMax Maximum CPU value observed
+	CpuMax float32 `json:"cpuMax,omitempty"`
+
+	// CpuMean Mean CPU usage across all experiments (steady-state)
+	CpuMean float32 `json:"cpuMean,omitempty"`
+
+	// CpuMin Minimum CPU value observed
+	CpuMin float32 `json:"cpuMin,omitempty"`
+
+	// CpuStdDev Standard deviation of CPU usage
+	CpuStdDev float32 `json:"cpuStdDev,omitempty"`
+
+	// SampleSize Number of experiments used in calculation
+	SampleSize int `json:"sampleSize,omitempty"`
+}
+
 // ClientHost defines model for ClientHost.
 type ClientHost struct {
 	ExternalIP          string `json:"externalIP,omitempty"`
@@ -249,6 +276,42 @@ type HostsStatusResponse struct {
 	Timestamp         time.Time          `json:"timestamp,omitempty"`
 }
 
+// LatencyStats Global latency statistics from client-side measurements
+type LatencyStats struct {
+	// ErrorRate Error rate percentage
+	ErrorRate float32 `json:"errorRate,omitempty"`
+
+	// LatencyMax Maximum latency in milliseconds
+	LatencyMax float32 `json:"latencyMax,omitempty"`
+
+	// LatencyMean Mean latency in milliseconds
+	LatencyMean float32 `json:"latencyMean,omitempty"`
+
+	// LatencyMin Minimum latency in milliseconds
+	LatencyMin float32 `json:"latencyMin,omitempty"`
+
+	// LatencyP50 Median latency in milliseconds
+	LatencyP50 float32 `json:"latencyP50,omitempty"`
+
+	// LatencyP90 90th percentile latency in milliseconds
+	LatencyP90 float32 `json:"latencyP90,omitempty"`
+
+	// LatencyP95 95th percentile latency in milliseconds
+	LatencyP95 float32 `json:"latencyP95,omitempty"`
+
+	// LatencyP99 99th percentile latency in milliseconds
+	LatencyP99 float32 `json:"latencyP99,omitempty"`
+
+	// SampleSize Number of experiments used in calculation
+	SampleSize int `json:"sampleSize,omitempty"`
+
+	// Throughput Successful requests per second
+	Throughput float32 `json:"throughput,omitempty"`
+
+	// Utilization Server utilization (lambda/mu)
+	Utilization float32 `json:"utilization,omitempty"`
+}
+
 // LoadBalancer defines model for LoadBalancer.
 type LoadBalancer struct {
 	ExternalIP string `json:"externalIP,omitempty"`
@@ -262,11 +325,14 @@ type QPSPoint struct {
 	// Experiments List of experiment IDs for this QPS
 	Experiments []string `json:"experiments,omitempty"`
 
+	// LatencyStats Global latency statistics from client-side measurements
+	LatencyStats LatencyStats `json:"latencyStats,omitempty"`
+
 	// Qps QPS value for this point
 	Qps int `json:"qps,omitempty"`
 
-	// Statistics Steady-state statistics per host for this QPS
-	Statistics map[string]SteadyStateStats `json:"statistics,omitempty"`
+	// Statistics CPU statistics per host for this QPS
+	Statistics map[string]CPUStats `json:"statistics,omitempty"`
 
 	// Status running, completed, failed
 	Status string `json:"status,omitempty"`
@@ -334,63 +400,6 @@ type StatusResponse struct {
 	// Status Current experiment manager status (Pending or Running)
 	Status    string    `json:"status,omitempty"`
 	Timestamp time.Time `json:"timestamp,omitempty"`
-}
-
-// SteadyStateStats Steady-state performance statistics with confidence intervals
-type SteadyStateStats struct {
-	// ConfidenceLevel Confidence level (e.g., 0.95 for 95%)
-	ConfidenceLevel float32 `json:"confidenceLevel,omitempty"`
-
-	// CpuConfLower Lower bound of 95% confidence interval
-	CpuConfLower float32 `json:"cpuConfLower,omitempty"`
-
-	// CpuConfUpper Upper bound of 95% confidence interval
-	CpuConfUpper float32 `json:"cpuConfUpper,omitempty"`
-
-	// CpuMax Maximum CPU value observed
-	CpuMax float32 `json:"cpuMax,omitempty"`
-
-	// CpuMean Mean CPU usage across all experiments (steady-state)
-	CpuMean float32 `json:"cpuMean,omitempty"`
-
-	// CpuMin Minimum CPU value observed
-	CpuMin float32 `json:"cpuMin,omitempty"`
-
-	// CpuStdDev Standard deviation of CPU usage
-	CpuStdDev float32 `json:"cpuStdDev,omitempty"`
-
-	// ErrorRate Error rate percentage
-	ErrorRate float32 `json:"errorRate,omitempty"`
-
-	// LatencyMax Maximum latency in milliseconds
-	LatencyMax float32 `json:"latencyMax,omitempty"`
-
-	// LatencyMean Mean latency in milliseconds
-	LatencyMean float32 `json:"latencyMean,omitempty"`
-
-	// LatencyMin Minimum latency in milliseconds
-	LatencyMin float32 `json:"latencyMin,omitempty"`
-
-	// LatencyP50 Median latency in milliseconds
-	LatencyP50 float32 `json:"latencyP50,omitempty"`
-
-	// LatencyP90 90th percentile latency in milliseconds
-	LatencyP90 float32 `json:"latencyP90,omitempty"`
-
-	// LatencyP95 95th percentile latency in milliseconds
-	LatencyP95 float32 `json:"latencyP95,omitempty"`
-
-	// LatencyP99 99th percentile latency in milliseconds
-	LatencyP99 float32 `json:"latencyP99,omitempty"`
-
-	// SampleSize Number of experiments used in calculation
-	SampleSize int `json:"sampleSize,omitempty"`
-
-	// Throughput Successful requests per second
-	Throughput float32 `json:"throughput,omitempty"`
-
-	// Utilization Server utilization (lambda/mu)
-	Utilization float32 `json:"utilization,omitempty"`
 }
 
 // TargetHost defines model for TargetHost.
@@ -2352,68 +2361,70 @@ func RegisterHandlersWithOptions(router gin.IRouter, si ServerInterface, options
 // Base64 encoded, gzipped, json marshaled Swagger object
 var swaggerSpec = []string{
 
-	"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",
+	"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",
 }
 
 // GetSwagger returns the content of the embedded swagger specification file

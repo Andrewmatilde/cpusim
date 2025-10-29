@@ -717,7 +717,8 @@ func (s *Service) executeExperimentGroup(groupID string, group *ExperimentGroup)
 		}
 
 		if len(experiments) > 0 {
-			group.QPSPoints[qpsIdx].Statistics = s.calculateSteadyStateStats(experiments)
+			group.QPSPoints[qpsIdx].Statistics = s.calculateCPUStats(experiments)
+			group.QPSPoints[qpsIdx].LatencyStats = s.calculateLatencyStats(experiments)
 		}
 		group.QPSPoints[qpsIdx].Status = "completed"
 
@@ -827,60 +828,28 @@ func (s *Service) GetExperimentGroupWithDetails(groupID string) (*ExperimentGrou
 	return group, experiments, nil
 }
 
-// calculateSteadyStateStats calculates steady-state statistics with confidence intervals
-// for each host across all experiments in the group
-func (s *Service) calculateSteadyStateStats(experiments []*ExperimentData) map[string]*SteadyStateStats {
+// calculateCPUStats calculates CPU statistics with confidence intervals for each host
+func (s *Service) calculateCPUStats(experiments []*ExperimentData) map[string]*CPUStats {
 	if len(experiments) == 0 {
-		s.logger.Warn().Msg("calculateSteadyStateStats: no experiments")
+		s.logger.Warn().Msg("calculateCPUStats: no experiments")
 		return nil
 	}
 
-	stats := make(map[string]*SteadyStateStats)
-
-	// Group metrics by host
+	// Group CPU metrics by host
 	hostMetrics := make(map[string][]float64) // key: host name, value: steady-state mean CPU for each experiment
 
-	// Collect latency metrics from requester results
-	latencyMetrics := struct {
-		p50Values   []float64
-		p90Values   []float64
-		p95Values   []float64
-		p99Values   []float64
-		meanValues  []float64
-		minValues   []float64
-		maxValues   []float64
-		throughputs []float64
-		errorRates  []float64
-		utilizations []float64
-	}{}
-
 	for expIdx, exp := range experiments {
-		// Collect CPU metrics
 		if exp.CollectorResults == nil {
 			s.logger.Warn().Int("exp_idx", expIdx).Msg("Experiment has nil CollectorResults")
 			continue
 		}
 
 		for hostName, result := range exp.CollectorResults {
-			if result.Data == nil {
+			if result.Data == nil || result.Data.Metrics == nil || len(result.Data.Metrics) == 0 {
 				s.logger.Warn().
 					Int("exp_idx", expIdx).
 					Str("host", hostName).
-					Msg("Collector result has nil Data")
-				continue
-			}
-			if result.Data.Metrics == nil {
-				s.logger.Warn().
-					Int("exp_idx", expIdx).
-					Str("host", hostName).
-					Msg("Collector data has nil Metrics")
-				continue
-			}
-			if len(result.Data.Metrics) == 0 {
-				s.logger.Warn().
-					Int("exp_idx", expIdx).
-					Str("host", hostName).
-					Msg("Collector data has empty Metrics")
+					Msg("Collector result has no metrics")
 				continue
 			}
 
@@ -900,82 +869,145 @@ func (s *Service) calculateSteadyStateStats(experiments []*ExperimentData) map[s
 
 			if cpuCount > 0 {
 				steadyStateMean := cpuSum / float64(cpuCount)
-				s.logger.Debug().
-					Int("exp_idx", expIdx).
-					Str("host", hostName).
-					Int("metric_count", len(metrics)).
-					Float64("steady_state_mean", steadyStateMean).
-					Msg("Calculated steady-state mean for experiment")
 				hostMetrics[hostName] = append(hostMetrics[hostName], steadyStateMean)
-			}
-		}
-
-		// Collect latency metrics from requester
-		if exp.RequesterResult != nil && exp.RequesterResult.Stats != nil {
-			stats := exp.RequesterResult.Stats
-			if stats.ResponseTimeP50 > 0 {
-				latencyMetrics.p50Values = append(latencyMetrics.p50Values, float64(stats.ResponseTimeP50))
-			}
-			if stats.ResponseTimeP90 > 0 {
-				latencyMetrics.p90Values = append(latencyMetrics.p90Values, float64(stats.ResponseTimeP90))
-			}
-			if stats.ResponseTimeP95 > 0 {
-				latencyMetrics.p95Values = append(latencyMetrics.p95Values, float64(stats.ResponseTimeP95))
-			}
-			if stats.ResponseTimeP99 > 0 {
-				latencyMetrics.p99Values = append(latencyMetrics.p99Values, float64(stats.ResponseTimeP99))
-			}
-			if stats.AverageResponseTime > 0 {
-				latencyMetrics.meanValues = append(latencyMetrics.meanValues, float64(stats.AverageResponseTime))
-			}
-			if stats.MinResponseTime > 0 {
-				latencyMetrics.minValues = append(latencyMetrics.minValues, float64(stats.MinResponseTime))
-			}
-			if stats.MaxResponseTime > 0 {
-				latencyMetrics.maxValues = append(latencyMetrics.maxValues, float64(stats.MaxResponseTime))
-			}
-			if stats.Throughput > 0 {
-				latencyMetrics.throughputs = append(latencyMetrics.throughputs, float64(stats.Throughput))
-			}
-			if stats.ErrorRate >= 0 {
-				latencyMetrics.errorRates = append(latencyMetrics.errorRates, float64(stats.ErrorRate))
-			}
-			if stats.Utilization > 0 {
-				latencyMetrics.utilizations = append(latencyMetrics.utilizations, float64(stats.Utilization))
 			}
 		}
 	}
 
-	s.logger.Info().Int("host_count", len(hostMetrics)).Msg("Grouped metrics by host")
+	s.logger.Info().Int("host_count", len(hostMetrics)).Msg("Grouped CPU metrics by host")
 
-	// Calculate statistics for each host
+	// Calculate CPU statistics for each host
+	cpuStats := make(map[string]*CPUStats)
 	for hostName, cpuValues := range hostMetrics {
 		if len(cpuValues) == 0 {
 			continue
 		}
 
-		s.logger.Info().
-			Str("host", hostName).
-			Int("sample_size", len(cpuValues)).
-			Msg("Calculating confidence interval")
-		stats[hostName] = calculateConfidenceInterval(cpuValues, 0.95)
-
-		// Add latency metrics to stats (same for all hosts since it's from requester)
-		if len(latencyMetrics.p50Values) > 0 {
-			stats[hostName].LatencyP50 = average(latencyMetrics.p50Values)
-			stats[hostName].LatencyP90 = average(latencyMetrics.p90Values)
-			stats[hostName].LatencyP95 = average(latencyMetrics.p95Values)
-			stats[hostName].LatencyP99 = average(latencyMetrics.p99Values)
-			stats[hostName].LatencyMean = average(latencyMetrics.meanValues)
-			stats[hostName].LatencyMin = min(latencyMetrics.minValues)
-			stats[hostName].LatencyMax = max(latencyMetrics.maxValues)
-			stats[hostName].Throughput = average(latencyMetrics.throughputs)
-			stats[hostName].ErrorRate = average(latencyMetrics.errorRates)
-			stats[hostName].Utilization = average(latencyMetrics.utilizations)
+		// Calculate confidence interval returns SteadyStateStats, extract CPU fields
+		ci := calculateConfidenceInterval(cpuValues, 0.95)
+		cpuStats[hostName] = &CPUStats{
+			CPUMean:         ci.CPUMean,
+			CPUStdDev:       ci.CPUStdDev,
+			CPUConfLower:    ci.CPUConfLower,
+			CPUConfUpper:    ci.CPUConfUpper,
+			CPUMin:          ci.CPUMin,
+			CPUMax:          ci.CPUMax,
+			SampleSize:      ci.SampleSize,
+			ConfidenceLevel: ci.ConfidenceLevel,
 		}
 	}
 
-	s.logger.Info().Int("stats_count", len(stats)).Msg("Calculated steady-state statistics")
+	s.logger.Info().Int("stats_count", len(cpuStats)).Msg("Calculated CPU statistics")
+	return cpuStats
+}
+
+// calculateLatencyStats calculates latency statistics from requester perspective
+func (s *Service) calculateLatencyStats(experiments []*ExperimentData) *LatencyStats {
+	if len(experiments) == 0 {
+		return nil
+	}
+
+	// Collect latency metrics from requester results
+	var p50Values, p90Values, p95Values, p99Values []float64
+	var meanValues, minValues, maxValues []float64
+	var throughputs, errorRates, utilizations []float64
+
+	for _, exp := range experiments {
+		if exp.RequesterResult != nil && exp.RequesterResult.Stats != nil {
+			stats := exp.RequesterResult.Stats
+			if stats.ResponseTimeP50 > 0 {
+				p50Values = append(p50Values, float64(stats.ResponseTimeP50))
+			}
+			if stats.ResponseTimeP90 > 0 {
+				p90Values = append(p90Values, float64(stats.ResponseTimeP90))
+			}
+			if stats.ResponseTimeP95 > 0 {
+				p95Values = append(p95Values, float64(stats.ResponseTimeP95))
+			}
+			if stats.ResponseTimeP99 > 0 {
+				p99Values = append(p99Values, float64(stats.ResponseTimeP99))
+			}
+			if stats.AverageResponseTime > 0 {
+				meanValues = append(meanValues, float64(stats.AverageResponseTime))
+			}
+			if stats.MinResponseTime > 0 {
+				minValues = append(minValues, float64(stats.MinResponseTime))
+			}
+			if stats.MaxResponseTime > 0 {
+				maxValues = append(maxValues, float64(stats.MaxResponseTime))
+			}
+			if stats.Throughput > 0 {
+				throughputs = append(throughputs, float64(stats.Throughput))
+			}
+			if stats.ErrorRate >= 0 {
+				errorRates = append(errorRates, float64(stats.ErrorRate))
+			}
+			if stats.Utilization > 0 {
+				utilizations = append(utilizations, float64(stats.Utilization))
+			}
+		}
+	}
+
+	if len(p50Values) == 0 {
+		return nil
+	}
+
+	latencyStats := &LatencyStats{
+		LatencyP50:  average(p50Values),
+		LatencyP90:  average(p90Values),
+		LatencyP95:  average(p95Values),
+		LatencyP99:  average(p99Values),
+		LatencyMean: average(meanValues),
+		LatencyMin:  min(minValues),
+		LatencyMax:  max(maxValues),
+		Throughput:  average(throughputs),
+		ErrorRate:   average(errorRates),
+		Utilization: average(utilizations),
+		SampleSize:  len(p50Values),
+	}
+
+	s.logger.Info().Int("sample_size", latencyStats.SampleSize).Msg("Calculated latency statistics")
+	return latencyStats
+}
+
+// calculateSteadyStateStats is deprecated, use calculateCPUStats and calculateLatencyStats instead
+// Kept for backward compatibility
+func (s *Service) calculateSteadyStateStats(experiments []*ExperimentData) map[string]*SteadyStateStats {
+	if len(experiments) == 0 {
+		return nil
+	}
+
+	cpuStats := s.calculateCPUStats(experiments)
+	latencyStats := s.calculateLatencyStats(experiments)
+
+	// Merge into old format for backward compatibility
+	stats := make(map[string]*SteadyStateStats)
+	for hostName, cpu := range cpuStats {
+		stats[hostName] = &SteadyStateStats{
+			CPUMean:         cpu.CPUMean,
+			CPUStdDev:       cpu.CPUStdDev,
+			CPUConfLower:    cpu.CPUConfLower,
+			CPUConfUpper:    cpu.CPUConfUpper,
+			CPUMin:          cpu.CPUMin,
+			CPUMax:          cpu.CPUMax,
+			SampleSize:      cpu.SampleSize,
+			ConfidenceLevel: cpu.ConfidenceLevel,
+		}
+
+		// Add latency stats (same for all hosts)
+		if latencyStats != nil {
+			stats[hostName].LatencyP50 = latencyStats.LatencyP50
+			stats[hostName].LatencyP90 = latencyStats.LatencyP90
+			stats[hostName].LatencyP95 = latencyStats.LatencyP95
+			stats[hostName].LatencyP99 = latencyStats.LatencyP99
+			stats[hostName].LatencyMean = latencyStats.LatencyMean
+			stats[hostName].LatencyMin = latencyStats.LatencyMin
+			stats[hostName].LatencyMax = latencyStats.LatencyMax
+			stats[hostName].Throughput = latencyStats.Throughput
+			stats[hostName].ErrorRate = latencyStats.ErrorRate
+			stats[hostName].Utilization = latencyStats.Utilization
+		}
+	}
 
 	return stats
 }

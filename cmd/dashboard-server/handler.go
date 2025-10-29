@@ -519,13 +519,13 @@ func convertExperimentGroupToAPI(group dashboard.ExperimentGroup) generated.Expe
 	// Convert QPS points with statistics
 	apiQPSPoints := make([]generated.QPSPoint, len(group.QPSPoints))
 	for i, qpsPoint := range group.QPSPoints {
-		// Convert statistics for this QPS point
-		var apiStatistics map[string]generated.SteadyStateStats
+		// Convert CPU statistics for this QPS point
+		var apiStatistics map[string]generated.CPUStats
 		if qpsPoint.Statistics != nil {
-			apiStatistics = make(map[string]generated.SteadyStateStats)
+			apiStatistics = make(map[string]generated.CPUStats)
 			for hostName, stats := range qpsPoint.Statistics {
 				if stats != nil {
-					apiStatistics[hostName] = generated.SteadyStateStats{
+					apiStatistics[hostName] = generated.CPUStats{
 						CpuMean:         float32(stats.CPUMean),
 						CpuStdDev:       float32(stats.CPUStdDev),
 						CpuConfLower:    float32(stats.CPUConfLower),
@@ -539,11 +539,30 @@ func convertExperimentGroupToAPI(group dashboard.ExperimentGroup) generated.Expe
 			}
 		}
 
+		// Convert latency statistics for this QPS point
+		var apiLatencyStats generated.LatencyStats
+		if qpsPoint.LatencyStats != nil {
+			apiLatencyStats = generated.LatencyStats{
+				LatencyP50:  float32(qpsPoint.LatencyStats.LatencyP50),
+				LatencyP90:  float32(qpsPoint.LatencyStats.LatencyP90),
+				LatencyP95:  float32(qpsPoint.LatencyStats.LatencyP95),
+				LatencyP99:  float32(qpsPoint.LatencyStats.LatencyP99),
+				LatencyMean: float32(qpsPoint.LatencyStats.LatencyMean),
+				LatencyMin:  float32(qpsPoint.LatencyStats.LatencyMin),
+				LatencyMax:  float32(qpsPoint.LatencyStats.LatencyMax),
+				Throughput:  float32(qpsPoint.LatencyStats.Throughput),
+				ErrorRate:   float32(qpsPoint.LatencyStats.ErrorRate),
+				Utilization: float32(qpsPoint.LatencyStats.Utilization),
+				SampleSize:  qpsPoint.LatencyStats.SampleSize,
+			}
+		}
+
 		apiQPSPoints[i] = generated.QPSPoint{
-			Qps:         qpsPoint.QPS,
-			Experiments: qpsPoint.Experiments,
-			Statistics:  apiStatistics,
-			Status:      qpsPoint.Status,
+			Qps:          qpsPoint.QPS,
+			Experiments:  qpsPoint.Experiments,
+			Statistics:   apiStatistics,
+			LatencyStats: apiLatencyStats,
+			Status:       qpsPoint.Status,
 		}
 	}
 

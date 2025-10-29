@@ -1,6 +1,7 @@
 apis/DefaultApi.ts
 apis/index.ts
 index.ts
+models/CPUStats.ts
 models/ClientHost.ts
 models/ClientHostStatus.ts
 models/CollectorResult.ts
@@ -18,6 +19,7 @@ models/ExperimentListResponse.ts
 models/ExperimentResponse.ts
 models/HealthResponse.ts
 models/HostsStatusResponse.ts
+models/LatencyStats.ts
 models/LoadBalancer.ts
 models/MetricDataPoint.ts
 models/NetworkIO.ts

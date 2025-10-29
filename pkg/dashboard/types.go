@@ -122,13 +122,42 @@ type ExperimentGroup struct {
 
 // QPSPoint represents results for a specific QPS value
 type QPSPoint struct {
-	QPS         int                          `json:"qps"`         // QPS value for this point
-	Experiments []string                     `json:"experiments"` // List of experiment IDs for this QPS
-	Statistics  map[string]*SteadyStateStats `json:"statistics"`  // key: host name
-	Status      string                       `json:"status"`      // "running", "completed", "failed"
+	QPS              int                       `json:"qps"`               // QPS value for this point
+	Experiments      []string                  `json:"experiments"`       // List of experiment IDs for this QPS
+	Statistics       map[string]*CPUStats      `json:"statistics"`        // CPU stats per host (key: host name)
+	LatencyStats     *LatencyStats             `json:"latency_stats"`     // Global latency stats from requester
+	Status           string                    `json:"status"`            // "running", "completed", "failed"
+}
+
+// CPUStats contains CPU performance statistics with confidence intervals for a specific host
+type CPUStats struct {
+	CPUMean         float64 `json:"cpu_mean"`         // Mean CPU usage across all experiments
+	CPUStdDev       float64 `json:"cpu_std_dev"`      // Standard deviation
+	CPUConfLower    float64 `json:"cpu_conf_lower"`   // 95% CI lower bound
+	CPUConfUpper    float64 `json:"cpu_conf_upper"`   // 95% CI upper bound
+	CPUMin          float64 `json:"cpu_min"`          // Minimum value
+	CPUMax          float64 `json:"cpu_max"`          // Maximum value
+	SampleSize      int     `json:"sample_size"`      // Number of experiments used
+	ConfidenceLevel float64 `json:"confidence_level"` // Confidence level (e.g., 0.95)
+}
+
+// LatencyStats contains latency performance statistics from requester perspective
+type LatencyStats struct {
+	LatencyP50  float64 `json:"latency_p50"`  // Median latency in milliseconds
+	LatencyP90  float64 `json:"latency_p90"`  // 90th percentile latency
+	LatencyP95  float64 `json:"latency_p95"`  // 95th percentile latency
+	LatencyP99  float64 `json:"latency_p99"`  // 99th percentile latency
+	LatencyMean float64 `json:"latency_mean"` // Mean latency
+	LatencyMin  float64 `json:"latency_min"`  // Min latency
+	LatencyMax  float64 `json:"latency_max"`  // Max latency
+	Throughput  float64 `json:"throughput"`   // Successful requests per second
+	ErrorRate   float64 `json:"error_rate"`   // Error rate percentage
+	Utilization float64 `json:"utilization"`  // Server utilization (λ/μ)
+	SampleSize  int     `json:"sample_size"`  // Number of experiments used
 }
 
 // SteadyStateStats contains steady-state performance statistics with confidence intervals
+// Deprecated: Use CPUStats and LatencyStats separately instead
 type SteadyStateStats struct {
 	// CPU statistics
 	CPUMean      float64 `json:"cpu_mean"`       // Mean CPU usage across all experiments

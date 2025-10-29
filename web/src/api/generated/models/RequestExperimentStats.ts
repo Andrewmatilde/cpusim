@@ -86,6 +86,12 @@ export interface RequestExperimentStats {
      */
     responseTimeP50?: number;
     /**
+     * 90%分位响应时间（毫秒）
+     * @type {number}
+     * @memberof RequestExperimentStats
+     */
+    responseTimeP90?: number;
+    /**
      * 95%分位响应时间（毫秒）
      * @type {number}
      * @memberof RequestExperimentStats
@@ -97,6 +103,18 @@ export interface RequestExperimentStats {
      * @memberof RequestExperimentStats
      */
     responseTimeP99?: number;
+    /**
+     * 成功请求吞吐量（请求/秒）
+     * @type {number}
+     * @memberof RequestExperimentStats
+     */
+    throughput?: number;
+    /**
+     * 服务器利用率（lambda/mu）
+     * @type {number}
+     * @memberof RequestExperimentStats
+     */
+    utilization?: number;
     /**
      * 开始时间
      * @type {Date}
@@ -164,8 +182,11 @@ export function RequestExperimentStatsFromJSONTyped(json: any, ignoreDiscriminat
         'requestsPerSecond': json['requestsPerSecond'] == null ? undefined : json['requestsPerSecond'],
         'errorRate': json['errorRate'] == null ? undefined : json['errorRate'],
         'responseTimeP50': json['responseTimeP50'] == null ? undefined : json['responseTimeP50'],
+        'responseTimeP90': json['responseTimeP90'] == null ? undefined : json['responseTimeP90'],
         'responseTimeP95': json['responseTimeP95'] == null ? undefined : json['responseTimeP95'],
         'responseTimeP99': json['responseTimeP99'] == null ? undefined : json['responseTimeP99'],
+        'throughput': json['throughput'] == null ? undefined : json['throughput'],
+        'utilization': json['utilization'] == null ? undefined : json['utilization'],
         'startTime': json['startTime'] == null ? undefined : (new Date(json['startTime'])),
         'endTime': json['endTime'] == null ? undefined : (new Date(json['endTime'])),
         'duration': json['duration'] == null ? undefined : json['duration'],
@@ -195,8 +216,11 @@ export function RequestExperimentStatsToJSONTyped(value?: RequestExperimentStats
         'requestsPerSecond': value['requestsPerSecond'],
         'errorRate': value['errorRate'],
         'responseTimeP50': value['responseTimeP50'],
+        'responseTimeP90': value['responseTimeP90'],
         'responseTimeP95': value['responseTimeP95'],
         'responseTimeP99': value['responseTimeP99'],
+        'throughput': value['throughput'],
+        'utilization': value['utilization'],
         'startTime': value['startTime'] == null ? undefined : ((value['startTime']).toISOString()),
         'endTime': value['endTime'] === null ? null : ((value['endTime'] as any)?.toISOString()),
         'duration': value['duration'],

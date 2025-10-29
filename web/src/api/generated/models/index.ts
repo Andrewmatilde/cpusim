@@ -1,5 +1,6 @@
 /* tslint:disable */
 /* eslint-disable */
+export * from './CPUStats';
 export * from './ClientHost';
 export * from './ClientHostStatus';
 export * from './CollectorResult';
@@ -17,6 +18,7 @@ export * from './ExperimentListResponse';
 export * from './ExperimentResponse';
 export * from './HealthResponse';
 export * from './HostsStatusResponse';
+export * from './LatencyStats';
 export * from './LoadBalancer';
 export * from './MetricDataPoint';
 export * from './NetworkIO';
