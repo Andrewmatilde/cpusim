@@ -36,13 +36,40 @@ See [references/infrastructure.md](references/infrastructure.md) for detailed ar
 
 To create a new release:
 
-1. Create and push a new tag:
+1. **Check existing tags first**:
+   ```bash
+   # List recent tags sorted by version
+   git tag --sort=-v:refname | head -10
+
+   # Check if current HEAD already has a tag
+   git tag --points-at HEAD
+
+   # View what commit a specific tag points to
+   git log <tag> --oneline -1
+   ```
+
+   This helps avoid creating duplicate tags or overwriting existing tags.
+
+2. Create and push a new tag:
    ```bash
    git tag v0.X.X
    git push origin v0.X.X
    ```
 
-2. Monitor the GitHub Actions workflow:
+   If you need to delete and recreate a tag:
+   ```bash
+   # Delete local tag
+   git tag -d v0.X.X
+
+   # Delete remote tag
+   git push origin :refs/tags/v0.X.X
+
+   # Create new tag
+   git tag v0.X.X
+   git push origin v0.X.X
+   ```
+
+3. Monitor the GitHub Actions workflow:
    ```bash
    gh run list --workflow=release.yml
    gh run watch
