@@ -336,11 +336,8 @@ func (s *Service) runExperiment(ctx context.Context, experimentID string, qps in
 		}
 
 		// Start collector experiment
-		// Use the experiment timeout from the context or a default value
+		// Use a fixed timeout for collector (should be long enough to complete collection)
 		timeout := 60 * time.Second
-		if deadline, ok := ctx.Deadline(); ok {
-			timeout = time.Until(deadline)
-		}
 		if err := client.StartExperiment(ctx, experimentID, timeout); err != nil {
 			s.logger.Error().
 				Err(err).
@@ -388,11 +385,8 @@ func (s *Service) runExperiment(ctx context.Context, experimentID string, qps in
 		return data, err
 	}
 
-	// Use the experiment timeout from the context or a default value
+	// Use a fixed timeout for requester (should be long enough to complete request sending)
 	timeout := 60 * time.Second
-	if deadline, ok := ctx.Deadline(); ok {
-		timeout = time.Until(deadline)
-	}
 	if err := s.requesterClient.StartExperiment(ctx, experimentID, timeout, qps); err != nil {
 		s.logger.Error().Err(err).Msg("Failed to start requester")
 		data.Errors = append(data.Errors, ExperimentError{
